@@ -615,8 +615,12 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
  */
 function wpyeg_defaults_validate_profile_password( $errors, $update, $user ) {
 	unset( $update );
+	// Core's edit_user() trims the password and stores the trimmed value, but
+	// fires this hook with $_POST untouched. Validate the trimmed string or the
+	// minimum length is bypassable: 15 spaces and an "a" reads as 16 characters
+	// here while core saves a one-character password.
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Passwords must not be sanitized.
-	$password = isset( $_POST['pass1'] ) ? (string) wp_unslash( $_POST['pass1'] ) : '';
+	$password = isset( $_POST['pass1'] ) ? trim( (string) wp_unslash( $_POST['pass1'] ) ) : '';
 	if ( '' !== $password ) {
 		$result = wpyeg_defaults_validate_password( $password, $user );
 		if ( is_wp_error( $result ) ) {
@@ -632,8 +636,11 @@ function wpyeg_defaults_validate_profile_password( $errors, $update, $user ) {
  * @param WP_User  $user   User context.
  */
 function wpyeg_defaults_validate_reset_password( $errors, $user ) {
+	// wp-login.php already trims $_POST['pass1'] in place before firing this
+	// hook, so this trim is belt-and-braces. It keeps both validators measuring
+	// the same string core stores, whichever screen the password came from.
 	// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Passwords must not be sanitized.
-	$password = isset( $_POST['pass1'] ) ? (string) wp_unslash( $_POST['pass1'] ) : '';
+	$password = isset( $_POST['pass1'] ) ? trim( (string) wp_unslash( $_POST['pass1'] ) ) : '';
 	if ( '' !== $password ) {
 		$result = wpyeg_defaults_validate_password( $password, $user );
 		if ( is_wp_error( $result ) ) {
