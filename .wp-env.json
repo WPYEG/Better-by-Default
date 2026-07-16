@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/wp-env.json",
+  "core": null,
+  "mappings": {
+    "wp-content/plugins/better-by-default": "./plugin/better-by-default"
+  },
+  "config": {
+    "WP_DEBUG": true,
+    "WP_ENVIRONMENT_TYPE": "local"
+  },
+  "testsEnvironment": false,
+  "autoPort": true
+}

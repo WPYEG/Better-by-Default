@@ -2,17 +2,17 @@
 Contributors: wpyeg
 Tags: security, hardening, defaults, performance, cleanup
 Requires at least: 6.4
-Tested up to: 6.8
+Tested up to: 7.0
 Requires PHP: 7.4
 Stable tag: 1.0.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-Sane defaults for every new WordPress site. A menu of security, UX, SEO, and performance defaults — each one individually toggleable.
+A reviewed starting policy for new WordPress sites, with individually toggleable security, content, UX, login, branding, and performance controls.
 
 == Description ==
 
-Better by Default bundles a menu of sensible defaults that most sites want on every build: restrict REST user discovery, disable XML-RPC and Application Passwords, require strong passwords, close comment spam, redirect thin author and attachment pages, drop the emoji script, right-size login sessions, own the login screen, and more.
+Better by Default is a teaching plugin that bundles reviewable policy choices: restrict anonymous core REST user routes, disable XML-RPC methods, enforce a password policy, close unused discussion surfaces, disable public author archives, remove emoji compatibility support, and more. Compatibility-sensitive behavior remains opt-in.
 
 Every policy is individually toggleable under **Settings → Better by Default**, and the whole plugin is built around one idea:
 
@@ -25,23 +25,23 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 = Defaults ON out of the box =
 
 * Restrict REST API user discovery
-* Disable XML-RPC (and strip the pingback header)
-* Disable Application Passwords
-* Require strong passwords (server-side)
-* Remove the version fingerprint + send baseline security headers
+* Disable all registered XML-RPC methods and strip discovery hints
+* Require passwords of at least 15 characters and reject a filterable blocklist
 * Disable comments, pingbacks & self-pingbacks
-* Redirect public author archives and attachment pages
-* Disable the emoji script
-* Remove/replace the login logo and point its link home
+* Return 404 for public author archives and suppress numeric-author canonical redirects
+* Disable emoji compatibility support
 
 = Opt-in (OFF by default) =
 
 * Require authentication for ALL REST requests
+* Disable Application Passwords as an explicit site policy
+* Remove the generator tag (output hygiene, not hardening)
+* Redirect attachment pages retained by upgraded sites
 * Title-only admin search
 * Hide the front-end admin bar
 * Disable "Remember Me"
+* Change session length or login branding
 * Throttle the Heartbeat API
-* Defer front-end scripts
 
 == Installation ==
 
@@ -55,13 +55,13 @@ WP-CLI:
 
 == Frequently Asked Questions ==
 
-= Will this break the block editor? =
+= Can a policy break an integration or publishing workflow? =
 
-No — the ON-by-default set is safe for nearly any site. The one policy that can break the editor (require-auth-for-all-REST) ships OFF for exactly that reason.
+Yes. Site policy is contextual. Requiring authentication for all REST requests, disabling Application Passwords or XML-RPC methods, closing discussion, changing author archives, and throttling Heartbeat can affect legitimate workflows. Test the settings your site enables.
 
 = Can I use it as an mu-plugin? =
 
-Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
+Yes. Copy the main PHP file directly into `wp-content/mu-plugins/`; WordPress does not recursively discover plugin subdirectories there. The settings screen remains available, but the activation hook does not run. Schema fallbacks still apply until you save settings.
 
 == Changelog ==
 

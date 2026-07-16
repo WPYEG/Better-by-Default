@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="Better by Default">
+	<description>WordPress Coding Standards.</description>
+	<file>plugin/better-by-default</file>
+	<file>tests</file>
+	<exclude-pattern>vendor/*</exclude-pattern>
+	<arg name="extensions" value="php" />
+	<arg name="parallel" value="8" />
+	<rule ref="WordPress" />
+	<rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_fwrite">
+		<exclude-pattern>tests/*</exclude-pattern>
+	</rule>
+</ruleset>

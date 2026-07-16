@@ -1,4 +1,5 @@
 const pptxgen = require("pptxgenjs");
+const path = require("path");
 const p = new pptxgen();
 p.layout = "LAYOUT_WIDE"; // 13.33 x 7.5
 p.author = "WPYEG";
@@ -28,13 +29,10 @@ const MONO = "Courier New";
 
 /* ---------------- Helpers ---------------- */
 function footer(s, n) {
-  s.addText(
-    [
-      { text: "WPYEG", options: { color: WHEATD, bold: true } },
-      { text: "  ·  Better by Default", options: { color: MUTE } },
-    ],
-    { x: 0.55, y: 7.03, w: 8, h: 0.3, fontFace: BODY, fontSize: 9, align: "left", margin: 0 }
-  );
+  s.addText("WPYEG  ·  Better by Default", {
+    x: 0.55, y: 7.03, w: 8, h: 0.3, fontFace: BODY, fontSize: 9,
+    color: WHEATD, bold: true, align: "left", margin: 0,
+  });
   s.addText(String(n), {
     x: 12.2, y: 7.03, w: 0.6, h: 0.3, fontFace: BODY, fontSize: 9,
     color: MUTE, align: "right", margin: 0,
@@ -56,7 +54,6 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   s.addShape(p.ShapeType.roundRect, {
     x, y, w, h, rectRadius: 0.08, fill: { color: CODEBG },
     line: { color: STEEL, width: 1 },
-    shadow: { type: "outer", color: "0A1A22", blur: 6, offset: 3, angle: 90, opacity: 0.4 },
   });
   const runs = [];
   lines.forEach((ln, i) => {
@@ -68,7 +65,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   });
   s.addText(runs, {
     x: x + 0.22, y: y + 0.18, w: w - 0.44, h: h - 0.36,
-    fontFace: MONO, fontSize: fontSize || 11.5, align: "left", valign: "top",
+    fontFace: MONO, fontSize: fontSize || 16, align: "left", valign: "top",
     lineSpacingMultiple: 1.08, margin: 0,
   });
 }
@@ -89,7 +86,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     x: 0.85, y: 2.35, w: 11.8, h: 1.5, fontFace: HEAD, fontSize: 68, bold: true,
     color: WHITE, lineSpacingMultiple: 1.02, margin: 0,
   });
-  s.addText("Sane defaults for every new WordPress site — one toggle at a time.", {
+  s.addText("Explicit, testable starting policies — one toggle at a time.", {
     x: 0.9, y: 4.35, w: 11.2, h: 0.7, fontFace: BODY, fontSize: 21, color: SKY, italic: true, margin: 0,
   });
   s.addText(
@@ -110,18 +107,18 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 (() => {
   const s = p.addSlide();
   s.background = { color: CLOUD };
-  s.addText("A fresh WordPress install ships wide open", {
+  s.addText("A default is an assumption, not a guarantee", {
     x: 0.6, y: 0.55, w: 12, h: 0.9, fontFace: HEAD, fontSize: 34, bold: true, color: INK, margin: 0,
   });
-  s.addText("Out of the box, core leaves a lot of doors ajar and a lot of noise switched on. None of it is a bug — it's just defaults chosen for maximum compatibility, not for your site.", {
+  s.addText("WordPress optimizes for broad compatibility. Our job is to make each project's assumptions explicit, reversible, and testable.", {
     x: 0.6, y: 1.5, w: 11.8, h: 0.9, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0,
   });
 
   const cards = [
-    { g: "!", c: CORAL, t: "Usernames leak", d: "REST + author archives happily list every login name to anonymous visitors." },
-    { g: "!", c: CORAL, t: "Legacy endpoints open", d: "XML-RPC and Application Passwords stay on — classic brute-force amplifiers." },
-    { g: "~", c: WHEATD, t: "Dead weight loads", d: "Emoji scripts, version tags, and RSD links ship on every single page view." },
-    { g: "~", c: WHEATD, t: "Spam surface invites", d: "Comments, pingbacks, and trackbacks are open by default on new content." },
+    { g: "1", c: STEEL, t: "Name the outcome", d: "Say what the control changes — and what public surface or workflow remains." },
+    { g: "2", c: STEEL, t: "Price compatibility", d: "REST, XML-RPC, comments, archives, and sessions can serve legitimate needs." },
+    { g: "3", c: WHEATD, t: "Choose the right layer", d: "Some policy belongs in WordPress; headers and endpoint blocking may belong at the edge." },
+    { g: "4", c: WHEATD, t: "Verify real behavior", d: "Test status codes, callable methods, cookies, query semantics, and integrations." },
   ];
   const cw = 5.75, ch = 1.85, gx = 0.6, gy = 2.65, gapx = 0.6, gapy = 0.45;
   cards.forEach((c, i) => {
@@ -150,14 +147,14 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   s.addText("The one idea to take home", {
     x: 0.8, y: 1.15, w: 11, h: 0.6, fontFace: BODY, fontSize: 18, color: WHEAT, bold: true, margin: 0,
   });
-  s.addText("A “default” is just an\nopinionated filter behind a toggle.", {
+  s.addText("A “default” is an explicit,\ntestable hook behind a toggle.", {
     x: 0.8, y: 1.9, w: 11.7, h: 2.4, fontFace: HEAD, fontSize: 44, bold: true, color: WHITE, lineSpacingMultiple: 1.05, margin: 0,
   });
   codePanel(s, 0.8, 4.5, 11.7, 1.9, [
     { t: "if ( wpyeg_defaults_enabled( 'disable_xmlrpc' ) ) {", k: "" },
-    { t: "    add_filter( 'xmlrpc_enabled', '__return_false' );", k: "h" },
-    { t: "}   // that's the whole pattern, repeated ~20 times", k: "c" },
-  ], 15);
+    { t: "    add_filter( 'xmlrpc_methods', '__return_empty_array' );", k: "h" },
+    { t: "}   // delivery is simple; accuracy is the work", k: "c" },
+  ], 16);
   s.addNotes("If you remember nothing else: a default is an add_filter behind an if( option ). Once you see that shape, the entire plugin is just twenty variations of it.");
 })();
 
@@ -185,7 +182,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(r.t, { x: 1.9, y: y + 0.22, w: 3, h: 0.5, fontFace: HEAD, fontSize: 22, bold: true, color: STEEL, margin: 0 });
     s.addText(r.d, { x: 1.9, y: y + 0.75, w: 6.4, h: 0.9, fontFace: BODY, fontSize: 14.5, color: SLATE, margin: 0, valign: "top" });
     s.addShape(p.ShapeType.roundRect, { x: 8.5, y: y + 0.5, w: 3.95, h: 0.8, rectRadius: 0.06, fill: { color: CODEBG } });
-    s.addText(r.ex, { x: 8.65, y: y + 0.5, w: 3.7, h: 0.8, fontFace: MONO, fontSize: 10.5, color: CGOLD, valign: "middle", margin: 0 });
+    s.addText(r.ex, { x: 8.65, y: y + 0.5, w: 3.7, h: 0.8, fontFace: MONO, fontSize: 16, color: CGOLD, valign: "middle", margin: 0 });
   });
   footer(s, 4);
   s.addNotes("Analogy for non-devs: an action is a doorbell (do something at a moment); a filter is a mail slot (change a value in transit). __return_false is a tiny helper that just hands back false — perfect for switching a feature off.");
@@ -201,8 +198,8 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     x: 0.6, y: 0.55, w: 12, h: 0.8, fontFace: HEAD, fontSize: 34, bold: true, color: INK, margin: 0,
   });
   const cats = [
-    { g: "1", t: "Security", d: "Shrink the attack surface" },
-    { g: "2", t: "Content", d: "Close public spam & leaks" },
+    { g: "1", t: "Security", d: "Reduce unused callable surface" },
+    { g: "2", t: "Content", d: "Close unused public surfaces" },
     { g: "3", t: "Admin UX", d: "Calmer, faster dashboard" },
     { g: "4", t: "Login", d: "Sessions & credentials" },
     { g: "5", t: "Branding", d: "Own the login screen" },
@@ -241,7 +238,7 @@ function codeSlide(num, kicker, title, why, optKey, def, lines, fs) {
   const s = p.addSlide();
   s.background = { color: CLOUD };
   s.addText(kicker, { x: 0.6, y: 0.5, w: 8, h: 0.4, fontFace: BODY, fontSize: 13, color: STEEL2, bold: true, margin: 0 });
-  s.addText(title, { x: 0.6, y: 0.85, w: 12.1, h: 0.85, fontFace: HEAD, fontSize: 30, bold: true, color: INK, margin: 0 });
+  s.addText(title, { x: 0.6, y: 0.85, w: 12.1, h: 0.85, fontFace: HEAD, fontSize: 32, bold: true, color: INK, margin: 0 });
 
   // left column
   s.addText(why, { x: 0.6, y: 1.95, w: 5.35, h: 3.2, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0, valign: "top", lineSpacingMultiple: 1.12 });
@@ -253,10 +250,10 @@ function codeSlide(num, kicker, title, why, optKey, def, lines, fs) {
     { text: optKey, options: { color: INK, bold: true } },
     { text: "\nDEFAULT   ", options: { color: STEEL2, bold: true } },
     { text: def, options: { color: def.includes("no") ? WHEATD : STEEL, bold: true } },
-  ], { x: 0.8, y: 5.65, w: 5.0, h: 0.85, fontFace: MONO, fontSize: 11.5, valign: "middle", margin: 0, lineSpacingMultiple: 1.15 });
+  ], { x: 0.8, y: 5.65, w: 5.0, h: 0.85, fontFace: MONO, fontSize: 13, valign: "middle", margin: 0, lineSpacingMultiple: 1.15 });
 
   // right code
-  codePanel(s, 6.25, 1.95, 6.45, 4.65, lines, fs || 11.5);
+  codePanel(s, 6.25, 1.95, 6.45, 4.65, lines, fs || 16);
   footer(s, num);
   return s;
 }
@@ -269,98 +266,86 @@ divider("1", "SECTION ONE", "Security &\nAttack Surface", "Every item here remov
 
 codeSlide(7, "SECURITY · 1 of 6",
   "Restrict REST API user discovery",
-  "The /wp/v2/users endpoint hands out every author's login name to anyone — half of a brute-force guess, free. We keep REST working for logged-in tools but slam the door on anonymous enumeration.",
+  "Core exposes public author records and user_nicename slugs — not private user_login values. Removing all core user routes reduces anonymous discovery, but other public author data can remain.",
   "wpyeg_restrict_rest_user_discovery", "yes",
   [
-    { t: "add_filter( 'rest_endpoints', function ( $ep ) {", k: "" },
-    { t: "    if ( ! is_user_logged_in() ) {", k: "" },
-    { t: "        unset( $ep['/wp/v2/users'] );", k: "h" },
-    { t: "        unset(", k: "" },
-    { t: "          $ep['/wp/v2/users/(?P<id>[\\d]+)']", k: "h" },
-    { t: "        );", k: "" },
-    { t: "    }", k: "" },
-    { t: "    return $ep;", k: "" },
-    { t: "} );", k: "" },
-  ]).addNotes("Author enumeration is step one of most brute-force scripts. This closes it for logged-out requests only, so your editor and integrations keep working.");
+    { t: "foreach ( array_keys( $endpoints ) as $route ) {", k: "" },
+    { t: "  if ( preg_match( '#^/wp/v2/users(?:/|$)#', $route ) ) {", k: "h" },
+    { t: "    unset( $endpoints[ $route ] );", k: "h" },
+    { t: "  }", k: "" },
+    { t: "}", k: "" },
+  ], 16).addNotes("Removed routes return the normal REST no-route response, usually 404 — not 401. This is surface reduction, not a promise that author identities are secret.");
 
 codeSlide(8, "SECURITY · 2 of 6",
-  "Disable XML-RPC",
-  "xmlrpc.php is a classic amplifier: one request can attempt hundreds of logins, and its pingback method has been used to bounce DDoS traffic. Unless you rely on the legacy mobile app or some Jetpack paths, switch it off.",
+  "Disable XML-RPC methods",
+  "The xmlrpc_enabled filter only disables authenticated methods. Remove the registered method surface and discovery hints to make the setting truthful. The endpoint file itself may still return a fault.",
   "wpyeg_disable_xmlrpc", "yes",
   [
-    { t: "add_filter( 'xmlrpc_enabled',", k: "" },
-    { t: "            '__return_false' );", k: "h" },
-    { t: "", k: "" },
-    { t: "// stop bots probing the discovery header", k: "c" },
-    { t: "add_filter( 'wp_headers', function ( $h ) {", k: "" },
-    { t: "    unset( $h['X-Pingback'] );", k: "h" },
-    { t: "    return $h;", k: "" },
-    { t: "} );", k: "" },
+    { t: "add_filter( 'xmlrpc_enabled', '__return_false' );", k: "h" },
+    { t: "add_filter(", k: "" },
+    { t: "  'xmlrpc_methods',", k: "" },
+    { t: "  '__return_empty_array',", k: "h" },
+    { t: "  PHP_INT_MAX", k: "" },
+    { t: ");", k: "" },
     { t: "remove_action( 'wp_head', 'rsd_link' );", k: "" },
-  ]).addNotes("Check with the client before disabling if they use the WordPress mobile app or older Jetpack features over XML-RPC. Most sites don't.");
+  ], 16).addNotes("Check trusted integrations first. Blocking xmlrpc.php itself belongs at the web server or edge.");
 
 codeSlide(9, "SECURITY · 3 of 6",
-  "Disable Application Passwords",
-  "Application Passwords mint long-lived credentials for the REST API. Great for headless setups — but if nobody's using them, they're just a secret waiting to leak. No feature, nothing to steal.",
-  "wpyeg_disable_application_passwords", "yes",
+  "Application Passwords: explicit policy",
+  "Application Passwords are hashed, per-application, revocable integration credentials. Availability is not itself a flaw. Keep them available unless organizational policy forbids them.",
+  "wpyeg_disable_application_passwords", "no",
   [
     { t: "add_filter(", k: "" },
     { t: "  'wp_is_application_passwords_available',", k: "h" },
     { t: "  '__return_false'", k: "h" },
     { t: ");", k: "" },
     { t: "", k: "" },
-    { t: "// Turn this OFF again if you run a", k: "c" },
-    { t: "// headless / external integration.", k: "c" },
-  ], 12.5).addNotes("One-liner. The only caveat: if the site talks to an external app via REST auth, leave the feature on.");
+    { t: "// Optional site-policy prohibition.", k: "c" },
+    { t: "// Inventory and revoke unused credentials.", k: "c" },
+  ], 16).addNotes("Application Passwords are documented core API credentials. Treat availability as policy context, not a failed security check.");
 
 codeSlide(10, "SECURITY · 4 of 6",
   "Require strong passwords",
-  "Core shows a strength meter but never enforces it — a determined user can still save “password1”. We validate server-side on profile save and password reset, turning the warning into a wall.",
+  "Enforce at least 15 characters and reject common or user-specific values. Avoid arbitrary composition rules. Validate core profile, reset, and REST user flows, then test custom registration, CLI, and SSO separately.",
   "wpyeg_require_strong_passwords", "yes",
   [
-    { t: "// hooked on user_profile_update_errors", k: "c" },
-    { t: "$ok = strlen( $pw ) >= 12", k: "" },
-    { t: "   && preg_match( '/[A-Z]/', $pw )", k: "h" },
-    { t: "   && preg_match( '/[a-z]/', $pw )", k: "h" },
-    { t: "   && preg_match( '/[0-9]/', $pw )", k: "h" },
-    { t: "   && preg_match( '/[^A-Za-z0-9]/', $pw );", k: "h" },
+    { t: "$length = function_exists( 'mb_strlen' )", k: "" },
+    { t: "  ? mb_strlen( $password )", k: "h" },
+    { t: "  : strlen( $password );", k: "" },
     { t: "", k: "" },
-    { t: "if ( ! $ok ) {", k: "" },
-    { t: "    $errors->add( 'weak', 'Too weak.' );", k: "" },
+    { t: "if ( 15 > $length ) {", k: "" },
+    { t: "  return new WP_Error(", k: "" },
+    { t: "    'password_too_short',", k: "h" },
+    { t: "    'Use 15+ characters.' );", k: "" },
     { t: "}", k: "" },
-  ]).addNotes("Never trust the client. The JS meter is UX; the server-side rule is enforcement. 12 chars + mixed classes is a reasonable floor.");
+  ], 16).addNotes("NIST recommends length, blocklists, rate limiting, paste/password-manager support, and no forced composition or periodic rotation.");
 
 codeSlide(11, "SECURITY · 5 of 6",
-  "Remove fingerprints, add headers",
-  "Two quick wins: stop broadcasting your exact core version to vulnerability scanners, and send three low-risk security headers that most sites can adopt without breaking anything.",
-  "wpyeg_remove_version / _security_headers", "yes / yes",
+  "Metadata and headers: use the right layer",
+  "Removing the generator tag is hygiene, not hardening. The wp_headers filter does not cover every REST/error/redirect, static file, or cached edge response. Configure security headers at the server or CDN.",
+  "wpyeg_remove_version", "no",
   [
     { t: "remove_action( 'wp_head', 'wp_generator' );", k: "h" },
+    { t: "add_filter( 'the_generator', '__return_empty_string' );", k: "" },
     { t: "", k: "" },
-    { t: "add_filter( 'wp_headers', function ( $h ) {", k: "" },
-    { t: "  $h['X-Content-Type-Options'] = 'nosniff';", k: "h" },
-    { t: "  $h['X-Frame-Options']        = 'SAMEORIGIN';", k: "h" },
-    { t: "  $h['Referrer-Policy'] =", k: "h" },
-    { t: "        'strict-origin-when-cross-origin';", k: "h" },
-    { t: "  return $h;", k: "" },
-    { t: "} );", k: "" },
-  ]).addNotes("Version hiding is obscurity, not security — but it cuts automated noise. The three headers are safe defaults; a full CSP is a bigger conversation.");
+    { t: "// Patch promptly; verify headers at edge.", k: "c" },
+  ], 16).addNotes("Prefer CSP frame-ancestors over relying only on X-Frame-Options. Roll out CSP from an inventory and report-only phase.");
 
 codeSlide(12, "SECURITY · 6 of 6 · opt-in",
   "Lock REST to logged-in users",
-  "The nuclear option. Requiring auth for ALL REST calls stops anonymous scraping cold — but it also breaks the block editor and many blocks. That's why it ships OFF. Reach for it only on pure brochure sites.",
+  "Requiring auth for every REST request can break public blocks, forms, search, oEmbed, and integrations. It ships off. Use it only after an endpoint inventory and compatibility test.",
   "wpyeg_disable_rest", "no",
   [
-    { t: "add_filter( 'rest_authentication_errors',", k: "" },
-    { t: "  function ( $result ) {", k: "" },
-    { t: "    if ( ! empty( $result ) ) return $result;", k: "" },
-    { t: "    if ( ! is_user_logged_in() ) {", k: "" },
-    { t: "      return new WP_Error(", k: "h" },
-    { t: "        'rest_not_logged_in', 'Auth required.',", k: "h" },
-    { t: "        array( 'status' => 401 ) );", k: "h" },
-    { t: "    }", k: "" },
-    { t: "    return $result;", k: "" },
-    { t: "} );", k: "" },
+    { t: "if ( ! empty( $result ) ) {", k: "" },
+    { t: "  return $result;", k: "" },
+    { t: "}", k: "" },
+    { t: "if ( ! is_user_logged_in() ) {", k: "" },
+    { t: "  return new WP_Error(", k: "h" },
+    { t: "    'rest_not_logged_in',", k: "h" },
+    { t: "    'Authentication required.',", k: "h" },
+    { t: "    array( 'status' => 401 )", k: "" },
+    { t: "  );", k: "" },
+    { t: "}", k: "" },
   ]).addNotes("Big red switch. Default off on purpose. Great teaching moment: not every default should default to ON — some are opt-in because they trade functionality for safety.");
 
 /* =================================================================== */
@@ -375,9 +360,8 @@ codeSlide(14, "CONTENT · 1 of 3",
   "wpyeg_disable_comments", "yes",
   [
     { t: "add_filter( 'comments_open', '__return_false', 20 );", k: "h" },
-    { t: "add_filter( 'pings_open',    '__return_false', 20 );", k: "h" },
-    { t: "add_filter( 'comments_array',", k: "" },
-    { t: "            '__return_empty_array', 20 );", k: "" },
+    { t: "add_filter( 'pings_open', '__return_false', 20 );", k: "h" },
+    { t: "add_filter( 'comments_array', '__return_empty_array', 20 );", k: "" },
     { t: "", k: "" },
     { t: "// + remove_post_type_support() on init", k: "c" },
     { t: "// + remove_menu_page('edit-comments.php')", k: "c" },
@@ -385,23 +369,21 @@ codeSlide(14, "CONTENT · 1 of 3",
   ]).addNotes("If the client wants comments, leave this off — but still consider closing pingbacks/trackbacks, which are almost pure spam.");
 
 codeSlide(15, "CONTENT · 2 of 3",
-  "Redirect author & attachment pages",
-  "Two thin-content leaks, same fix. Author archives expose login slugs; attachment pages are near-empty media wrappers. Both dilute SEO and add surface. Send them home with a 301.",
-  "wpyeg_disable_author_archives / _redirect_attachment_pages", "yes / yes",
+  "Author archives & legacy attachment pages",
+  "Disabled author archives should return a real 404 and suppress numeric-author canonical redirects. WordPress 6.4+ already disables attachment pages on new sites; redirects mainly help upgraded sites.",
+  "wpyeg_disable_author_archives / _redirect_attachment_pages", "yes / no",
   [
-    { t: "add_action( 'template_redirect', function () {", k: "" },
-    { t: "  if ( is_author() ) {", k: "h" },
-    { t: "    wp_safe_redirect( home_url('/'), 301 );", k: "" },
-    { t: "    exit;", k: "" },
-    { t: "  }", k: "" },
-    { t: "  if ( is_attachment() ) {", k: "h" },
-    { t: "    // 301 to parent post, or home", k: "c" },
-    { t: "  }", k: "" },
-    { t: "} );", k: "" },
-  ]).addNotes("template_redirect fires before a template loads — the perfect place to bounce a request. Same hook, two conditions.");
+    { t: "if ( is_author() ) {", k: "" },
+    { t: "  $wp_query->set_404();", k: "h" },
+    { t: "  status_header( 404 );", k: "h" },
+    { t: "  nocache_headers();", k: "" },
+    { t: "}", k: "" },
+    { t: "", k: "" },
+    { t: "// Legacy attachment: parent or media file.", k: "c" },
+  ], 16).addNotes("Homepage redirects create soft-404 and misleading canonical behavior. Multi-author publications should enable and curate author pages.");
 
 codeSlide(16, "CONTENT · 3 of 3",
-  "Disable the emoji script",
+  "Disable emoji compatibility support",
   "Core injects an emoji-detection script and inline CSS on every page load, plus a DNS-prefetch hint. Modern browsers render emoji natively, so this is pure dead weight you can shed.",
   "wpyeg_disable_emojis", "yes",
   [
@@ -424,36 +406,37 @@ divider("3", "SECTION THREE", "Admin UX &\nLogin Sessions", "Small quality-of-li
 
 codeSlide(18, "ADMIN UX",
   "Faster search, quieter admin bar",
-  "On big sites the admin list-table search scans post content and crawls. Title-only search is far faster (off by default — it changes editor expectations). And the floating front-end admin bar can be hidden for non-admins.",
+  "Title-only search changes editor expectations, so it is opt-in. Use core's search-column filter to preserve term parsing, exclusions, password constraints, and SQL composition. Toolbar visibility is UX, not authorization.",
   "wpyeg_title_only_admin_search / _frontend_admin_bar_behavior", "no / ''",
   [
-    { t: "// title-only admin search (scoped!)", k: "c" },
-    { t: "add_filter( 'posts_search', function ( $sql, $q ) {", k: "" },
-    { t: "  if ( ! is_admin() || ! $q->is_main_query() )", k: "" },
-    { t: "      return $sql;   // front-end untouched", k: "h" },
-    { t: "  // ...match post_title only", k: "c" },
-    { t: "}, 10, 2 );", k: "" },
-    { t: "", k: "" },
-    { t: "// hide bar for non-admins", k: "c" },
-    { t: "add_filter( 'show_admin_bar', fn( $s ) =>", k: "" },
-    { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
-  ], 11).addNotes("Note the is_admin() guard — we scope the search change so we never touch the visitor-facing search. Scoping filters correctly is the craft here.");
+    { t: "add_filter(", k: "" },
+    { t: "  'post_search_columns',", k: "" },
+    { t: "  function ( $columns, $search, $query ) {", k: "" },
+    { t: "    if ( is_admin() && $query->is_search() ) {", k: "" },
+    { t: "      return array( 'post_title' );", k: "h" },
+    { t: "    }", k: "" },
+    { t: "    return $columns;", k: "" },
+    { t: "  },", k: "" },
+    { t: "  10,", k: "" },
+    { t: "  3", k: "" },
+    { t: ");", k: "" },
+  ], 16).addNotes("manage_options is a capability, not the name of an Administrator role. Hiding the toolbar does not remove wp-admin access.");
 
 codeSlide(19, "LOGIN & SESSIONS",
   "Right-size the login session",
-  "Core's “Remember Me” lasts 14 days — often too long. Cap it (say 5 days), optionally shorten regular logins, or hide the checkbox entirely for shared machines. One filter does all three.",
-  "wpyeg_remember_me_days / _session_regular_hours", "5 / 0",
+  "WordPress defaults are approximately 14 days remembered and 48 hours regular. Keep those defaults unless policy says otherwise. To disable Remember Me, remove the submitted value server-side; CSS is only presentation.",
+  "wpyeg_remember_me_days / _session_regular_hours", "0 / 0",
   [
-    { t: "add_filter( 'auth_cookie_expiration',", k: "" },
-    { t: "  function ( $exp, $uid, $remember ) {", k: "" },
-    { t: "    if ( $remember ) {", k: "" },
-    { t: "      return 5 * DAY_IN_SECONDS;", k: "h" },
-    { t: "    }", k: "" },
-    { t: "    return 12 * HOUR_IN_SECONDS;", k: "h" },
-    { t: "  }, 10, 3 );", k: "" },
+    { t: "add_action(", k: "" },
+    { t: "  'login_init',", k: "" },
+    { t: "  static function () {", k: "" },
+    { t: "    unset( $_POST['rememberme'] );", k: "h" },
+    { t: "    unset( $_REQUEST['rememberme'] );", k: "h" },
+    { t: "  }", k: "" },
+    { t: ");", k: "" },
     { t: "", k: "" },
-    { t: "// DAY_IN_SECONDS: core time constant", k: "c" },
-  ]).addNotes("WordPress ships handy time constants — DAY_IN_SECONDS, HOUR_IN_SECONDS — so you never hand-count seconds. Good habit to point out.");
+    { t: "// Expiration changes affect new cookies only.", k: "c" },
+  ], 16).addNotes("Revoke existing sessions separately. Client-side checkbox removal alone is bypassable.");
 
 /* =================================================================== */
 /* SECTION 4 — BRANDING + PERFORMANCE (combined divider)               */
@@ -462,34 +445,34 @@ divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, t
   .addNotes("Last pair of sections: a branding touch on the login screen, then two performance levers.");
 
 codeSlide(21, "BRANDING",
-  "Own the login screen",
-  "The default WordPress “W” on wp-login.php links out to wordpress.org — a subtle trust and brand leak on the one page where trust matters most. Remove or replace it, and point the link back home.",
-  "wpyeg_login_logo_behavior / _login_logo_link_home", "remove_logo / yes",
+  "Brand the login screen — when useful",
+  "The WordPress logo is not a security leak. Keep core behavior by default; remove or replace it only when the project calls for branded authentication UX.",
+  "wpyeg_login_logo_behavior / _login_logo_link_home", "default / no",
   [
-    { t: "add_action( 'login_head', function () {", k: "" },
-    { t: "  echo '<style>#login h1 a{display:none}</style>';", k: "h" },
-    { t: "} );", k: "" },
-    { t: "", k: "" },
     { t: "add_filter( 'login_headerurl', 'home_url' );", k: "h" },
-    { t: "add_filter( 'login_headertext', fn() =>", k: "" },
-    { t: "            get_bloginfo( 'name' ) );", k: "h" },
-  ], 12).addNotes("Swap display:none for a background-image to drop in the client's own logo. Tiny detail clients always notice.");
+    { t: "add_filter(", k: "" },
+    { t: "  'login_headertext',", k: "" },
+    { t: "  static function () {", k: "" },
+    { t: "    return get_bloginfo( 'name' );", k: "h" },
+    { t: "  }", k: "" },
+    { t: ");", k: "" },
+  ], 16).addNotes("This is a preference, not a hardening control. Keep it out of security scorecards.");
 
 codeSlide(22, "PERFORMANCE · opt-in",
-  "Throttle Heartbeat, defer scripts",
-  "Two opt-in levers. The Heartbeat API polls admin-ajax every 15–60s — throttle it (and drop it on the dashboard home) to ease shared hosting. And defer non-critical front-end scripts so they stop blocking render.",
-  "wpyeg_throttle_heartbeat / _defer_scripts", "no / no",
+  "Throttle Heartbeat; declare script strategy",
+  "An opt-in 60-second Heartbeat interval may reduce polling, but do not deregister it: autosave, post locking, sessions, and plugins use it. Declare defer/async per owned script through core's dependency-aware API.",
+  "wpyeg_throttle_heartbeat", "no",
   [
-    { t: "add_filter( 'heartbeat_settings', fn( $s ) => {", k: "" },
-    { t: "  $s['interval'] = 60; return $s;", k: "h" },
-    { t: "} );", k: "" },
+    { t: "$settings['interval'] = 60;", k: "h" },
     { t: "", k: "" },
-    { t: "add_filter( 'script_loader_tag',", k: "" },
-    { t: "  function ( $tag, $handle ) {", k: "" },
-    { t: "    // add ' defer' (skip jquery-core)", k: "c" },
-    { t: "    return $tag;", k: "" },
-    { t: "}, 10, 2 );", k: "" },
-  ]).addNotes("Off by default because deferring scripts can break plugins that expect synchronous jQuery. Test before shipping — hence opt-in.");
+    { t: "wp_enqueue_script(", k: "" },
+    { t: "  'example-feature',", k: "" },
+    { t: "  $src,", k: "" },
+    { t: "  array(),", k: "" },
+    { t: "  '1.0.0',", k: "" },
+    { t: "  array( 'strategy' => 'defer' )", k: "h" },
+    { t: ");", k: "" },
+  ], 16).addNotes("WordPress 6.3+ resolves eligible loading strategies through dependency trees. Never inject defer into every script tag.");
 
 /* =================================================================== */
 /* 23. wp-config things                                                */
@@ -497,21 +480,22 @@ codeSlide(22, "PERFORMANCE · opt-in",
 (() => {
   const s = p.addSlide();
   s.background = { color: CLOUD };
-  s.addText("Three things a plugin can't toggle", {
+  s.addText("Deployment policy belongs in configuration", {
     x: 0.6, y: 0.55, w: 12, h: 0.8, fontFace: HEAD, fontSize: 32, bold: true, color: INK, margin: 0,
   });
-  s.addText("Some defaults live in wp-config.php, above the plugin layer. Document these as manual steps in your onboarding checklist.", {
+  s.addText("Plugins can define constants early, but wp-config.php or environment configuration makes deployment ownership clearer.", {
     x: 0.6, y: 1.4, w: 11.8, h: 0.7, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0,
   });
   codePanel(s, 0.6, 2.35, 12.1, 2.1, [
     { t: "define( 'DISALLOW_FILE_EDIT', true );  // no in-dashboard code editor", k: "" },
+    { t: "define( 'DISALLOW_FILE_MODS', true );  // managed deployments only", k: "h" },
     { t: "define( 'AUTOSAVE_INTERVAL', 120 );    // gentler autosave (seconds)", k: "" },
     { t: "define( 'WP_POST_REVISIONS', 10 );     // cap revision-table bloat", k: "" },
-  ], 14);
+  ], 16);
   const notes = [
-    { t: "Kills the theme/plugin editor", d: "A stolen admin login can't rewrite your PHP from the dashboard." },
-    { t: "Writes to the DB less often", d: "Fewer autosave revisions during long edits." },
-    { t: "Keeps revisions in check", d: "Ten per post instead of unbounded growth." },
+    { t: "Separate deployment policy", d: "File editing and update ownership are different decisions." },
+    { t: "Protect the update path", d: "DISALLOW_FILE_MODS requires an external update workflow." },
+    { t: "Tune editorial storage", d: "Autosave and revisions are workflow/capacity choices." },
   ];
   notes.forEach((c, i) => {
     const x = 0.6 + i * 4.07;
@@ -521,7 +505,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     s.addText(c.d, { x: x + 0.28, y: 5.62, w: 3.35, h: 0.7, fontFace: BODY, fontSize: 12.5, color: SLATE, margin: 0, valign: "top" });
   });
   footer(s, 23);
-  s.addNotes("These constants can't be options because they must load before plugins do. Put them in your standard wp-config template.");
+  s.addNotes("Do not enable DISALLOW_FILE_MODS on a site that relies on dashboard updates. These constants are clearer in deployment config, not impossible for plugins to define.");
 })();
 
 /* =================================================================== */
@@ -552,7 +536,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
   codePanel(s, 0.7, 5.15, 11.95, 1.35, [
     { t: "$stored = get_option('wpyeg_better_by_default');   // read once", k: "c" },
     { t: "foreach ( wpyeg_defaults_schema() as $key => $field ) { /* render + wire */ }", k: "" },
-  ], 12.5);
+  ], 16);
   s.addNotes("The design lesson: a data-driven plugin. Adding a new default = one array entry + one if-block in bootstrap. No new settings-page code. That's the pattern to steal.");
 })();
 
@@ -569,7 +553,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
   const steps = [
     { n: "1", t: "Upload the plugin", d: "Plugins → Add New → Upload Plugin → choose better-by-default.zip → Activate." },
     { n: "2", t: "Open the settings", d: "Settings → Better by Default. Every toggle is grouped by category." },
-    { n: "3", t: "Verify a default", d: "Visit /wp-json/wp/v2/users logged out — 401 or empty, not a list of usernames." },
+    { n: "3", t: "Verify status codes", d: "Visit /wp-json/wp/v2/users and /?author=1 logged out — both should return 404." },
     { n: "4", t: "Toggle & re-check", d: "Flip a switch off, reload, watch the behavior change. That's the filter turning on and off." },
   ];
   steps.forEach((c, i) => {
@@ -584,7 +568,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
   s.addText([
     { text: "prefer the terminal?   ", options: { color: WHEAT, bold: true } },
     { text: "wp plugin install ./better-by-default.zip --activate", options: { color: CGOLD } },
-  ], { x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 13, valign: "middle", margin: 0 });
+  ], { x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 16, valign: "middle", margin: 0 });
   footer(s, 25);
   s.addNotes("Do this live if there's a sandbox. The /wp-json/wp/v2/users check is the crowd-pleaser — before/after is instantly visible. For the terminal crowd, the WP-CLI one-liner installs and activates from the zip in one shot; swap the local path for a URL if the zip is hosted.");
 })();
@@ -602,18 +586,18 @@ codeSlide(22, "PERFORMANCE · opt-in",
   s.addText("Goal: disable the WordPress dashboard “Welcome” panel. Two small edits — no new settings-page code.", {
     x: 0.8, y: 2.7, w: 11.5, h: 0.7, fontFace: BODY, fontSize: 17, color: SKY, italic: true, margin: 0, valign: "top",
   });
-  codePanel(s, 0.8, 3.55, 11.7, 2.7, [
-    { t: "// 1) add a schema entry in wpyeg_defaults_schema()", k: "c" },
+  codePanel(s, 0.8, 3.4, 11.7, 3.0, [
+    { t: "// 1) Add a schema entry.", k: "c" },
     { t: "'hide_welcome_panel' => array(", k: "" },
-    { t: "    'default' => 'yes', 'type' => 'toggle', 'group' => 'ux',", k: "h" },
-    { t: "    'label' => 'Hide dashboard welcome panel',", k: "" },
+    { t: "  'default' => 'yes',", k: "h" },
+    { t: "  'type'    => 'toggle',", k: "" },
+    { t: "  'group'   => 'ux',", k: "" },
     { t: "),", k: "" },
-    { t: "", k: "" },
-    { t: "// 2) wire it inside wpyeg_defaults_bootstrap()", k: "c" },
+    { t: "// 2) Wire the enabled policy.", k: "c" },
     { t: "if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {", k: "" },
-    { t: "    remove_action( 'welcome_panel', 'wp_welcome_panel' );", k: "h" },
+    { t: "  remove_action( 'welcome_panel', 'wp_welcome_panel' );", k: "h" },
     { t: "}", k: "" },
-  ], 13);
+  ], 16);
   s.addNotes("Great confidence-builder. It proves the data-driven pattern: they touch two spots and a real feature toggles. If time is short, walk it verbally.");
 })();
 
@@ -626,36 +610,33 @@ codeSlide(22, "PERFORMANCE · opt-in",
   s.addText("The cheat sheet", {
     x: 0.6, y: 0.45, w: 12, h: 0.7, fontFace: HEAD, fontSize: 30, bold: true, color: INK, margin: 0,
   });
-  s.addText("Defaults that ship ON — safe for nearly any site.", {
+  s.addText("Starting assumptions that ship ON — review each site's boundary.", {
     x: 0.6, y: 1.2, w: 12, h: 0.4, fontFace: BODY, fontSize: 14, color: STEEL2, bold: true, margin: 0,
   });
   const rows = [
     ["Restrict REST user discovery", "rest_endpoints", "Security"],
-    ["Disable XML-RPC", "xmlrpc_enabled", "Security"],
-    ["Disable Application Passwords", "wp_is_application_passwords_available", "Security"],
-    ["Require strong passwords", "user_profile_update_errors", "Security"],
-    ["Remove version + security headers", "wp_generator / wp_headers", "Security"],
+    ["Disable XML-RPC methods", "xmlrpc_methods", "Security"],
+    ["Require password policy", "profile / reset / REST", "Security"],
     ["Disable comments & pingbacks", "comments_open / pings_open", "Content"],
-    ["Redirect author + attachment pages", "template_redirect", "Content / SEO"],
-    ["Disable emoji script", "init (remove_action)", "Performance"],
-    ["Own the login logo + link", "login_head / login_headerurl", "Branding"],
+    ["404 public author archives", "canonical + query state", "Content"],
+    ["Remove emoji compatibility", "init (remove hooks)", "Performance"],
   ];
   const tblRows = [[
-    { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
-    { text: "Core hook", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: MONO, fontSize: 12, align: "left", margin: 4 } },
-    { text: "Category", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
+    { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 16, align: "left", margin: 4 } },
+    { text: "Core hook", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: MONO, fontSize: 16, align: "left", margin: 4 } },
+    { text: "Category", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 16, align: "left", margin: 4 } },
   ]];
   rows.forEach((r, i) => {
     const bg = i % 2 ? "EAF1F5" : WHITE;
     tblRows.push([
-      { text: r[0], options: { color: INK, fill: { color: bg }, fontFace: BODY, fontSize: 12.5, align: "left", margin: 4 } },
-      { text: r[1], options: { color: STEEL, fill: { color: bg }, fontFace: MONO, fontSize: 11, align: "left", margin: 4 } },
-      { text: r[2], options: { color: SLATE, fill: { color: bg }, fontFace: BODY, fontSize: 12, align: "left", margin: 4 } },
+      { text: r[0], options: { color: INK, fill: { color: bg }, fontFace: BODY, fontSize: 16, align: "left", margin: 4 } },
+      { text: r[1], options: { color: STEEL, fill: { color: bg }, fontFace: MONO, fontSize: 16, align: "left", margin: 4 } },
+      { text: r[2], options: { color: SLATE, fill: { color: bg }, fontFace: BODY, fontSize: 16, align: "left", margin: 4 } },
     ]);
   });
   s.addTable(tblRows, {
     x: 0.6, y: 1.65, w: 12.1, colW: [5.0, 4.9, 2.2],
-    border: { type: "solid", color: "DCE6EB", pt: 1 }, valign: "middle", rowH: 0.44,
+    border: { type: "solid", color: "DCE6EB", pt: 1 }, valign: "middle", rowH: 0.65,
   });
   footer(s, 27);
   s.addNotes("Screenshot slide. Everything ON-by-default in one view, mapped to the core hook so they can find it in the code.");
@@ -672,7 +653,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
   s.addText("Thanks, WPYEG!", {
     x: 0.85, y: 1.9, w: 11.6, h: 1.2, fontFace: HEAD, fontSize: 50, bold: true, color: WHITE, margin: 0,
   });
-  s.addText("Take the plugin, fork it, teach it. A default is just an opinionated filter behind a toggle.", {
+  s.addText("Take the plugin, fork it, teach it. A default is an explicit, testable hook behind a toggle.", {
     x: 0.9, y: 3.2, w: 11, h: 0.9, fontFace: BODY, fontSize: 19, color: SKY, italic: true, margin: 0, valign: "top",
   });
   s.addText([
@@ -683,9 +664,9 @@ codeSlide(22, "PERFORMANCE · opt-in",
   ], { x: 0.9, y: 4.4, w: 11.5, h: 0.5, fontFace: MONO, fontSize: 14, margin: 0 });
   s.addText([
     { text: "Questions?  ", options: { color: WHITE, bold: true } },
-    { text: "License GPL-2.0-or-later — ship it.", options: { color: SKY } },
+    { text: "License GPL-3.0-or-later — verify it, then ship it.", options: { color: SKY } },
   ], { x: 0.9, y: 6.15, w: 11.5, h: 0.6, fontFace: BODY, fontSize: 16, margin: 0, valign: "middle" });
   s.addNotes("Wrap: hand out the zip and the reference doc. Invite them to add their own favorite default to the schema and share it back with the group.");
 })();
 
-p.writeFile({ fileName: "/home/claude/deck/WPYEG-Sane-Defaults.pptx" }).then((f) => console.log("WROTE", f));
+p.writeFile({ fileName: path.join(__dirname, "Better-by-Default.pptx") }).then((f) => console.log("WROTE", f));

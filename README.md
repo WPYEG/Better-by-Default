@@ -1,9 +1,9 @@
 # Better by Default
 
-**Sane defaults for every new WordPress site.**
+**A reviewed, testable starting policy for new WordPress sites.**
 
-A small, data-driven plugin that flips a menu of sensible security, UX, SEO, and performance
-defaults onto any WordPress install — each one individually toggleable under
+A small, data-driven teaching plugin that applies a menu of security, content, UX, login,
+branding, and performance policies — each one individually toggleable under
 **Settings → Better by Default**. Built as the teaching project for the
 [WPYEG — Edmonton WordPress Meetup](https://wpyeg.ca/).
 
@@ -44,17 +44,20 @@ On activation the documented defaults are seeded automatically. Then visit
 
 ## The defaults
 
-**On out of the box** (safe for nearly any site): restrict REST user discovery, disable
-XML-RPC, disable Application Passwords, require strong passwords, remove the version
-fingerprint + send security headers, disable comments / pingbacks / self-pingbacks, redirect
-public author archives and attachment pages, disable the emoji script, and own the login logo.
+**On out of the box:** restrict anonymous core REST user routes, disable XML-RPC methods and
+discovery hints, enforce a 15-character password floor with a filterable blocklist, and disable
+comments, pingbacks, self-pingbacks, public author archives, and emoji compatibility support.
+These are starting assumptions, not universal truths; review them for each site's publishing
+and integration needs.
 
 **Opt-in, off by default** (they change behavior — turn on deliberately): require auth for all
-REST, title-only admin search, hide the front-end admin bar, disable Remember Me, throttle the
-Heartbeat API, and defer front-end scripts.
+REST requests, disable Application Passwords, hide the generator tag, redirect legacy
+attachment pages, use title-only admin search, alter the front-end admin bar, disable Remember
+Me, change session lengths or login branding, and throttle the Heartbeat API.
 
-Three more live in `wp-config.php`, above the plugin layer, and are documented as manual steps:
-`DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, and `WP_POST_REVISIONS`.
+Deployment-level defaults such as `DISALLOW_FILE_EDIT`, `DISALLOW_FILE_MODS`,
+`AUTOSAVE_INTERVAL`, and `WP_POST_REVISIONS` are clearer in `wp-config.php`. A managed
+deployment may use `DISALLOW_FILE_MODS`; a site that relies on dashboard updates should not.
 
 See [`docs/wordpress-default-settings.md`](docs/wordpress-default-settings.md) for the full
 reference — every default, the reasoning, and the snippet.
@@ -70,7 +73,16 @@ code. (The `wpyeg_` option prefix is kept deliberately as the WPYEG org conventi
 
 The [`workshop/`](workshop/) folder holds the full talk: `Better-by-Default.pptx`, an iA
 Presenter version (`Better-by-Default.ia.md`), a `Better-by-Default.pdf` handout, and
-`build_deck.js` (the pptxgenjs generator, in case you want to reskin the slides).
+`build_deck.js` (the source used to regenerate the workshop deck).
+
+## Verification
+
+The repository includes PHP syntax checks, WordPress Coding Standards configuration, lightweight
+regression tests, and a `wp-env` mapping for a real WordPress smoke test. Run `composer lint`,
+`composer test`, and then `npx --yes @wordpress/env start` plus
+`npx --yes @wordpress/env run cli wp plugin activate better-by-default` before packaging. The
+reference document also links each material claim to WordPress developer documentation, Core
+developer notes, or NIST password guidance.
 
 ## License
 

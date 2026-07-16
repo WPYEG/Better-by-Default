@@ -1,544 +1,278 @@
-# WordPress "Sane Defaults" Reference
+# Better by Default: reviewed WordPress policy reference
 
-A menu of default settings that can be applied to just about any WordPress install to
-tighten security, trim attack surface, clean up UX, and shave weight off the front end.
+This is a teaching reference, not a universal hardening checklist. A good default is an
+explicit assumption with a compatibility boundary, an owner, and a test. The companion plugin
+puts each runtime policy behind a setting under **Settings → Better by Default**.
 
-Each item lists a suggested **option key** (using a `wpyeg_` prefix for the WPYEG workshop
-plugin), a recommended **default value**, a short **description**, and a **code snippet** you
-can drop into a plugin, an mu-plugin, or a theme's `functions.php`.
+The complete, executable implementation is in
+[`plugin/better-by-default/better-by-default.php`](../plugin/better-by-default/better-by-default.php).
+The shorter snippets below demonstrate the relevant core hook without pretending to cover
+every deployment.
 
-> Built for the **WPYEG — Edmonton WordPress Meetup** hands-on workshop. The companion
-> `better-by-default` plugin wires every one of these behind a toggle.
+## Security and access surfaces
 
-**How to read this:** the option key/default columns assume these are user-toggleable
-settings. The snippet under each item is the "on" behavior — the code that runs when the
-default is active. In a real plugin you'd wrap each snippet in a
-`get_option( 'wpyeg_...' ) === 'yes'` check so site owners can flip it. Snippets are shown
-unwrapped for clarity.
+### Restrict anonymous core REST user routes — default `yes`
 
-A few items are flagged **plugin-specific** — they have no stable WordPress core equivalent
-and depend on your own plugin's logic.
-
----
-
-## 1. Security & Attack-Surface Reduction
-
-### Restrict REST API User Discovery
-- **Option:** `wpyeg_restrict_rest_user_discovery`
-- **Default:** `yes`
-- **Why:** The `/wp/v2/users` endpoint leaks usernames (author slugs) to anonymous visitors,
-  which hands attackers half of every brute-force credential. Closing it to logged-out users
-  keeps the API working for authenticated tools while shutting the enumeration door.
+Core's users controller exposes public author records, including `slug` (`user_nicename`), not
+the private `user_login`. That data can still aid account discovery, but authors can also be
+discoverable through posts, feeds, sitemaps, themes, and intentional author archives. Removing
+routes is therefore a privacy/surface-reduction policy, not a claim that usernames become secret.
+Logged-out requests to removed routes return the normal REST “no route” response (typically
+404), not 401.
 
 ```php
-add_filter( 'rest_endpoints', function ( $endpoints ) {
-    if ( ! is_user_logged_in() ) {
-        unset( $endpoints['/wp/v2/users'] );
-        unset( $endpoints['/wp/v2/users/(?P<id>[\d]+)'] );
-    }
+add_filter(
+	'rest_endpoints',
+	static function ( $endpoints ) {
+		if ( ! is_user_logged_in() ) {
+			foreach ( array_keys( $endpoints ) as $route ) {
+				if ( preg_match( '#^/wp/v2/users(?:/|$)#', $route ) ) {
+					unset( $endpoints[ $route ] );
+				}
+			}
+		}
 
-    return $endpoints;
-} );
+		return $endpoints;
+	}
+);
 ```
 
-### Disable REST API for Anonymous Requests
-- **Option:** `wpyeg_disable_rest`
-- **Default:** `no` *(leave off unless the site is a pure brochure site — the block editor,
-  many blocks, and core AJAX rely on REST)*
-- **Why:** Fully disabling REST is a blunt instrument. The safer posture is to require
-  authentication for all REST calls, which blocks anonymous scraping without breaking the
-  editor for logged-in users.
+### Require authentication for all REST requests — default `no`
+
+This is compatibility-sensitive. Public blocks, oEmbed, forms, search, headless front ends, and
+integrations may need anonymous REST access. Existing authentication errors must pass through.
 
 ```php
-add_filter( 'rest_authentication_errors', function ( $result ) {
-    if ( ! empty( $result ) ) {
-        return $result;
-    }
+add_filter(
+	'rest_authentication_errors',
+	static function ( $result ) {
+		if ( ! empty( $result ) || is_user_logged_in() ) {
+			return $result;
+		}
 
-    if ( ! is_user_logged_in() ) {
-        return new WP_Error(
-            'rest_not_logged_in',
-            __( 'REST API restricted to authenticated users.' ),
-            array( 'status' => 401 )
-        );
-    }
-
-    return $result;
-} );
+		return new WP_Error(
+			'rest_not_logged_in',
+			__( 'REST API restricted to authenticated users.', 'better-by-default' ),
+			array( 'status' => 401 )
+		);
+	}
+);
 ```
 
-### Disable XML-RPC
-- **Option:** `wpyeg_disable_xmlrpc`
-- **Default:** `yes`
-- **Why:** `xmlrpc.php` is a classic amplification vector for brute-force and pingback-DDoS
-  attacks. Unless you run the legacy Jetpack/mobile-app path over XML-RPC, kill it.
+### Disable XML-RPC methods — default `yes`
+
+The `xmlrpc_enabled` filter only controls methods requiring authentication. It does **not**
+disable the endpoint or pingback methods. To make the setting truthful, remove the registered
+method surface as well as discovery hints. `xmlrpc.php` can still respond with an XML-RPC fault;
+blocking the file itself belongs at the web server or edge.
 
 ```php
 add_filter( 'xmlrpc_enabled', '__return_false' );
-
-// Also strip the RSD/pingback discovery header so bots stop probing.
-add_filter( 'wp_headers', function ( $headers ) {
-    unset( $headers['X-Pingback'] );
-    return $headers;
-} );
+add_filter( 'xmlrpc_methods', '__return_empty_array', PHP_INT_MAX );
+add_filter(
+	'wp_headers',
+	static function ( $headers ) {
+		unset( $headers['X-Pingback'] );
+		return $headers;
+	}
+);
 remove_action( 'wp_head', 'rsd_link' );
 ```
 
-### Disable Application Passwords
-- **Option:** `wpyeg_disable_application_passwords`
-- **Default:** `yes`
-- **Why:** Application Passwords create long-lived credentials for the REST API. If you
-  aren't using headless clients or external integrations, remove the feature so there's
-  nothing to leak.
+### Application Passwords — available by default
+
+Application Passwords are hashed, per-application, revocable credentials intended for API
+authentication. Availability is not inherently a vulnerability. The plugin offers an opt-in
+prohibition for sites whose policy forbids them:
 
 ```php
 add_filter( 'wp_is_application_passwords_available', '__return_false' );
 ```
 
-### Require Strong Passwords
-- **Option:** `wpyeg_require_strong_passwords`
-- **Default:** `yes`
-- **Why:** Core ships a password meter but won't *enforce* strength. This rejects weak
-  passwords server-side on profile updates and user creation, so a warning becomes a wall.
+### Password policy — default `yes`
+
+The plugin enforces at least 15 characters, rejects a small filterable blocklist, and rejects
+the current user's login/nicename/email name. It deliberately does not require arbitrary mixes
+of uppercase, lowercase, numbers, and symbols. Validation runs for wp-admin profile/user flows,
+password reset, and the core REST users controller. Custom registration forms, WP-CLI, direct
+`wp_update_user()` calls, and third-party identity providers need their own integration tests.
+
+For production, connect `wpyeg_password_blocklist` to a substantially larger compromised or
+common-password source. NIST recommends blocklist comparison, password-manager/paste support,
+Unicode support, and rate limiting rather than composition rules or periodic forced rotation.
+
+### Generator tag — default `no`
+
+Removing `wp_generator` is output hygiene only. WordPress and version clues remain fingerprintable
+through assets, files, behavior, and other metadata. Prompt patching matters; hiding a tag does not.
+
+### Security headers — configure at the server or edge
+
+The plugin no longer claims to set a complete baseline through `wp_headers`. That filter covers
+WordPress-generated front-end responses, not every server response, static file, cached response,
+redirect, REST response, or error document. Configure and test headers at the web server/CDN.
+Prefer CSP `frame-ancestors` over relying only on obsolete `X-Frame-Options`, and deploy CSP from
+an inventory/report-only phase rather than copying a universal value.
+
+## Content and public surfaces
+
+### Comments, pings, and self-pings — defaults `yes`
+
+Closing comments is appropriate only for sites that do not use discussion. The plugin closes
+comments and pings at runtime, hides existing comments from templates, removes post-type support
+after post types register, and removes related admin UI. Ping defaults affect newly created
+content; they do not rewrite old database rows.
+
+Self-ping detection compares parsed hosts rather than string prefixes, avoiding false matches
+such as `example.com.evil.test`.
+
+### Public author archives — default `yes` (disabled)
+
+When archives are not part of the publishing model, the plugin returns an actual 404 and suppresses
+numeric-author canonical redirects. Redirecting every author URL to the homepage creates soft-404
+and misleading canonical behavior. Multi-author publications should normally enable and curate
+author pages rather than hide them.
 
 ```php
-add_action( 'user_profile_update_errors', 'wpyeg_enforce_strong_password', 10, 3 );
-add_action( 'validate_password_reset', function ( $errors, $user ) {
-    wpyeg_enforce_strong_password( $errors, true, $user );
-}, 10, 2 );
-
-function wpyeg_enforce_strong_password( $errors, $update, $user ) {
-    $password = isset( $_POST['pass1'] ) ? (string) $_POST['pass1'] : '';
-
-    if ( '' === $password ) {
-        return; // No password change requested.
-    }
-
-    $long_enough = strlen( $password ) >= 12;
-    $has_mixed   = preg_match( '/[A-Z]/', $password )
-                && preg_match( '/[a-z]/', $password )
-                && preg_match( '/[0-9]/', $password )
-                && preg_match( '/[^A-Za-z0-9]/', $password );
-
-    if ( ! $long_enough || ! $has_mixed ) {
-        $errors->add(
-            'pass_too_weak',
-            __( '<strong>Error:</strong> Password must be at least 12 characters and include upper, lower, number, and symbol.' )
-        );
-    }
-}
+add_filter(
+	'redirect_canonical',
+	static function ( $redirect_url ) {
+		return ( is_author() || get_query_var( 'author' ) ) ? false : $redirect_url;
+	}
+);
 ```
-> **Note:** Server-side validation is the enforcement layer. Pair it with the core JS meter
-> for good UX, but never trust the client alone.
 
-### Disable AI Connectors
-- **Option:** `wpyeg_disable_ai_connectors`
-- **Default:** `yes`
-- **Description:** Disables the plugin's built-in AI connector recommendations and related
-  WordPress AI support.
-- **Plugin-specific** — no stable core equivalent. This is plugin-policy logic; there's no
-  core hook to switch off "AI support" generically as of now, so it lives entirely in your
-  plugin. The workshop plugin exposes a `wpyeg_disable_ai_connectors` action as the seam.
+### Legacy attachment pages — default `no`
 
----
+WordPress 6.4+ disables attachment pages on new sites. Upgraded sites can retain them, so the
+plugin offers an opt-in redirect to the parent post or, when unattached, the media file. Do not
+describe this as a necessary new-site default.
 
-## 2. Content, Comments & Public Surfaces
+### Emoji compatibility support — default `yes` (disabled)
 
-### Disable Comments, Trackbacks, and Pingbacks
-- **Option:** `wpyeg_disable_comments`
-- **Default:** `yes`
-- **Why:** For most business/brochure sites, comments are pure spam surface. This closes
-  comments everywhere, drops existing open threads from the UI, and removes the admin menu.
+This removes core's compatibility script/styles plus feed, email, DNS-prefetch, and TinyMCE emoji
+support. Native emoji still render in modern platforms. Test older-browser/accessibility support
+requirements before enabling the policy.
+
+## Admin, login, and performance
+
+### Title-only admin search — default `no`
+
+Use `post_search_columns`, introduced in WordPress 6.2, rather than replacing the `posts_search`
+SQL fragment. This preserves core token parsing, exclusions, password constraints, and query
+composition.
 
 ```php
-// Close comments and pings on the front end for all post types.
-add_filter( 'comments_open', '__return_false', 20, 2 );
-add_filter( 'pings_open', '__return_false', 20, 2 );
+add_filter(
+	'post_search_columns',
+	static function ( $columns, $search, $query ) {
+		if ( is_admin() && $query->is_main_query() && $query->is_search() ) {
+			return array( 'post_title' );
+		}
 
-// Hide existing comments.
-add_filter( 'comments_array', '__return_empty_array', 20, 2 );
-
-// Remove support so meta boxes disappear.
-add_action( 'init', function () {
-    foreach ( get_post_types() as $type ) {
-        if ( post_type_supports( $type, 'comments' ) ) {
-            remove_post_type_support( $type, 'comments' );
-            remove_post_type_support( $type, 'trackbacks' );
-        }
-    }
-} );
-
-// Strip the admin menu + admin-bar node.
-add_action( 'admin_menu', function () {
-    remove_menu_page( 'edit-comments.php' );
-} );
-add_action( 'wp_before_admin_bar_render', function () {
-    global $wp_admin_bar;
-    $wp_admin_bar->remove_node( 'comments' );
-} );
+		return $columns;
+	},
+	10,
+	3
+);
 ```
 
-### Disable Pingbacks and Trackbacks (defaults for new posts)
-- **Option:** `wpyeg_disable_pingbacks`
-- **Default:** `yes`
-- **Why:** Even with comments on, pingbacks/trackbacks are low-value and spammy. This forces
-  the "closed" default for any newly created content.
+### Front-end admin bar — default unchanged
+
+`manage_options` is a capability, not a synonym for the Administrator role. Hiding the bar is a
+presentation preference, not hardening; it does not remove access to wp-admin.
+
+### Remember Me and session duration — defaults unchanged
+
+WordPress defaults are approximately 14 days for remembered sessions and 48 hours otherwise.
+The plugin can change new cookie expirations. Disabling Remember Me removes submitted values on
+the server and hides the checkbox with CSS; a client-side-only removal would be bypassable.
+Changing expiration does not revoke cookies already issued.
+
+### Login branding — default unchanged
+
+The WordPress logo is not a security leak. Removing it or pointing it home is an optional branding
+decision and should not be mixed into a hardening baseline.
+
+### Heartbeat — default unchanged
+
+The opt-in setting raises the requested interval to 60 seconds but does not deregister Heartbeat.
+Disabling it can break post locking, autosave, session warnings, and plugin workflows.
+
+### Script loading strategy — per script, not blanket mutation
+
+WordPress 6.3+ supports `defer` and `async` strategies while accounting for dependency trees.
+Declare a strategy on scripts you own and test it; do not inject `defer` into every script tag.
 
 ```php
-add_filter( 'pre_option_default_pingback_flag', '__return_zero' );
-add_filter( 'pre_option_default_ping_status', function () {
-    return 'closed';
-} );
+wp_enqueue_script(
+	'example-feature',
+	plugins_url( 'assets/feature.js', __FILE__ ),
+	array(),
+	'1.0.0',
+	array(
+		'in_footer' => true,
+		'strategy'  => 'defer',
+	)
+);
 ```
 
-### Disable Public Author Archives
-- **Option:** `wpyeg_disable_author_archives`
-- **Default:** `yes`
-- **Why:** Author archive URLs (`/author/{slug}/`) are another username-enumeration path and
-  usually thin, duplicate content. Redirect them home.
+## Deployment-level policy
 
-```php
-add_action( 'template_redirect', function () {
-    if ( is_author() ) {
-        wp_safe_redirect( home_url( '/' ), 301 );
-        exit;
-    }
-} );
-```
-
-### Redirect Attachment Pages
-- **Option:** `wpyeg_redirect_attachment_pages`
-- **Default:** `yes`
-- **Why:** Standalone attachment pages (`?attachment_id=…`) are thin, index-bloating pages
-  that expose media out of context. Redirect them to the parent or home.
-
-```php
-add_action( 'template_redirect', function () {
-    if ( is_attachment() ) {
-        $parent = wp_get_post_parent_id( get_queried_object_id() );
-        $target = $parent ? get_permalink( $parent ) : home_url( '/' );
-        wp_safe_redirect( $target, 301 );
-        exit;
-    }
-} );
-```
-
-### Disable Emojis
-- **Option:** `wpyeg_disable_emojis`
-- **Default:** `yes`
-- **Why:** Core injects an emoji detection script and inline CSS on every page. Modern
-  browsers render emoji natively, so this is dead weight (an extra script + a DNS lookup).
-
-```php
-add_action( 'init', function () {
-    remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
-    remove_action( 'admin_print_scripts', 'print_emoji_detection_script' );
-    remove_action( 'wp_print_styles', 'print_emoji_styles' );
-    remove_action( 'admin_print_styles', 'print_emoji_styles' );
-    remove_filter( 'the_content_feed', 'wp_staticize_emoji' );
-    remove_filter( 'comment_text_rss', 'wp_staticize_emoji' );
-    remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
-
-    // Stop the emoji DNS-prefetch hint too.
-    add_filter( 'emoji_svg_url', '__return_false' );
-} );
-```
-
----
-
-## 3. Admin & Front-End UX
-
-### Title-Only Admin Search
-- **Option:** `wpyeg_title_only_admin_search`
-- **Default:** `no`
-- **Why:** On big sites, the admin list-table search scans post content and can be painfully
-  slow. Restricting it to titles is much faster — but it changes editor expectations, so it's
-  off by default. Scope the filter to admin list tables only so front-end search is untouched.
-
-```php
-add_filter( 'posts_search', function ( $search, WP_Query $query ) {
-    if ( ! is_admin() || ! $query->is_main_query() || ! $query->is_search() ) {
-        return $search;
-    }
-
-    global $wpdb;
-    $term = $query->get( 's' );
-    if ( '' === $term ) {
-        return $search;
-    }
-
-    $like = '%' . $wpdb->esc_like( $term ) . '%';
-    return $wpdb->prepare( " AND {$wpdb->posts}.post_title LIKE %s ", $like );
-}, 10, 2 );
-```
-
-### Disable Front-End Admin Bar
-- **Option:** `wpyeg_frontend_admin_bar_behavior`
-- **Default:** `''` (unchanged) — or `hide_for_non_admins` as a common hardening default
-- **Why:** The floating admin bar on the front end nudges layout, leaks that a user is logged
-  in, and is rarely needed for subscribers/customers. Two common policies below.
-
-```php
-// Option A: hide the admin bar on the front end for everyone.
-add_filter( 'show_admin_bar', '__return_false' );
-
-// Option B: hide it only for users who can't manage options (keep it for admins).
-add_filter( 'show_admin_bar', function ( $show ) {
-    return current_user_can( 'manage_options' ) ? $show : false;
-} );
-```
-
----
-
-## 4. Login & Session Policy
-
-### Disable Remember Me
-- **Option:** `wpyeg_disable_remember_me`
-- **Default:** `no`
-- **Why:** On shared or kiosk machines, a persistent "Remember Me" cookie is a risk. Removing
-  the checkbox forces short-lived sessions. Off by default because it hurts convenience.
-
-```php
-add_action( 'login_footer', function () {
-    ?>
-    <script>
-        (function () {
-            var wrap = document.querySelector('.login form #rememberme');
-            if (wrap && wrap.closest('p')) { wrap.closest('p').style.display = 'none'; }
-        })();
-    </script>
-    <?php
-} );
-
-// Belt-and-suspenders: never honor a "remember" flag server-side.
-add_filter( 'auth_cookie_expiration', function ( $length, $user_id, $remember ) {
-    return $remember ? 2 * DAY_IN_SECONDS : $length;
-}, 10, 3 );
-```
-
-### Change Remember Me Session Length
-- **Option:** `wpyeg_remember_me_policy` / `wpyeg_remember_me_days` / `wpyeg_session_regular_hours`
-- **Defaults:** `default` / `5` / `0`
-- **Why:** Core's "Remember Me" is 14 days — often too long. This lets you cap the persistent
-  session (e.g. 5 days) and, optionally, shorten the regular (non-remembered) session too.
-
-```php
-add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
-    if ( $remember ) {
-        return 5 * DAY_IN_SECONDS;   // wpyeg_remember_me_days
-    }
-
-    return 12 * HOUR_IN_SECONDS;     // wpyeg_session_regular_hours
-}, 10, 3 );
-```
-
-### Login Logo & Link
-- **Option:** `wpyeg_login_logo_behavior` / `wpyeg_login_logo_link_home`
-- **Defaults:** `remove_logo` / `yes`
-- **Why:** The default WordPress "W" logo on `wp-login.php` links to wordpress.org — a subtle
-  brand and trust leak. Remove it (or swap it) and point the link at the site home.
-
-```php
-// Remove the default logo (or replace the background-image URL to use your own).
-add_action( 'login_head', function () {
-    echo '<style>#login h1 a, .login h1 a { display: none; }</style>';
-} );
-
-// Point the logo link at the site home and use the site name as its text.
-add_filter( 'login_headerurl', 'home_url' );
-add_filter( 'login_headertext', function () {
-    return get_bloginfo( 'name' );
-} );
-```
-
----
-
-## 5. Additional Recommended Defaults
-
-Beyond your list, these are the defaults I'd reach for on nearly every build.
-
-### Security
-
-**Disable the theme/plugin file editor.** Removes the in-dashboard code editor so a
-compromised admin account can't rewrite PHP on the fly. Set in `wp-config.php`:
+These constants can technically be defined before plugins load, but they are clearer in a standard
+`wp-config.php` or environment configuration because they describe deployment behavior:
 
 ```php
 define( 'DISALLOW_FILE_EDIT', true );
+define( 'DISALLOW_FILE_MODS', true ); // Managed deployments only.
+define( 'AUTOSAVE_INTERVAL', 120 );
+define( 'WP_POST_REVISIONS', 10 );
 ```
 
-**Remove the WordPress version fingerprint.** Stops broadcasting your exact core version to
-vulnerability scanners.
+`DISALLOW_FILE_MODS` also blocks dashboard installation and updates. Use it only when an external
+deployment/update process owns those changes. Revision and autosave values are editorial/capacity
+tradeoffs, not security controls.
 
-```php
-remove_action( 'wp_head', 'wp_generator' );
-add_filter( 'the_generator', '__return_empty_string' );
-```
+## Defaults summary
 
-**Send baseline security headers.** Reasonable defaults that don't usually break sites.
+| Policy | Default | Important boundary |
+| --- | --- | --- |
+| Restrict anonymous core REST user routes | On | Other public author data can remain |
+| Require auth for every REST request | Off | Often breaks public integrations/features |
+| Disable XML-RPC methods | On | Endpoint file can still return a fault |
+| Disable Application Passwords | Off | Optional organizational policy |
+| Workshop password policy | On | Covered core UI/reset/REST paths only |
+| Remove generator tag | Off | Hygiene, not hardening |
+| Disable comments/pings/self-pings | On | Wrong for discussion sites |
+| Disable public author archives | On | Wrong for curated multi-author sites |
+| Redirect legacy attachment pages | Off | New WP 6.4+ sites already disable them |
+| Disable emoji compatibility support | On | Test legacy support needs |
+| Title-only admin search | Off | Changes editor expectations |
+| Admin bar/session/login branding changes | Off | UX/policy choices |
+| Heartbeat interval 60 seconds | Off | Test collaboration/plugin workflows |
 
-```php
-add_filter( 'wp_headers', function ( $headers ) {
-    $headers['X-Content-Type-Options'] = 'nosniff';
-    $headers['X-Frame-Options']        = 'SAMEORIGIN';
-    $headers['Referrer-Policy']        = 'strict-origin-when-cross-origin';
-    return $headers;
-} );
-```
+## Authoritative references
 
-**Disable self-pingbacks.** Stops your own internal links from creating pingback noise.
+- [WordPress `xmlrpc_enabled` hook](https://developer.wordpress.org/reference/hooks/xmlrpc_enabled/)
+- [WordPress REST users controller](https://developer.wordpress.org/reference/classes/wp_rest_users_controller/)
+- [WordPress `redirect_canonical()`](https://developer.wordpress.org/reference/functions/redirect_canonical/)
+- [WordPress 6.4 attachment-page behavior](https://make.wordpress.org/core/2023/10/16/changes-to-attachment-pages/)
+- [WordPress Application Passwords](https://developer.wordpress.org/advanced-administration/security/application-passwords/)
+- [WordPress script loading strategies](https://make.wordpress.org/core/2023/07/14/registering-scripts-with-async-and-defer-attributes-in-wordpress-6-3/)
+- [WordPress `wp_headers` hook](https://developer.wordpress.org/reference/hooks/wp_headers/)
+- [WordPress authentication cookies](https://developer.wordpress.org/advanced-administration/security/logging-in/)
+- [WordPress plugin internationalization](https://developer.wordpress.org/plugins/internationalization/how-to-internationalize-your-plugin/)
+- [NIST SP 800-63B password guidance](https://pages.nist.gov/800-63-4/sp800-63b.html)
 
-```php
-add_action( 'pre_ping', function ( &$links ) {
-    $home = home_url();
-    foreach ( $links as $key => $link ) {
-        if ( 0 === strpos( $link, $home ) ) {
-            unset( $links[ $key ] );
-        }
-    }
-} );
-```
+## Verification checklist
 
-### UX
-
-**Sensible admin cleanup.** Hide the "Try Gutenberg"/welcome nags and the WordPress logo in
-the admin bar for a calmer dashboard.
-
-```php
-add_action( 'wp_before_admin_bar_render', function () {
-    global $wp_admin_bar;
-    $wp_admin_bar->remove_node( 'wp-logo' );
-} );
-```
-
-**Increase the autosave interval and cap post revisions** so the editor writes to the DB less
-often and revisions don't balloon table size. In `wp-config.php`:
-
-```php
-define( 'AUTOSAVE_INTERVAL', 120 ); // seconds
-define( 'WP_POST_REVISIONS', 10 );  // keep the last 10 per post
-```
-
-**Raise the "Howdy" and default email sender** to something branded — small touches, but they
-stop the site looking like a stock install. Filter `wp_mail_from` and `wp_mail_from_name`:
-
-```php
-add_filter( 'wp_mail_from', function () { return 'no-reply@example.com'; } );
-add_filter( 'wp_mail_from_name', function () { return get_bloginfo( 'name' ); } );
-```
-
-### SEO
-
-**Trim the `wp_head` clutter** — shortlinks, WLW manifest, and adjacent-post `rel` links are
-rarely useful and add markup.
-
-```php
-remove_action( 'wp_head', 'wlwmanifest_link' );
-remove_action( 'wp_head', 'wp_shortlink_wp_head' );
-remove_action( 'wp_head', 'adjacent_posts_rel_link_wp_head' );
-```
-
-**Keep core sitemaps on (or hand off to your SEO plugin).** Core ships `wp-sitemap.xml`; make
-sure exactly one system owns sitemaps to avoid conflicting signals. If an SEO plugin handles
-it, disable core's:
-
-```php
-add_filter( 'wp_sitemaps_enabled', '__return_false' );
-```
-
-**Set a canonical, and noindex thin archives.** Redirecting attachment/author pages (above)
-already helps; consider `noindex` on internal search results and paginated tag archives via
-your SEO plugin's defaults.
-
-### Performance
-
-**Throttle the Heartbeat API** so autosave/lock polling doesn't hammer `admin-ajax.php`,
-especially on shared hosting.
-
-```php
-add_filter( 'heartbeat_settings', function ( $settings ) {
-    $settings['interval'] = 60; // default is 15–60s; 60 is gentle
-    return $settings;
-} );
-
-// Optionally disable Heartbeat on the dashboard home where it's least needed.
-add_action( 'init', function () {
-    if ( is_admin() ) {
-        global $pagenow;
-        if ( 'index.php' === $pagenow ) {
-            wp_deregister_script( 'heartbeat' );
-        }
-    }
-} );
-```
-
-**Defer non-critical scripts.** Add `defer` to enqueued front-end scripts so they don't block
-render.
-
-```php
-add_filter( 'script_loader_tag', function ( $tag, $handle ) {
-    if ( is_admin() ) {
-        return $tag;
-    }
-    // Skip anything that must run inline/early (e.g. jQuery core).
-    $skip = array( 'jquery-core' );
-    if ( in_array( $handle, $skip, true ) ) {
-        return $tag;
-    }
-    if ( false === strpos( $tag, ' defer' ) && false !== strpos( $tag, ' src=' ) ) {
-        $tag = str_replace( ' src=', ' defer src=', $tag );
-    }
-    return $tag;
-}, 10, 2 );
-```
-
-**Remove query strings from static assets** for better proxy/CDN caching (many CDNs skip
-querystring'd URLs by default).
-
-```php
-add_filter( 'style_loader_src', 'wpyeg_strip_asset_ver', 15 );
-add_filter( 'script_loader_src', 'wpyeg_strip_asset_ver', 15 );
-function wpyeg_strip_asset_ver( $src ) {
-    if ( strpos( $src, 'ver=' ) ) {
-        $src = remove_query_arg( 'ver', $src );
-    }
-    return $src;
-}
-```
-> **Caveat:** stripping `ver` weakens cache-busting on deploys. Prefer versioning assets by
-> filename/hash if you use this.
-
----
-
-## Quick-Reference Table
-
-| Setting | Option key | Default | Category |
-| --- | --- | --- | --- |
-| Disable Comments/Trackbacks/Pingbacks | `wpyeg_disable_comments` | `yes` | Content |
-| Disable Pingbacks (new-post default) | `wpyeg_disable_pingbacks` | `yes` | Content |
-| Restrict REST User Discovery | `wpyeg_restrict_rest_user_discovery` | `yes` | Security |
-| Disable REST (anon) | `wpyeg_disable_rest` | `no` | Security |
-| Disable XML-RPC | `wpyeg_disable_xmlrpc` | `yes` | Security |
-| Disable Application Passwords | `wpyeg_disable_application_passwords` | `yes` | Security |
-| Require Strong Passwords | `wpyeg_require_strong_passwords` | `yes` | Security |
-| Disable AI Connectors *(PMP-specific)* | `wpyeg_disable_ai_connectors` | `yes` | Security |
-| Disable Public Author Archives | `wpyeg_disable_author_archives` | `yes` | Content |
-| Disable Emojis | `wpyeg_disable_emojis` | `yes` | Performance |
-| Redirect Attachment Pages | `wpyeg_redirect_attachment_pages` | `yes` | SEO |
-| Title-Only Admin Search | `wpyeg_title_only_admin_search` | `no` | UX |
-| Front-End Admin Bar Behavior | `wpyeg_frontend_admin_bar_behavior` | `''` | UX |
-| Disable Remember Me | `wpyeg_disable_remember_me` | `no` | Login |
-| Remember Me Policy / Days | `wpyeg_remember_me_policy` / `_days` | `default` / `5` | Login |
-| Regular Session Hours | `wpyeg_session_regular_hours` | `0` | Login |
-| Login Logo Behavior | `wpyeg_login_logo_behavior` | `remove_logo` | Branding |
-| Login Logo Link Home | `wpyeg_login_logo_link_home` | `yes` | Branding |
-
----
-
-### Implementation notes
-- Load these from an **mu-plugin** or a dedicated plugin, not the theme, so policy survives
-  theme switches.
-- Gate every snippet behind its `get_option()` toggle so site owners keep control.
-- `wp-config.php` constants (`DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, `WP_POST_REVISIONS`)
-  can't be toggled from options — surface them in your docs as recommended manual settings.
-- Test REST and comment changes against the block editor before shipping; those two touch the
-  most core functionality.
+1. Run `composer lint` and `composer test`.
+2. Activate on a fresh WordPress 6.4+ site and confirm defaults are seeded.
+3. Test logged-out and authenticated REST requests.
+4. Confirm `system.listMethods` exposes no methods when XML-RPC policy is enabled.
+5. Exercise profile, reset, and REST password paths.
+6. Test author and legacy attachment URLs, including `?author=1`.
+7. Test comments, autosave, post locking, login cookies, and every integration affected by an
+   enabled policy.
+8. Verify response headers at the server/CDN across HTML, REST, redirects, errors, static assets,
+   and cached responses.

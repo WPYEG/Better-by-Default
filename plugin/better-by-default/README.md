@@ -1,6 +1,6 @@
 # Better by Default
 
-Sane defaults for every new WordPress site — the installable plugin.
+A reviewed starting policy for new WordPress sites — the installable teaching plugin.
 
 Every policy is individually toggleable under **Settings → Better by Default**, and the whole
 thing is built around one idea worth carrying home:
@@ -20,9 +20,10 @@ WP-CLI:
 wp plugin install ./better-by-default.zip --activate
 ```
 
-For production you can also drop the main PHP file into `wp-content/mu-plugins/` so the
-policy survives theme changes and can't be deactivated — though you lose the settings screen
-convenience when loaded that way.
+For a simple must-use installation, copy the main PHP file directly into
+`wp-content/mu-plugins/`. WordPress does not scan subdirectories there unless a loader requires
+them. The settings screen still works, but the activation hook does not run; schema fallbacks
+still supply defaults until the settings are saved.
 
 ## How it's built
 
@@ -31,24 +32,27 @@ defines a key, its default, its type (`toggle` / `select` / `number`), and its g
 bootstrap function then wires each *enabled* policy to its WordPress hook. The `wpyeg_`
 option prefix is kept deliberately as the WPYEG org convention.
 
-Defaults on out of the box: restrict REST user discovery, disable XML-RPC, disable
-Application Passwords, require strong passwords, remove the version fingerprint, send security
-headers, disable comments/pingbacks/self-pingbacks, disable author archives, redirect
-attachment pages, disable emojis, remove the login logo + point it home.
+Defaults on out of the box: restrict anonymous core REST user routes, disable all registered
+XML-RPC methods and discovery hints, enforce a 15-character password floor plus a filterable
+blocklist, disable comments/pingbacks/self-pingbacks and author archives, and remove emoji
+compatibility support.
 
-Off by default (opt-in, because they change behavior): require-auth-for-all-REST, title-only
-admin search, hide the front-end admin bar, disable Remember Me, throttle Heartbeat, defer
-scripts.
+Off by default: require-auth-for-all-REST, disable Application Passwords, remove the generator
+tag, redirect legacy attachment pages, title-only admin search, admin-bar changes, Remember Me
+and session changes, login branding, and Heartbeat throttling.
 
-## Three things this plugin can't do for you
+## Deployment-level examples
 
-These live in `wp-config.php`, above the plugin layer:
+These are normally clearer in `wp-config.php` because they describe deployment policy:
 
 ```php
 define( 'DISALLOW_FILE_EDIT', true );  // no in-dashboard code editor
+define( 'DISALLOW_FILE_MODS', true );  // managed deployments only
 define( 'AUTOSAVE_INTERVAL', 120 );    // gentler autosave
 define( 'WP_POST_REVISIONS', 10 );     // cap revision bloat
 ```
+
+Do not enable `DISALLOW_FILE_MODS` on a site that depends on dashboard-managed updates.
 
 ## License
 
