@@ -9,7 +9,8 @@ define( 'ABSPATH', __DIR__ . '/' );
 define( 'DAY_IN_SECONDS', 86400 );
 define( 'HOUR_IN_SECONDS', 3600 );
 
-$GLOBALS['wpyeg_test_hooks'] = array();
+$GLOBALS['wpyeg_test_hooks']         = array();
+$GLOBALS['wpyeg_test_filter_values'] = array();
 
 /**
  * Translation test double.
@@ -93,13 +94,29 @@ function register_activation_hook( $file, $callback ) {
 /**
  * Filter test double.
  *
+ * Returns the unfiltered value unless a test has staged an override in
+ * $GLOBALS['wpyeg_test_filter_values'], which stands in for a site adding its
+ * own filter callback.
+ *
  * @param string $hook  Hook name.
  * @param mixed  $value Filtered value.
  * @return mixed
  */
 function apply_filters( $hook, $value ) {
-	unset( $hook );
+	if ( isset( $GLOBALS['wpyeg_test_filter_values'][ $hook ] ) ) {
+		return $GLOBALS['wpyeg_test_filter_values'][ $hook ];
+	}
 	return $value;
+}
+
+/**
+ * Slash-stripping test double.
+ *
+ * @param mixed $value Input value.
+ * @return mixed
+ */
+function wp_unslash( $value ) {
+	return is_string( $value ) ? stripslashes( $value ) : $value;
 }
 
 /**
@@ -158,6 +175,82 @@ wpyeg_test_assert( 'default' === $sanitized['login_logo_behavior'], 'Invalid sel
 $short = wpyeg_defaults_validate_password( 'too-short' );
 wpyeg_test_assert( is_wp_error( $short ) && 'wpyeg_password_too_short' === $short->get_error_code(), 'Short passwords are rejected.' );
 wpyeg_test_assert( true === wpyeg_defaults_validate_password( 'a long passphrase with spaces' ), 'Long passphrases are accepted without composition rules.' );
+
+/**
+ * Reduce a validator result to a comparable error code.
+ *
+ * @param true|WP_Error $result Validator result.
+ * @return string Error code, or an empty string when the password was accepted.
+ */
+function wpyeg_test_password_error( $result ) {
+	return is_wp_error( $result ) ? $result->get_error_code() : '';
+}
+
+/**
+ * Run an admin-side validator against a raw, still-slashed $_POST['pass1'].
+ *
+ * @param string      $validator Validator function name.
+ * @param string      $raw_post  Raw $_POST['pass1'] value, as core receives it.
+ * @param object|null $user      User context.
+ * @return string First error code, or an empty string when accepted.
+ */
+function wpyeg_test_posted_password_error( $validator, $raw_post, $user = null ) {
+	$_POST['pass1'] = $raw_post;
+	$errors         = new WP_Error();
+
+	if ( 'reset' === $validator ) {
+		wpyeg_defaults_validate_reset_password( $errors, $user );
+	} else {
+		wpyeg_defaults_validate_profile_password( $errors, true, $user );
+	}
+
+	unset( $_POST['pass1'] );
+	return $errors->get_error_code();
+}
+
+// Blocklist. Entries are compared case-insensitively, after normalization.
+wpyeg_test_assert( 'wpyeg_password_common' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'wordpresswordpress' ) ), 'Blocklisted passwords at or above the minimum length are rejected.' );
+wpyeg_test_assert( 'wpyeg_password_common' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'WordPressWordPress' ) ), 'The blocklist comparison is case-insensitive.' );
+
+/*
+ * Entries shorter than the default 15-character minimum are unreachable at the
+ * default settings, but become load-bearing as soon as a site filters the
+ * minimum down. They are deliberately kept in the list for this case.
+ */
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_minimum_password_length'] = 8;
+wpyeg_test_assert( 'wpyeg_password_common' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'password' ) ), 'Short blocklist entries apply when a site lowers wpyeg_minimum_password_length.' );
+$GLOBALS['wpyeg_test_filter_values'] = array();
+
+// Personal-context rejections.
+$user_context                = new stdClass();
+$user_context->user_login    = 'administrator';
+$user_context->user_nicename = 'administrator';
+$user_context->user_email    = 'admin@example.com';
+wpyeg_test_assert( 'wpyeg_password_personal' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'administratorlonghorse', $user_context ) ), 'Passwords containing the username are rejected.' );
+wpyeg_test_assert( 'wpyeg_password_personal' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'adminXXXXXXXXXXXXXXXX', $user_context ) ), 'Passwords containing the email name are rejected.' );
+wpyeg_test_assert( '' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'correct horse battery staple', $user_context ) ), 'Unrelated passphrases pass the personal-context check.' );
+
+$short_context             = new stdClass();
+$short_context->user_login = 'bob';
+$short_context->user_email = 'bob@example.com';
+wpyeg_test_assert( '' === wpyeg_test_password_error( wpyeg_defaults_validate_password( 'bobbobbobbobbob', $short_context ) ), 'Context values under four characters are not substring-matched.' );
+
+/*
+ * Core's edit_user() trims $_POST['pass1'] and stores the trimmed value
+ * (wp-admin/includes/user.php), while firing user_profile_update_errors with
+ * $_POST untouched. A validator reading $_POST raw therefore measures a
+ * different string than core saves, and whitespace padding slips past it.
+ */
+wpyeg_test_assert( 'wpyeg_password_too_short' === wpyeg_test_posted_password_error( 'profile', str_repeat( ' ', 15 ) . 'a' ), 'Whitespace padding cannot inflate a short password to the minimum length.' );
+wpyeg_test_assert( 'wpyeg_password_common' === wpyeg_test_posted_password_error( 'profile', 'wordpresswordpress ' ), 'Whitespace padding cannot smuggle a blocklisted password past the blocklist.' );
+wpyeg_test_assert( 'wpyeg_password_too_short' === wpyeg_test_posted_password_error( 'reset', str_repeat( ' ', 15 ) . 'a' ), 'The reset screen rejects whitespace-padded short passwords too.' );
+
+// Internal whitespace is part of the password and must survive trimming.
+wpyeg_test_assert( '' === wpyeg_test_posted_password_error( 'profile', 'a long passphrase with spaces' ), 'Passphrases with internal spaces remain acceptable.' );
+
+// An omitted or whitespace-only field means "no password change"; core owns that case.
+wpyeg_test_assert( '' === wpyeg_test_posted_password_error( 'profile', '' ), 'An empty password field is left alone.' );
+wpyeg_test_assert( '' === wpyeg_test_posted_password_error( 'profile', '   ' ), 'A whitespace-only field is treated as empty, as core does.' );
 
 wpyeg_defaults_bootstrap();
 $registered_hooks = array_column( $GLOBALS['wpyeg_test_hooks'], 'hook' );
