@@ -1,0 +1,55 @@
+# Better by Default
+
+Sane defaults for every new WordPress site — the installable plugin.
+
+Every policy is individually toggleable under **Settings → Better by Default**, and the whole
+thing is built around one idea worth carrying home:
+
+> A "default" is just an opinionated `add_filter()` sitting behind a toggle.
+
+## Install
+
+1. Copy the `better-by-default` folder into `wp-content/plugins/`
+   (or upload the zip via **Plugins → Add New → Upload Plugin**).
+2. Activate. On activation the documented defaults are seeded automatically.
+3. Visit **Settings → Better by Default** to flip switches.
+
+WP-CLI:
+
+```bash
+wp plugin install ./better-by-default.zip --activate
+```
+
+For production you can also drop the main PHP file into `wp-content/mu-plugins/` so the
+policy survives theme changes and can't be deactivated — though you lose the settings screen
+convenience when loaded that way.
+
+## How it's built
+
+The whole map lives in one array: `wpyeg_defaults_schema()`. Read that first. Each entry
+defines a key, its default, its type (`toggle` / `select` / `number`), and its group. The
+bootstrap function then wires each *enabled* policy to its WordPress hook. The `wpyeg_`
+option prefix is kept deliberately as the WPYEG org convention.
+
+Defaults on out of the box: restrict REST user discovery, disable XML-RPC, disable
+Application Passwords, require strong passwords, remove the version fingerprint, send security
+headers, disable comments/pingbacks/self-pingbacks, disable author archives, redirect
+attachment pages, disable emojis, remove the login logo + point it home.
+
+Off by default (opt-in, because they change behavior): require-auth-for-all-REST, title-only
+admin search, hide the front-end admin bar, disable Remember Me, throttle Heartbeat, defer
+scripts.
+
+## Three things this plugin can't do for you
+
+These live in `wp-config.php`, above the plugin layer:
+
+```php
+define( 'DISALLOW_FILE_EDIT', true );  // no in-dashboard code editor
+define( 'AUTOSAVE_INTERVAL', 120 );    // gentler autosave
+define( 'WP_POST_REVISIONS', 10 );     // cap revision bloat
+```
+
+## License
+
+GPL-3.0-or-later. Fork it, teach with it, ship it.
