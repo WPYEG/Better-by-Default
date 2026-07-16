@@ -84,6 +84,11 @@ regression tests, and a `wp-env` mapping for a real WordPress smoke test. Run `c
 reference document also links each material claim to WordPress developer documentation, Core
 developer notes, or NIST password guidance.
 
+`dist/better-by-default.zip` is committed, so it goes stale the moment the plugin source changes.
+`composer build` regenerates it from `plugin/better-by-default/`, and `composer verify:dist`
+checks the committed zip still matches the source without rewriting it — run that before
+publishing a build or handing the zip to a room full of people.
+
 ## License
 
 [GPL-3.0-or-later](LICENSE). Fork it, teach with it, ship it.
