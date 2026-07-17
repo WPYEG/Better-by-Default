@@ -42,20 +42,33 @@ add_filter(
 This is compatibility-sensitive. Public blocks, oEmbed, forms, search, headless front ends, and
 integrations may need anonymous REST access. Existing authentication errors must pass through.
 
+Two details decide whether this filter means what its label says. Core registers
+`rest_application_password_check_errors` at priority 90 and `rest_cookie_check_errors` at 100, so
+anything deciding at the default 10 runs before authentication has resolved. And the value is not a
+plain boolean: when a cookie arrives without an `X-WP-Nonce`, `rest_cookie_check_errors()` calls
+`wp_set_current_user( 0 )` and returns **`true`**. The widely copied `! empty( $result )` guard reads
+that `true` as "authenticated" and lets the request dispatch as user 0. Run last, and let only a
+`WP_Error` short-circuit.
+
 ```php
 add_filter(
 	'rest_authentication_errors',
 	static function ( $result ) {
-		if ( ! empty( $result ) || is_user_logged_in() ) {
+		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
-		return new WP_Error(
-			'rest_not_logged_in',
-			__( 'REST API restricted to authenticated users.', 'better-by-default' ),
-			array( 'status' => 401 )
-		);
-	}
+		if ( ! is_user_logged_in() ) {
+			return new WP_Error(
+				'rest_not_logged_in',
+				__( 'REST API restricted to authenticated users.', 'better-by-default' ),
+				array( 'status' => 401 )
+			);
+		}
+
+		return $result;
+	},
+	PHP_INT_MAX
 );
 ```
 

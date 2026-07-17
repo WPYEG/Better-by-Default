@@ -222,17 +222,17 @@ const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
  * @return mixed
  */
 function wpyeg_defaults_get( $key ) {
-	static $stored = null;
-	if ( null === $stored ) {
-		$stored = get_option( WPYEG_DEFAULTS_OPTION, array() );
-		if ( ! is_array( $stored ) ) {
-			$stored = array();
-		}
-	}
-
 	$schema = wpyeg_defaults_schema();
 	if ( ! isset( $schema[ $key ] ) ) {
 		return null;
+	}
+
+	// Deliberately uncached: the option is autoloaded, so get_option() answers
+	// from the options cache without a query. A static here would only add a
+	// second cache that goes stale the moment anything calls update_option().
+	$stored = get_option( WPYEG_DEFAULTS_OPTION, array() );
+	if ( ! is_array( $stored ) ) {
+		$stored = array();
 	}
 
 	return array_key_exists( $key, $stored ) ? $stored[ $key ] : $schema[ $key ]['default'];
@@ -279,22 +279,7 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_rest' ) ) {
-		add_filter(
-			'rest_authentication_errors',
-			function ( $result ) {
-				if ( ! empty( $result ) ) {
-					return $result;
-				}
-				if ( ! is_user_logged_in() ) {
-					return new WP_Error(
-						'rest_not_logged_in',
-						__( 'REST API restricted to authenticated users.', 'better-by-default' ),
-						array( 'status' => 401 )
-					);
-				}
-				return $result;
-			}
-		);
+		add_filter( 'rest_authentication_errors', 'wpyeg_defaults_require_rest_auth', PHP_INT_MAX );
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_xmlrpc' ) ) {
@@ -548,6 +533,35 @@ function wpyeg_defaults_bootstrap() {
 			}
 		);
 	}
+}
+
+/**
+ * Require an authenticated user for every REST request.
+ *
+ * Registered at PHP_INT_MAX on purpose. Core resolves Application Password auth
+ * at priority 90 and cookie auth at 100, and rest_cookie_check_errors() returns
+ * true after calling wp_set_current_user( 0 ) when a cookie carries no
+ * X-WP-Nonce. Deciding before core has finished — or treating any truthy $result
+ * as success — would read that true as "authenticated" and let the request
+ * dispatch as user 0. Only an existing WP_Error short-circuits.
+ *
+ * @param WP_Error|true|null $result Authentication result so far.
+ * @return WP_Error|true|null
+ */
+function wpyeg_defaults_require_rest_auth( $result ) {
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error(
+			'rest_not_logged_in',
+			__( 'REST API restricted to authenticated users.', 'better-by-default' ),
+			array( 'status' => 401 )
+		);
+	}
+
+	return $result;
 }
 
 /**

@@ -20,14 +20,22 @@ class WP_Error {
 	private $errors = array();
 
 	/**
+	 * Error data keyed by error code.
+	 *
+	 * @var array
+	 */
+	private $error_data = array();
+
+	/**
 	 * Construct the error, optionally seeding the first error.
 	 *
 	 * @param string $code    Error code.
 	 * @param string $message Error message.
+	 * @param mixed  $data    Error data, such as an HTTP status.
 	 */
-	public function __construct( $code = '', $message = '' ) {
+	public function __construct( $code = '', $message = '', $data = '' ) {
 		if ( '' !== $code ) {
-			$this->add( $code, $message );
+			$this->add( $code, $message, $data );
 		}
 	}
 
@@ -36,9 +44,26 @@ class WP_Error {
 	 *
 	 * @param string $code    Error code.
 	 * @param string $message Error message.
+	 * @param mixed  $data    Error data, such as an HTTP status.
 	 */
-	public function add( $code, $message = '' ) {
+	public function add( $code, $message = '', $data = '' ) {
 		$this->errors[ $code ][] = $message;
+		if ( '' !== $data ) {
+			$this->error_data[ $code ] = $data;
+		}
+	}
+
+	/**
+	 * Return the data attached to a code, defaulting to the first error.
+	 *
+	 * @param string $code Error code.
+	 * @return mixed|null
+	 */
+	public function get_error_data( $code = '' ) {
+		if ( '' === $code ) {
+			$code = $this->get_error_code();
+		}
+		return isset( $this->error_data[ $code ] ) ? $this->error_data[ $code ] : null;
 	}
 
 	/**

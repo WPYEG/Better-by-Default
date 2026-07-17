@@ -11,6 +11,7 @@ define( 'HOUR_IN_SECONDS', 3600 );
 
 $GLOBALS['wpyeg_test_hooks']         = array();
 $GLOBALS['wpyeg_test_filter_values'] = array();
+$GLOBALS['wpyeg_test_current_user']  = 0;
 
 /**
  * Translation test double.
@@ -25,13 +26,25 @@ function __( $text ) { // phpcs:ignore WordPress.WP.I18n.MissingArgDomain
 /**
  * Option test double.
  *
+ * Returns the schema defaults unless a test has staged a stored option, which
+ * is how the policies that ship disabled get exercised.
+ *
  * @param string $name          Option name.
  * @param mixed  $default_value Default value.
  * @return mixed
  */
 function get_option( $name, $default_value = false ) {
 	unset( $name );
-	return $default_value;
+	return isset( $GLOBALS['wpyeg_test_option'] ) ? $GLOBALS['wpyeg_test_option'] : $default_value;
+}
+
+/**
+ * Current-user test double.
+ *
+ * @return bool
+ */
+function is_user_logged_in() {
+	return (bool) $GLOBALS['wpyeg_test_current_user'];
 }
 
 /**
@@ -252,10 +265,59 @@ wpyeg_test_assert( '' === wpyeg_test_posted_password_error( 'profile', 'a long p
 wpyeg_test_assert( '' === wpyeg_test_posted_password_error( 'profile', '' ), 'An empty password field is left alone.' );
 wpyeg_test_assert( '' === wpyeg_test_posted_password_error( 'profile', '   ' ), 'A whitespace-only field is treated as empty, as core does.' );
 
+/*
+ * REST authentication gate.
+ *
+ * The value core hands this filter is not a plain boolean: rest_cookie_check_errors()
+ * returns true after calling wp_set_current_user( 0 ) when a cookie arrives without an
+ * X-WP-Nonce. Treating any truthy result as "authenticated" would let that request
+ * through to dispatch as user 0, so only a WP_Error may short-circuit.
+ */
+$GLOBALS['wpyeg_test_current_user'] = 0;
+$anonymous                          = wpyeg_defaults_require_rest_auth( null );
+wpyeg_test_assert( is_wp_error( $anonymous ) && 'rest_not_logged_in' === $anonymous->get_error_code(), 'Anonymous REST requests are rejected.' );
+wpyeg_test_assert( array( 'status' => 401 ) === $anonymous->get_error_data(), 'The REST rejection carries a 401 status.' );
+
+$nonceless = wpyeg_defaults_require_rest_auth( true );
+wpyeg_test_assert( is_wp_error( $nonceless ), 'A cookie without a nonce resolves to user 0 and is still rejected.' );
+
+$GLOBALS['wpyeg_test_current_user'] = 7;
+wpyeg_test_assert( null === wpyeg_defaults_require_rest_auth( null ), 'Authenticated requests pass through untouched.' );
+wpyeg_test_assert( true === wpyeg_defaults_require_rest_auth( true ), 'A successful auth result is preserved.' );
+
+$prior = new WP_Error( 'rest_cookie_invalid_nonce', 'Cookie check failed' );
+wpyeg_test_assert( wpyeg_defaults_require_rest_auth( $prior ) === $prior, 'An existing authentication error is returned unchanged.' );
+$GLOBALS['wpyeg_test_current_user'] = 0;
+
 wpyeg_defaults_bootstrap();
 $registered_hooks = array_column( $GLOBALS['wpyeg_test_hooks'], 'hook' );
 wpyeg_test_assert( in_array( 'xmlrpc_methods', $registered_hooks, true ), 'XML-RPC method removal is registered.' );
 wpyeg_test_assert( in_array( 'rest_pre_insert_user', $registered_hooks, true ), 'REST password validation is registered.' );
 wpyeg_test_assert( ! in_array( 'script_loader_tag', $registered_hooks, true ), 'Blanket script-tag mutation is not registered.' );
+
+/**
+ * Find the first registration for a hook.
+ *
+ * @param string $hook Hook name.
+ * @return array|null
+ */
+function wpyeg_test_find_hook( $hook ) {
+	foreach ( $GLOBALS['wpyeg_test_hooks'] as $entry ) {
+		if ( $entry['hook'] === $hook ) {
+			return $entry;
+		}
+	}
+	return null;
+}
+
+// disable_rest ships off, so stage it on to check how it registers.
+$GLOBALS['wpyeg_test_option'] = array( 'disable_rest' => 'yes' );
+$GLOBALS['wpyeg_test_hooks']  = array();
+wpyeg_defaults_bootstrap();
+$auth_gate = wpyeg_test_find_hook( 'rest_authentication_errors' );
+unset( $GLOBALS['wpyeg_test_option'] );
+
+wpyeg_test_assert( null !== $auth_gate, 'Enabling disable_rest registers the authentication gate.' );
+wpyeg_test_assert( PHP_INT_MAX === $auth_gate['priority'], 'The gate runs after core resolves cookie and Application Password auth.' );
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );
