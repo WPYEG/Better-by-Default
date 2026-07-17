@@ -110,6 +110,21 @@ of uppercase, lowercase, numbers, and symbols. Validation runs for wp-admin prof
 password reset, and the core REST users controller. Custom registration forms, WP-CLI, direct
 `wp_update_user()` calls, and third-party identity providers need their own integration tests.
 
+Enforcing a policy means hooking where core actually reads the password, which differs by screen:
+
+- **Profile and user-new** (`user_profile_update_errors`): `edit_user()` trims `$_POST['pass1']`
+  into a local and stores *that*, but fires the hook with `$_POST['pass1']` still untrimmed. A
+  validator reading the raw value measures a different string than the one core saves — 15 spaces
+  and an `a` passes a 15-character minimum and stores a one-character password. Trim first.
+- **Password reset** (`validate_password_reset`): `wp-login.php` writes the trimmed value back into
+  `$_POST['pass1']` before firing, so this path is already consistent.
+- **REST** (`rest_pre_insert_user`): the documented seam, but neither `create_item()` nor
+  `update_item()` checks its return for an error. Returning a `WP_Error` there fails closed — the
+  password is never stored — yet an update answers `200 OK` with the user unchanged and a create
+  answers a misleading `500`. Enforce on the `password` argument's `sanitize_callback` via
+  `rest_endpoints` instead: `sanitize_params()` turns that error into `rest_invalid_param`, which
+  dispatch returns as a `400` carrying the actual reason. Keep `rest_pre_insert_user` as a backstop.
+
 For production, connect `wpyeg_password_blocklist` to a substantially larger compromised or
 common-password source. NIST recommends blocklist comparison, password-manager/paste support,
 Unicode support, and rate limiting rather than composition rules or periodic forced rotation.

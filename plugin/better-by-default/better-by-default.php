@@ -302,6 +302,7 @@ function wpyeg_defaults_bootstrap() {
 	if ( wpyeg_defaults_enabled( 'require_strong_passwords' ) ) {
 		add_action( 'user_profile_update_errors', 'wpyeg_defaults_validate_profile_password', 10, 3 );
 		add_action( 'validate_password_reset', 'wpyeg_defaults_validate_reset_password', 10, 2 );
+		add_filter( 'rest_endpoints', 'wpyeg_defaults_guard_rest_password_arg' );
 		add_filter( 'rest_pre_insert_user', 'wpyeg_defaults_validate_rest_password', 10, 2 );
 	}
 
@@ -536,35 +537,6 @@ function wpyeg_defaults_bootstrap() {
 }
 
 /**
- * Require an authenticated user for every REST request.
- *
- * Registered at PHP_INT_MAX on purpose. Core resolves Application Password auth
- * at priority 90 and cookie auth at 100, and rest_cookie_check_errors() returns
- * true after calling wp_set_current_user( 0 ) when a cookie carries no
- * X-WP-Nonce. Deciding before core has finished — or treating any truthy $result
- * as success — would read that true as "authenticated" and let the request
- * dispatch as user 0. Only an existing WP_Error short-circuits.
- *
- * @param WP_Error|true|null $result Authentication result so far.
- * @return WP_Error|true|null
- */
-function wpyeg_defaults_require_rest_auth( $result ) {
-	if ( is_wp_error( $result ) ) {
-		return $result;
-	}
-
-	if ( ! is_user_logged_in() ) {
-		return new WP_Error(
-			'rest_not_logged_in',
-			__( 'REST API restricted to authenticated users.', 'better-by-default' ),
-			array( 'status' => 401 )
-		);
-	}
-
-	return $result;
-}
-
-/**
  * Validate a password against the workshop policy.
  *
  * @param string                $password Proposed password.
@@ -679,6 +651,139 @@ function wpyeg_defaults_validate_rest_password( $prepared_user, $request ) {
 	$user   = ! empty( $prepared_user->ID ) ? get_userdata( $prepared_user->ID ) : $prepared_user;
 	$result = wpyeg_defaults_validate_password( (string) $password, $user );
 	return is_wp_error( $result ) ? $result : $prepared_user;
+}
+
+/**
+ * Require an authenticated user for every REST request.
+ *
+ * Registered at PHP_INT_MAX on purpose. Core resolves Application Password auth
+ * at priority 90 and cookie auth at 100, and rest_cookie_check_errors() returns
+ * true after calling wp_set_current_user( 0 ) when a cookie carries no
+ * X-WP-Nonce. Deciding before core has finished — or treating any truthy $result
+ * as success — would read that true as "authenticated" and let the request
+ * dispatch as user 0. Only an existing WP_Error short-circuits.
+ *
+ * @param WP_Error|true|null $result Authentication result so far.
+ * @return WP_Error|true|null
+ */
+function wpyeg_defaults_require_rest_auth( $result ) {
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error(
+			'rest_not_logged_in',
+			__( 'REST API restricted to authenticated users.', 'better-by-default' ),
+			array( 'status' => 401 )
+		);
+	}
+
+	return $result;
+}
+
+/**
+ * Enforce the password policy on the users controller's `password` argument.
+ *
+ * The rest_pre_insert_user filter is the documented seam, but the controller
+ * never checks its return for an error: update_item() assigns ID onto the
+ * WP_Error and hands it to wp_update_user(), which finds no user_pass and
+ * answers 200 OK with the user unchanged; create_item() casts it to an array
+ * with no user_login and answers 500 "empty login name". Either way the policy
+ * message is lost.
+ *
+ * An argument-level error is different. WP_REST_Request::sanitize_params() turns
+ * it into rest_invalid_param, which dispatch() returns as a 400 before the
+ * callback runs, so the caller sees the actual reason. validate_rest_password()
+ * stays registered as a backstop for any route this does not reach.
+ *
+ * @param array $endpoints Registered REST endpoints, keyed by route.
+ * @return array
+ */
+function wpyeg_defaults_guard_rest_password_arg( $endpoints ) {
+	foreach ( $endpoints as $route => $handlers ) {
+		// Application Passwords are core-generated and carry a readonly password
+		// field, so they are never in scope for a human password policy.
+		if ( ! preg_match( '#^/wp/v2/users(?:/|$)#', $route ) || false !== strpos( $route, 'application-password' ) ) {
+			continue;
+		}
+
+		if ( ! is_array( $handlers ) ) {
+			continue;
+		}
+
+		foreach ( $handlers as $index => $handler ) {
+			if ( ! is_array( $handler ) || ! isset( $handler['args']['password'] ) ) {
+				continue;
+			}
+
+			$inner = isset( $handler['args']['password']['sanitize_callback'] )
+				? $handler['args']['password']['sanitize_callback']
+				: null;
+
+			$endpoints[ $route ][ $index ]['args']['password']['sanitize_callback'] = function ( $value, $request, $param ) use ( $inner ) {
+				// Let core sanitize first; it rejects empty and backslashed passwords.
+				if ( $inner ) {
+					$value = call_user_func( $inner, $value, $request, $param );
+					if ( is_wp_error( $value ) ) {
+						return $value;
+					}
+				}
+
+				$result = wpyeg_defaults_validate_password(
+					(string) $value,
+					wpyeg_defaults_rest_password_context( $request )
+				);
+
+				if ( is_wp_error( $result ) ) {
+					return new WP_Error(
+						$result->get_error_code(),
+						$result->get_error_message(),
+						array( 'status' => 400 )
+					);
+				}
+
+				return $value;
+			};
+		}
+	}
+
+	return $endpoints;
+}
+
+/**
+ * Resolve the user a REST password change applies to.
+ *
+ * Argument sanitizing runs before the controller prepares a user, so the
+ * context has to come from the request: update_item() takes the id from the
+ * route, and update_current_item() only assigns it after dispatch. A create
+ * has no stored user at all, so the submitted fields are the only context.
+ *
+ * @param WP_REST_Request $request REST request.
+ * @return WP_User|stdClass
+ */
+function wpyeg_defaults_rest_password_context( $request ) {
+	$user_id = 0;
+
+	if ( preg_match( '#/wp/v2/users/me$#', (string) $request->get_route() ) ) {
+		$user_id = get_current_user_id();
+	} elseif ( null !== $request['id'] ) {
+		$user_id = (int) $request['id'];
+	}
+
+	if ( $user_id ) {
+		$existing = get_userdata( $user_id );
+		if ( $existing ) {
+			return $existing;
+		}
+	}
+
+	$context                = new stdClass();
+	$context->user_login    = (string) $request['username'];
+	$context->user_email    = (string) $request['email'];
+	$context->user_nicename = (string) $request['slug'];
+
+	return $context;
 }
 
 
