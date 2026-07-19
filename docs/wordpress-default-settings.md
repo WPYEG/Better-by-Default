@@ -126,9 +126,12 @@ add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
 } );
 ```
 
-> **Jetpack:** don't *block the endpoint* on a Jetpack site — a blanket 403 breaks its
-> WordPress.com connection. The per-category **method** toggles leave `jetpack.*` alone, so those
-> are safe; the endpoint block is the one setting to avoid with Jetpack.
+> **Jetpack:** Jetpack still uses XML-RPC for its WordPress.com connection, so don't *block the
+> endpoint* on a Jetpack site — a blanket 403 breaks it. The pingback and remote-publishing toggles
+> only remove WordPress methods, leaving `jetpack.*` untouched. Refusing `system.multicall` didn't
+> break a Jetpack connection in testing (the replacement server overrides only `multiCall()`, so
+> `jetpack.*` still resolve) — but that's a single connected-site check, not a guarantee. The
+> endpoint block is the one setting to genuinely avoid with Jetpack.
 > **`demo.*`:** the inert `demo.sayHello`/`demo.addTwoNumbers` methods still confirm XML-RPC is
 > live to a scanner — drop them too (`unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] )`)
 > if you want a quiet endpoint.
