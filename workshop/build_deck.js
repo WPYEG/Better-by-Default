@@ -137,7 +137,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(c.d, { x: x + 1.05, y: y + 0.82, w: cw - 1.3, h: 0.9, fontFace: BODY, fontSize: 14, color: SLATE, margin: 0, valign: "top" });
   });
   footer(s, 2);
-  s.addNotes("These aren't hypothetical. Every one is a default you can flip. The rest of the talk is: which doors, and the one line of code that closes each.");
+  s.addNotes("These aren't hypothetical. Every one is a default you can flip. The rest of tonight is just: which doors, and the one line of code that closes each.");
 })();
 
 /* =================================================================== */
@@ -285,7 +285,7 @@ codeSlide(7, "SECURITY · 1 of 6",
 
 codeSlide(8, "SECURITY · 2 of 6",
   "Lock XML-RPC down by category",
-  "Not all-or-nothing. Pingbacks (spam/DDoS) and the credential-authenticated blogging APIs (the brute-force target) come off via a method filter; system.multicall can't be filtered off, so a replacement server refuses it. Jetpack's jetpack.* methods are left untouched.",
+  "XML-RPC is an old switchboard — every method is a line. We unplug the lines we don't want: pingbacks (spam/DDoS) and the credential-authenticated blogging APIs (the brute-force target), via a method filter. system.multicall can't be filtered off, so a replacement server refuses it. Jetpack's jetpack.* lines stay untouched.",
   "wpyeg_xmlrpc_allow_pingbacks / _remote_publishing / _multicall", "no (each)",
   [
     { t: "// each category off → remove its methods", k: "c" },
@@ -298,11 +298,11 @@ codeSlide(8, "SECURITY · 2 of 6",
     { t: "} );", k: "" },
     { t: "// multicall: swap in a server that refuses it", k: "c" },
     { t: "add_filter( 'wp_xmlrpc_server_class', $refuse );", k: "h" },
-  ]).addNotes("system.multicall can't be removed by the xmlrpc_methods filter — IXR re-adds it — so we swap in a server that refuses it. Don't *block the endpoint* on a Jetpack site: that breaks its WordPress.com connection; the method toggles leave jetpack.* alone.");
+  ]).addNotes("system.multicall is the stubborn line: the xmlrpc_methods filter can't remove it — IXR plugs it right back in — so we swap in a server that refuses the call. And don't *block the endpoint* on a Jetpack site: that breaks its WordPress.com connection. The method toggles leave jetpack.* alone.");
 
 codeSlide(9, "SECURITY · 3 of 6",
   "Keep Application Passwords available",
-  "The one we don't lock down. Application Passwords are hashed, per-application, and individually revocable — the safer REST credential, and the only one core accepts for REST Basic Auth. So they stay on; prohibit them only if policy forbids non-interactive credentials.",
+  "The one we don't lock down. An Application Password is a spare key cut for one app — hashed, per-application, revocable on its own. It's the safer REST credential, and the only one core accepts for REST Basic Auth. So they stay on; prohibit them only if policy forbids non-interactive credentials.",
   "wpyeg_disable_application_passwords", "no (available)",
   [
     { t: "// available by default —", k: "c" },
@@ -314,11 +314,11 @@ codeSlide(9, "SECURITY · 3 of 6",
     { t: "    '__return_false'", k: "h" },
     { t: "  );", k: "" },
     { t: "}", k: "" },
-  ], 12.5).addNotes("Turning them off just pushes people to worse habits like sharing the login password. They stay available by default — the safer, revocable REST credential.");
+  ], 12.5).addNotes("Switching them off doesn't stop people connecting things — it just pushes them to worse habits, like sharing the login password. So they stay available by default: the safer, revocable REST credential.");
 
 codeSlide(10, "SECURITY · 4 of 6",
   "Require strong passwords",
-  "NIST 800-63B and OWASP now say length plus breach screening beats composition rules. Forcing upper/lower/number/symbol just herds users to Password1! — predictable, not strong. We require 15+ chars and screen against known breaches, server-side.",
+  "The rules changed: NIST 800-63B and OWASP now say length plus breach screening beats composition rules. Forcing upper/lower/number/symbol just herds everyone to Password1! — predictable, not strong. We require 15+ chars and screen against known breaches, server-side.",
   "wpyeg_require_strong_passwords", "yes",
   [
     { t: "// hooked on user_profile_update_errors", k: "c" },
@@ -427,7 +427,7 @@ divider("3", "SECTION THREE", "Admin UX &\nLogin Sessions", "Small quality-of-li
 
 codeSlide(18, "ADMIN UX",
   "Faster search, quieter admin bar",
-  "On big sites the admin list-table search scans post content and crawls. Title-only search is far faster (off by default — it changes editor expectations). And the floating front-end admin bar can be hidden for non-admins.",
+  "On big sites the admin list-table search reads every word of every post — and crawls. Title-only search checks just the spines, far faster (off by default — it changes editor expectations). And the floating front-end admin bar can be hidden for non-admins.",
   "wpyeg_title_only_admin_search / _frontend_admin_bar_behavior", "no / ''",
   [
     { t: "// title-only admin search — narrow the COLUMNS", k: "c" },
@@ -440,7 +440,7 @@ codeSlide(18, "ADMIN UX",
     { t: "// hide bar for non-admins", k: "c" },
     { t: "add_filter( 'show_admin_bar', fn( $s ) =>", k: "" },
     { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
-  ], 11).addNotes("post_search_columns (WP 6.2+) narrows the columns instead of rewriting the SQL clause — it keeps core's term parsing and the logged-out password guard intact. Scoping filters correctly is the craft here.");
+  ], 11).addNotes("post_search_columns (WP 6.2+) narrows the columns instead of rewriting the SQL clause — core's term parsing and the logged-out password guard stay intact. Scope the filter; don't bulldoze the query. That's the craft here.");
 
 codeSlide(19, "LOGIN & SESSIONS",
   "Right-size the login session",
@@ -466,7 +466,7 @@ divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, t
 
 codeSlide(21, "BRANDING",
   "Own the login screen",
-  "The default WordPress “W” on wp-login.php links out to wordpress.org — a subtle trust leak. But changing the login screen out of the box is intrusive, so the default is to leave it alone; removing, unlinking, or replacing the logo is an opt-in, and any change points the link home.",
+  "The login page is the site's front door — and the default “W” on wp-login.php links out to wordpress.org, a subtle trust leak. But repainting a client's front door uninvited is rude, so the default is to leave it alone; removing, unlinking, or replacing the logo is an opt-in, and any change points the link home.",
   "wpyeg_login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
   [
     { t: "// remove, unlink, or replace — a choice", k: "c" },
@@ -477,7 +477,7 @@ codeSlide(21, "BRANDING",
     { t: "add_filter( 'login_headerurl', 'home_url' );", k: "h" },
     { t: "add_filter( 'login_headertext', fn() =>", k: "" },
     { t: "            get_bloginfo( 'name' ) );", k: "h" },
-  ], 12).addNotes("Default is keep_default — leave the login screen untouched. Swap in a background-image to drop in the client's own logo. Tiny detail clients always notice.");
+  ], 12).addNotes("Default is keep_default — leave the login screen untouched. Swap in a background-image to drop in the client's own logo. Tiny detail — clients always notice it.");
 
 codeSlide(22, "PERFORMANCE · opt-in",
   "Throttle Heartbeat, defer scripts",

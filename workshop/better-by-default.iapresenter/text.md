@@ -19,7 +19,7 @@ Welcome to WPYEG. Tonight we build one small plugin that flips a menu of sensibl
 - **Dead weight loads** — emoji scripts, version tags, and RSD links on every page
 - **Spam surface invites** — comments, pingbacks, and trackbacks open by default
 
-None of this is a bug. It's just defaults chosen for maximum compatibility, not for your site. Every item on this slide is a default you can flip, and the rest of the talk is which doors, and the one line that closes each.
+None of this is a bug. It's just defaults chosen for maximum compatibility, not for your site. Every item on this slide is a default you can flip. The rest of tonight is just: which doors, and the one line that closes each.
 
 ---
 
@@ -112,7 +112,7 @@ add_filter( 'xmlrpc_methods', function ( $m ) {
 add_filter( 'wp_xmlrpc_server_class', $refuse_multicall );
 ```
 
-Not all-or-nothing. Pingbacks (spam/DDoS) and the credential-authenticated blogging APIs (the brute-force target) come off via a method filter; `system.multicall` can't be removed by a filter, so a replacement server refuses it. Third-party methods — Jetpack's `jetpack.*` — are left untouched, so *don't block the endpoint* on a Jetpack site.
+XML-RPC isn't one door — it's an old switchboard, and every method is a line. So we don't rip the whole thing off the wall; we unplug lines. Pingbacks go (a spam and DDoS relay), and the credential-authenticated blogging APIs go (the brute-force target) — both via a method filter. `system.multicall` is the stubborn one: unplug it and IXR plugs it right back in, so the fix is a replacement server that refuses the call. And the lines we never touch: third-party methods like Jetpack's `jetpack.*` stay connected — which is exactly why you *don't block the endpoint* on a Jetpack site.
 
 ---
 
@@ -132,7 +132,7 @@ if ( wpyeg_defaults_enabled(
 }
 ```
 
-The one we *don't* lock down. Application Passwords are hashed, per-application, and individually revocable — the safer REST credential, and the only one core accepts for REST Basic Auth. So they stay on. Prohibit them only if site policy forbids non-interactive credentials; turning them off just pushes people to worse habits like sharing the login password.
+Here's the twist: this is the one we *don't* lock down. An Application Password is like a spare key cut for one app — hashed, tracked per application, and revocable on its own, no lock-change needed. That makes it the safer REST credential, and the only one core accepts for REST Basic Auth. So they stay on. Prohibit them only if site policy forbids non-interactive credentials — because switching them off doesn't stop people connecting things, it just pushes them to worse habits, like sharing the login password.
 
 ---
 
@@ -154,7 +154,7 @@ if ( wpyeg_password_is_pwned( $pw ) ) {
 }
 ```
 
-NIST 800-63B and OWASP now say **length plus breach screening beats composition rules**. Forcing upper/lower/number/symbol just herds users to `Password1!` — predictable, not strong. So we require 15+ characters and screen against Have I Been Pwned (wire the filter to its range API), enforced server-side on save and reset. The JS meter is UX; the server rule is the wall.
+The rules changed and most sites didn't notice: NIST 800-63B and OWASP now say **length plus breach screening beats composition rules**. Forcing upper/lower/number/symbol just herds everyone to `Password1!` — predictable, not strong. So we require 15+ characters and screen against Have I Been Pwned (wire the filter to its range API), enforced server-side on save and reset. The JS meter is UX; the server rule is the wall.
 
 ---
 
@@ -292,7 +292,7 @@ add_filter( 'show_admin_bar', fn( $s ) =>
   current_user_can('manage_options') ? $s : false );
 ```
 
-On big sites the admin list-table search scans post content and crawls; title-only is far faster. Use `post_search_columns` (WP 6.2+) to narrow the *columns* rather than rewriting the whole SQL clause — that keeps core's term parsing and the logged-out password guard intact. Scoping filters correctly is the real craft here.
+Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster. The craft is in the *how*: `post_search_columns` (WP 6.2+) narrows the columns instead of rewriting the whole SQL clause, so core's term parsing and the logged-out password guard stay intact. Scope the filter; don't bulldoze the query.
 
 ---
 
@@ -336,7 +336,7 @@ add_filter( 'login_headertext', fn() =>
             get_bloginfo( 'name' ) );
 ```
 
-The default WordPress "W" on `wp-login.php` links out to wordpress.org — a subtle trust leak on the one page where trust matters most. But changing the login screen out of the box is intrusive, so the default is to **leave it alone**; removing, unlinking, or replacing the logo is an opt-in, and any of those always points the link home. Swap in a background-image to drop in the client's own logo. Clients always notice this one.
+The login page is the site's front door — and by default the welcome mat links to someone else's house. That little WordPress "W" on `wp-login.php` points out to wordpress.org: a subtle trust leak on the one page where trust matters most. Still, repainting a client's front door uninvited is rude, so the default is to **leave it alone**. Removing, unlinking, or replacing the logo is an opt-in — and whichever you choose, the link always points home. Swap in a background-image to drop in the client's own logo. Clients always notice this one.
 
 ---
 
