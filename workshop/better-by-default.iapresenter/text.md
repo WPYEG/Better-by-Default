@@ -14,10 +14,10 @@ Welcome to WPYEG. Tonight we build one small plugin that flips a menu of sensibl
 ## A fresh WordPress install ships wide open
 
 ---
-- **Usernames leak** — REST + author archives list every login name to anonymous visitors
-- **Legacy XML-RPC wide open** — pingback and `system.multicall` amplifiers answer by default
-- **Dead weight loads** — emoji scripts, version tags, and RSD links on every page
-- **Spam surface invites** — comments, pingbacks, and trackbacks open by default
+	- **Usernames leak** — REST + author archives list every login name to anonymous visitors
+	- **Legacy XML-RPC wide open** — pingback and `system.multicall` amplifiers answer by default
+	- **Dead weight loads** — emoji scripts, version tags, and RSD links on every page
+	- **Spam surface invites** — comments, pingbacks, and trackbacks open by default
 
 None of this is a bug. It's just defaults chosen for maximum compatibility, not for your site. Every item on this slide is a default you can flip. The rest of tonight is just: which doors, and the one line that closes each.
 
@@ -42,8 +42,8 @@ If you remember nothing else: a default is an `add_filter` behind an `if ( optio
 ## Two words, gently: hooks & filters
 
 ---
-- **Action** — "when you reach this moment, also DO this." A doorbell you answer.
-- **Filter** — "before you use this value, let me CHANGE it first." A mail slot that edits the letter.
+	- **Action** — "when you reach this moment, also DO this." A doorbell you answer.
+	- **Filter** — "before you use this value, let me CHANGE it first." A mail slot that edits the letter.
 
 ---
 ```php
@@ -56,12 +56,12 @@ For the non-developers in the room: an action is a doorbell, a filter is a mail 
 
 ## Six categories of default
 
-1. **Security** — shrink the attack surface
-2. **Content** — close public spam & leaks
-3. **Admin UX** — a calmer, faster dashboard
-4. **Login** — sessions & credentials
-5. **Branding** — own the login screen
-6. **Performance** — trim the page weight
+	1. **Security** — shrink the attack surface
+	2. **Content** — close public spam & leaks
+	3. **Admin UX** — a calmer, faster dashboard
+	4. **Login** — sessions & credentials
+	5. **Branding** — own the login screen
+	6. **Performance** — trim the page weight
 
 Here's the roadmap. We'll spend most of our time on security and content, then move quickly through UX, login, branding, and performance, and end at the plugin that bundles them all.
 
@@ -75,7 +75,7 @@ Every item in this section removes something an attacker can poke — usually in
 
 ## Restrict REST API user discovery
 
-`wpyeg_restrict_rest_user_discovery` · default **yes**
+	`wpyeg_restrict_rest_user_discovery` · default **yes**
 
 ---
 ```php
@@ -94,7 +94,7 @@ The `/wp/v2/users` endpoint hands out every author's login name to anyone — ha
 
 ## Lock XML-RPC down by category
 
-`wpyeg_xmlrpc_allow_pingbacks` / `_remote_publishing` / `_multicall` · default **no** each · (+ `_block_xmlrpc_endpoint`)
+	`wpyeg_xmlrpc_allow_pingbacks` / `_remote_publishing` / `_multicall` · default **no** each · (+ `_block_xmlrpc_endpoint`)
 
 ---
 ```php
@@ -118,7 +118,7 @@ XML-RPC isn't one door — it's an old switchboard, and every method is a line. 
 
 ## Keep Application Passwords available
 
-`wpyeg_disable_application_passwords` · default **no** (available)
+	`wpyeg_disable_application_passwords` · default **no** (available)
 
 ---
 ```php
@@ -138,7 +138,7 @@ Here's the twist: this is the one we *don't* lock down. An Application Password 
 
 ## Require strong passwords
 
-`wpyeg_require_strong_passwords` · default **yes**
+	`wpyeg_require_strong_passwords` · default **yes**
 
 ---
 ```php
@@ -160,7 +160,7 @@ The rules changed and most sites didn't notice: NIST 800-63B and OWASP now say *
 
 ## Remove fingerprints, add headers
 
-`wpyeg_remove_version` / `wpyeg_security_headers` · default **yes / yes**
+	`wpyeg_remove_version` / `wpyeg_security_headers` · default **yes / yes**
 
 ---
 ```php
@@ -181,7 +181,7 @@ Two quick wins. Version hiding is obscurity, not security — but it cuts automa
 
 ## Lock REST to logged-in users (opt-in)
 
-`wpyeg_disable_rest` · default **no**
+	`wpyeg_disable_rest` · default **no**
 
 ---
 ```php
@@ -209,7 +209,7 @@ These reduce spam surface and clean up the thin, duplicate URLs that bots and se
 
 ## Disable comments, trackbacks & pingbacks
 
-`wpyeg_disable_comments` · default **yes**
+	`wpyeg_disable_comments` · default **yes**
 
 ---
 ```php
@@ -228,7 +228,7 @@ For most business sites, comments are a spam magnet with little upside. We close
 
 ## Redirect author & attachment pages
 
-`wpyeg_disable_author_archives` / `wpyeg_redirect_attachment_pages` · **yes / yes**
+	`wpyeg_disable_author_archives` / `wpyeg_redirect_attachment_pages` · **yes / yes**
 
 ---
 ```php
@@ -249,7 +249,7 @@ Two thin-content leaks, same fix. Author archives expose login slugs; attachment
 
 ## Disable the emoji script
 
-`wpyeg_disable_emojis` · default **yes**
+	`wpyeg_disable_emojis` · default **yes**
 
 ---
 ```php
@@ -275,7 +275,7 @@ Now the quality-of-life defaults. These are more about the daily experience and 
 
 ## Faster search, quieter admin bar
 
-`wpyeg_title_only_admin_search` / `wpyeg_frontend_admin_bar_behavior` · **no / ''**
+	`wpyeg_title_only_admin_search` / `wpyeg_frontend_admin_bar_behavior` · **no / ''**
 
 ---
 ```php
@@ -298,7 +298,7 @@ Search the admin post list on a big site and WordPress reads every word of every
 
 ## Right-size the login session
 
-`wpyeg_remember_me_days` / `wpyeg_session_regular_hours` · default **5 / 0**
+	`wpyeg_remember_me_days` / `wpyeg_session_regular_hours` · default **5 / 0**
 
 ---
 ```php
@@ -323,7 +323,7 @@ The last pair: a branding touch on the login screen, then two performance levers
 
 ## Own the login screen
 
-`wpyeg_login_logo_behavior` · default **keep_default** (keep / remove / unlink / replace)
+	`wpyeg_login_logo_behavior` · default **keep_default** (keep / remove / unlink / replace)
 
 ---
 ```php
@@ -342,7 +342,7 @@ The login page is the site's front door — and by default the welcome mat links
 
 ## Throttle Heartbeat, defer scripts (opt-in)
 
-`wpyeg_throttle_heartbeat` / `wpyeg_defer_scripts` · default **no / no**
+	`wpyeg_throttle_heartbeat` / `wpyeg_defer_scripts` · default **no / no**
 
 ---
 ```php
@@ -371,9 +371,9 @@ define( 'WP_POST_REVISIONS', 10 );     // cap revision-table bloat
 ```
 
 ---
-- **Kills the theme/plugin editor** — a stolen admin login can't rewrite your PHP
-- **Writes to the DB less often** — fewer autosave revisions during long edits
-- **Keeps revisions in check** — ten per post instead of unbounded growth
+	- **Kills the theme/plugin editor** — a stolen admin login can't rewrite your PHP
+	- **Writes to the DB less often** — fewer autosave revisions during long edits
+	- **Keeps revisions in check** — ten per post instead of unbounded growth
 
 Some defaults live in `wp-config.php`, above the plugin layer, because they must load before plugins do. They can't be options — so document them as manual steps in your onboarding checklist and put them in your standard wp-config template.
 
@@ -381,9 +381,9 @@ Some defaults live in `wp-config.php`, above the plugin layer, because they must
 
 ## How the plugin is built
 
-1. **schema()** — one array: every setting, its default, type & group. The single source of truth.
-2. **settings page** — loops the schema to render toggles under Settings → Better by Default.
-3. **bootstrap()** — for each *enabled* key, wires its `add_filter` / `add_action` to the right hook.
+	1. **schema()** — one array: every setting, its default, type & group. The single source of truth.
+	2. **settings page** — loops the schema to render toggles under Settings → Better by Default.
+	3. **bootstrap()** — for each *enabled* key, wires its `add_filter` / `add_action` to the right hook.
 
 ---
 ```php
@@ -397,10 +397,10 @@ The design lesson is a data-driven plugin. Adding a new default equals one array
 
 ## Hands-on: install & flip switches
 
-1. **Upload the plugin** — Plugins → Add New → Upload Plugin → choose `better-by-default.zip` → Activate
-2. **Open the settings** — Settings → Better by Default; every toggle grouped by category
-3. **Verify a default** — visit `/wp-json/wp/v2/users` logged out → 401 or empty, not a list of usernames
-4. **Toggle & re-check** — flip a switch off, reload, watch the behavior change
+	1. **Upload the plugin** — Plugins → Add New → Upload Plugin → choose `better-by-default.zip` → Activate
+	2. **Open the settings** — Settings → Better by Default; every toggle grouped by category
+	3. **Verify a default** — visit `/wp-json/wp/v2/users` logged out → 401 or empty, not a list of usernames
+	4. **Toggle & re-check** — flip a switch off, reload, watch the behavior change
 
 ---
 ```bash
