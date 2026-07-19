@@ -119,7 +119,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 
   const cards = [
     { g: "!", c: CORAL, t: "Usernames leak", d: "REST + author archives happily list every login name to anonymous visitors." },
-    { g: "!", c: CORAL, t: "Legacy endpoints open", d: "XML-RPC and Application Passwords stay on — classic brute-force amplifiers." },
+    { g: "!", c: CORAL, t: "Legacy XML-RPC wide open", d: "pingback and system.multicall amplifiers answer by default." },
     { g: "~", c: WHEATD, t: "Dead weight loads", d: "Emoji scripts, version tags, and RSD links ship on every single page view." },
     { g: "~", c: WHEATD, t: "Spam surface invites", d: "Comments, pingbacks, and trackbacks are open by default on new content." },
   ];
@@ -154,8 +154,8 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     x: 0.8, y: 1.9, w: 11.7, h: 2.4, fontFace: HEAD, fontSize: 44, bold: true, color: WHITE, lineSpacingMultiple: 1.05, margin: 0,
   });
   codePanel(s, 0.8, 4.5, 11.7, 1.9, [
-    { t: "if ( wpyeg_defaults_enabled( 'disable_xmlrpc' ) ) {", k: "" },
-    { t: "    add_filter( 'xmlrpc_enabled', '__return_false' );", k: "h" },
+    { t: "if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {", k: "" },
+    { t: "    add_filter( 'rest_endpoints', $hide_users_endpoint );", k: "h" },
     { t: "}   // that's the whole pattern, repeated ~20 times", k: "c" },
   ], 15);
   s.addNotes("If you remember nothing else: a default is an add_filter behind an if( option ). Once you see that shape, the entire plugin is just twenty variations of it.");
@@ -284,51 +284,54 @@ codeSlide(7, "SECURITY · 1 of 6",
   ]).addNotes("Author enumeration is step one of most brute-force scripts. This closes it for logged-out requests only, so your editor and integrations keep working.");
 
 codeSlide(8, "SECURITY · 2 of 6",
-  "Disable XML-RPC",
-  "xmlrpc.php is a classic amplifier: one request can attempt hundreds of logins, and its pingback method has been used to bounce DDoS traffic. Unless you rely on the legacy mobile app or some Jetpack paths, switch it off.",
-  "wpyeg_disable_xmlrpc", "yes",
+  "Lock XML-RPC down by category",
+  "Not all-or-nothing. Pingbacks (spam/DDoS) and the credential-authenticated blogging APIs (the brute-force target) come off via a method filter; system.multicall can't be filtered off, so a replacement server refuses it. Jetpack's jetpack.* methods are left untouched.",
+  "wpyeg_xmlrpc_allow_pingbacks / _remote_publishing / _multicall", "no (each)",
   [
-    { t: "add_filter( 'xmlrpc_enabled',", k: "" },
-    { t: "            '__return_false' );", k: "h" },
-    { t: "", k: "" },
-    { t: "// stop bots probing the discovery header", k: "c" },
-    { t: "add_filter( 'wp_headers', function ( $h ) {", k: "" },
-    { t: "    unset( $h['X-Pingback'] );", k: "h" },
-    { t: "    return $h;", k: "" },
+    { t: "// each category off → remove its methods", k: "c" },
+    { t: "add_filter( 'xmlrpc_methods', function ( $m ) {", k: "" },
+    { t: "  if ( ! allow( 'pingbacks' ) )", k: "" },
+    { t: "    unset( $m['pingback.ping'] );", k: "h" },
+    { t: "  if ( ! allow( 'remote_publishing' ) )", k: "" },
+    { t: "    // drop wp.* metaWeblog.* mt.* blogger.*", k: "c" },
+    { t: "  return $m;", k: "" },
     { t: "} );", k: "" },
-    { t: "remove_action( 'wp_head', 'rsd_link' );", k: "" },
-  ]).addNotes("Check with the client before disabling if they use the WordPress mobile app or older Jetpack features over XML-RPC. Most sites don't.");
+    { t: "// multicall: swap in a server that refuses it", k: "c" },
+    { t: "add_filter( 'wp_xmlrpc_server_class', $refuse );", k: "h" },
+  ]).addNotes("system.multicall can't be removed by the xmlrpc_methods filter — IXR re-adds it — so we swap in a server that refuses it. Don't *block the endpoint* on a Jetpack site: that breaks its WordPress.com connection; the method toggles leave jetpack.* alone.");
 
 codeSlide(9, "SECURITY · 3 of 6",
-  "Disable Application Passwords",
-  "Application Passwords mint long-lived credentials for the REST API. Great for headless setups — but if nobody's using them, they're just a secret waiting to leak. No feature, nothing to steal.",
-  "wpyeg_disable_application_passwords", "yes",
+  "Keep Application Passwords available",
+  "The one we don't lock down. Application Passwords are hashed, per-application, and individually revocable — the safer REST credential, and the only one core accepts for REST Basic Auth. So they stay on; prohibit them only if policy forbids non-interactive credentials.",
+  "wpyeg_disable_application_passwords", "no (available)",
   [
-    { t: "add_filter(", k: "" },
-    { t: "  'wp_is_application_passwords_available',", k: "h" },
-    { t: "  '__return_false'", k: "h" },
-    { t: ");", k: "" },
-    { t: "", k: "" },
-    { t: "// Turn this OFF again if you run a", k: "c" },
-    { t: "// headless / external integration.", k: "c" },
-  ], 12.5).addNotes("One-liner. The only caveat: if the site talks to an external app via REST auth, leave the feature on.");
+    { t: "// available by default —", k: "c" },
+    { t: "// prohibit only if opted in", k: "c" },
+    { t: "if ( wpyeg_defaults_enabled(", k: "" },
+    { t: "       'disable_application_passwords' ) ) {", k: "" },
+    { t: "  add_filter(", k: "" },
+    { t: "    'wp_is_application_passwords_available',", k: "h" },
+    { t: "    '__return_false'", k: "h" },
+    { t: "  );", k: "" },
+    { t: "}", k: "" },
+  ], 12.5).addNotes("Turning them off just pushes people to worse habits like sharing the login password. They stay available by default — the safer, revocable REST credential.");
 
 codeSlide(10, "SECURITY · 4 of 6",
   "Require strong passwords",
-  "Core shows a strength meter but never enforces it — a determined user can still save “password1”. We validate server-side on profile save and password reset, turning the warning into a wall.",
+  "NIST 800-63B and OWASP now say length plus breach screening beats composition rules. Forcing upper/lower/number/symbol just herds users to Password1! — predictable, not strong. We require 15+ chars and screen against known breaches, server-side.",
   "wpyeg_require_strong_passwords", "yes",
   [
     { t: "// hooked on user_profile_update_errors", k: "c" },
-    { t: "$ok = strlen( $pw ) >= 12", k: "" },
-    { t: "   && preg_match( '/[A-Z]/', $pw )", k: "h" },
-    { t: "   && preg_match( '/[a-z]/', $pw )", k: "h" },
-    { t: "   && preg_match( '/[0-9]/', $pw )", k: "h" },
-    { t: "   && preg_match( '/[^A-Za-z0-9]/', $pw );", k: "h" },
-    { t: "", k: "" },
-    { t: "if ( ! $ok ) {", k: "" },
-    { t: "    $errors->add( 'weak', 'Too weak.' );", k: "" },
+    { t: "if ( strlen( $pw ) < 15 ) {", k: "h" },
+    { t: "    $errors->add( 'short', 'Use 15+ chars.' );", k: "" },
     { t: "}", k: "" },
-  ]).addNotes("Never trust the client. The JS meter is UX; the server-side rule is enforcement. 12 chars + mixed classes is a reasonable floor.");
+    { t: "", k: "" },
+    { t: "// screen against breaches (HIBP),", k: "c" },
+    { t: "// not composition rules", k: "c" },
+    { t: "if ( wpyeg_password_is_pwned( $pw ) ) {", k: "h" },
+    { t: "    $errors->add( 'pwned', 'Seen in a breach.' );", k: "" },
+    { t: "}", k: "" },
+  ]).addNotes("Never trust the client — the JS meter is UX, the server rule is the wall. Length + breach screening is the modern NIST/OWASP guidance; composition rules are out.");
 
 codeSlide(11, "SECURITY · 5 of 6",
   "Remove fingerprints, add headers",
@@ -427,17 +430,17 @@ codeSlide(18, "ADMIN UX",
   "On big sites the admin list-table search scans post content and crawls. Title-only search is far faster (off by default — it changes editor expectations). And the floating front-end admin bar can be hidden for non-admins.",
   "wpyeg_title_only_admin_search / _frontend_admin_bar_behavior", "no / ''",
   [
-    { t: "// title-only admin search (scoped!)", k: "c" },
-    { t: "add_filter( 'posts_search', function ( $sql, $q ) {", k: "" },
-    { t: "  if ( ! is_admin() || ! $q->is_main_query() )", k: "" },
-    { t: "      return $sql;   // front-end untouched", k: "h" },
-    { t: "  // ...match post_title only", k: "c" },
-    { t: "}, 10, 2 );", k: "" },
-    { t: "", k: "" },
+    { t: "// title-only admin search — narrow the COLUMNS", k: "c" },
+    { t: "add_filter( 'post_search_columns',", k: "" },
+    { t: "  function ( $cols, $s, $q ) {", k: "" },
+    { t: "    if ( is_admin() && $q->is_main_query() )", k: "" },
+    { t: "        return array( 'post_title' );", k: "h" },
+    { t: "    return $cols;   // front-end untouched", k: "" },
+    { t: "  }, 10, 3 );", k: "" },
     { t: "// hide bar for non-admins", k: "c" },
     { t: "add_filter( 'show_admin_bar', fn( $s ) =>", k: "" },
     { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
-  ], 11).addNotes("Note the is_admin() guard — we scope the search change so we never touch the visitor-facing search. Scoping filters correctly is the craft here.");
+  ], 11).addNotes("post_search_columns (WP 6.2+) narrows the columns instead of rewriting the SQL clause — it keeps core's term parsing and the logged-out password guard intact. Scoping filters correctly is the craft here.");
 
 codeSlide(19, "LOGIN & SESSIONS",
   "Right-size the login session",
@@ -463,17 +466,18 @@ divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, t
 
 codeSlide(21, "BRANDING",
   "Own the login screen",
-  "The default WordPress “W” on wp-login.php links out to wordpress.org — a subtle trust and brand leak on the one page where trust matters most. Remove or replace it, and point the link back home.",
-  "wpyeg_login_logo_behavior / _login_logo_link_home", "remove_logo / yes",
+  "The default WordPress “W” on wp-login.php links out to wordpress.org — a subtle trust leak. But changing the login screen out of the box is intrusive, so the default is to leave it alone; removing, unlinking, or replacing the logo is an opt-in, and any change points the link home.",
+  "wpyeg_login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
   [
-    { t: "add_action( 'login_head', function () {", k: "" },
-    { t: "  echo '<style>#login h1 a{display:none}</style>';", k: "h" },
-    { t: "} );", k: "" },
+    { t: "// remove, unlink, or replace — a choice", k: "c" },
+    { t: "add_action( 'login_head', $logo_css );", k: "h" },
     { t: "", k: "" },
+    { t: "// any change points the link home", k: "c" },
+    { t: "// (no separate toggle)", k: "c" },
     { t: "add_filter( 'login_headerurl', 'home_url' );", k: "h" },
     { t: "add_filter( 'login_headertext', fn() =>", k: "" },
     { t: "            get_bloginfo( 'name' ) );", k: "h" },
-  ], 12).addNotes("Swap display:none for a background-image to drop in the client's own logo. Tiny detail clients always notice.");
+  ], 12).addNotes("Default is keep_default — leave the login screen untouched. Swap in a background-image to drop in the client's own logo. Tiny detail clients always notice.");
 
 codeSlide(22, "PERFORMANCE · opt-in",
   "Throttle Heartbeat, defer scripts",
@@ -631,14 +635,12 @@ codeSlide(22, "PERFORMANCE · opt-in",
   });
   const rows = [
     ["Restrict REST user discovery", "rest_endpoints", "Security"],
-    ["Disable XML-RPC", "xmlrpc_enabled", "Security"],
-    ["Disable Application Passwords", "wp_is_application_passwords_available", "Security"],
-    ["Require strong passwords", "user_profile_update_errors", "Security"],
+    ["Lock down XML-RPC by category", "xmlrpc_methods / wp_xmlrpc_server_class", "Security"],
+    ["Require strong passwords (15+ / breach-screened)", "user_profile_update_errors", "Security"],
     ["Remove version + security headers", "wp_generator / wp_headers", "Security"],
     ["Disable comments & pingbacks", "comments_open / pings_open", "Content"],
     ["Redirect author + attachment pages", "template_redirect", "Content / SEO"],
     ["Disable emoji script", "init (remove_action)", "Performance"],
-    ["Own the login logo + link", "login_head / login_headerurl", "Branding"],
   ];
   const tblRows = [[
     { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
@@ -688,4 +690,4 @@ codeSlide(22, "PERFORMANCE · opt-in",
   s.addNotes("Wrap: hand out the zip and the reference doc. Invite them to add their own favorite default to the schema and share it back with the group.");
 })();
 
-p.writeFile({ fileName: "/home/claude/deck/WPYEG-Sane-Defaults.pptx" }).then((f) => console.log("WROTE", f));
+p.writeFile({ fileName: "Better-by-Default.pptx" }).then((f) => console.log("WROTE", f));
