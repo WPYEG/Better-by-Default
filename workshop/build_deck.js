@@ -1,3 +1,13 @@
+/*
+ * Better by Default — workshop deck generator (pptxgenjs).
+ *
+ * Build the slides:   node build_deck.js            → Better-by-Default.pptx
+ * Render the PDF:     soffice --headless --convert-to pdf Better-by-Default.pptx
+ *   (soffice = LibreOffice; the PDF is the pptx design, not the iA Presenter export)
+ *
+ * The iA Presenter sources (better-by-default.iapresenter/ and Better-by-Default.ia.md)
+ * carry the same deck for live presenting; keep all three in sync on content changes.
+ */
 const pptxgen = require("pptxgenjs");
 const p = new pptxgen();
 p.layout = "LAYOUT_WIDE"; // 13.33 x 7.5
