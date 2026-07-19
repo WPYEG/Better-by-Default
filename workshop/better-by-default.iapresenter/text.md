@@ -15,7 +15,7 @@ Welcome to WPYEG. Tonight we build one small plugin that flips a menu of sensibl
 
 ---
 - **Usernames leak** — REST + author archives list every login name to anonymous visitors
-- **Legacy endpoints open** — XML-RPC and Application Passwords stay on
+- **Legacy XML-RPC wide open** — pingback and `system.multicall` amplifiers answer by default
 - **Dead weight loads** — emoji scripts, version tags, and RSD links on every page
 - **Spam surface invites** — comments, pingbacks, and trackbacks open by default
 
@@ -30,8 +30,8 @@ None of this is a bug. It's just defaults chosen for maximum compatibility, not 
 
 ---
 ```php
-if ( wpyeg_defaults_enabled( 'disable_xmlrpc' ) ) {
-    add_filter( 'xmlrpc_enabled', '__return_false' );
+if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
+    add_filter( 'rest_endpoints', $hide_users_endpoint );
 }   // that's the whole pattern, repeated ~20 times
 ```
 
@@ -92,39 +92,47 @@ The `/wp/v2/users` endpoint hands out every author's login name to anyone — ha
 
 ---
 
-## Disable XML-RPC
+## Lock XML-RPC down by category
 
-`wpyeg_disable_xmlrpc` · default **yes**
+`wpyeg_xmlrpc_allow_pingbacks` / `_remote_publishing` / `_multicall` · default **no** each · (+ `_block_xmlrpc_endpoint`)
 
 ---
 ```php
-add_filter( 'xmlrpc_enabled', '__return_false' );
-
-// stop bots probing the discovery header
-add_filter( 'wp_headers', function ( $h ) {
-    unset( $h['X-Pingback'] );
-    return $h;
+// each category off → remove its methods
+add_filter( 'xmlrpc_methods', function ( $m ) {
+  if ( ! allow( 'pingbacks' ) )
+    unset( $m['pingback.ping'] );
+  if ( ! allow( 'remote_publishing' ) )
+    // drop wp.* metaWeblog.* mt.* blogger.*
+  return $m;
 } );
-remove_action( 'wp_head', 'rsd_link' );
+
+// multicall can't be filtered off (IXR re-adds it)
+// → swap in a server that refuses it
+add_filter( 'wp_xmlrpc_server_class', $refuse_multicall );
 ```
 
-`xmlrpc.php` is a classic amplifier: one request can attempt hundreds of logins, and its pingback method has bounced DDoS traffic. Check with the client first if they use the WordPress mobile app or older Jetpack paths — otherwise, switch it off.
+Not all-or-nothing. Pingbacks (spam/DDoS) and the credential-authenticated blogging APIs (the brute-force target) come off via a method filter; `system.multicall` can't be removed by a filter, so a replacement server refuses it. Third-party methods — Jetpack's `jetpack.*` — are left untouched, so *don't block the endpoint* on a Jetpack site.
 
 ---
 
-## Disable Application Passwords
+## Keep Application Passwords available
 
-`wpyeg_disable_application_passwords` · default **yes**
+`wpyeg_disable_application_passwords` · default **no** (available)
 
 ---
 ```php
-add_filter(
-  'wp_is_application_passwords_available',
-  '__return_false'
-);
+// available by default — prohibit only if opted in
+if ( wpyeg_defaults_enabled(
+       'disable_application_passwords' ) ) {
+  add_filter(
+    'wp_is_application_passwords_available',
+    '__return_false'
+  );
+}
 ```
 
-Application Passwords mint long-lived REST credentials. Great for headless setups — but if nobody's using them, they're just a secret waiting to leak. No feature, nothing to steal. Turn this back off if the site talks to an external app via REST auth.
+The one we *don't* lock down. Application Passwords are hashed, per-application, and individually revocable — the safer REST credential, and the only one core accepts for REST Basic Auth. So they stay on. Prohibit them only if site policy forbids non-interactive credentials; turning them off just pushes people to worse habits like sharing the login password.
 
 ---
 
@@ -135,18 +143,18 @@ Application Passwords mint long-lived REST credentials. Great for headless setup
 ---
 ```php
 // hooked on user_profile_update_errors
-$ok = strlen( $pw ) >= 12
-   && preg_match( '/[A-Z]/', $pw )
-   && preg_match( '/[a-z]/', $pw )
-   && preg_match( '/[0-9]/', $pw )
-   && preg_match( '/[^A-Za-z0-9]/', $pw );
+if ( strlen( $pw ) < 15 ) {
+    $errors->add( 'short', 'Use 15+ characters.' );
+}
 
-if ( ! $ok ) {
-    $errors->add( 'weak', 'Too weak.' );
+// screen against known breaches (HIBP) —
+// length + screening, not composition rules
+if ( wpyeg_password_is_pwned( $pw ) ) {
+    $errors->add( 'pwned', 'Seen in a breach.' );
 }
 ```
 
-Core shows a strength meter but never enforces it — a determined user can still save "password1". We validate server-side on profile save and password reset, turning the warning into a wall. Never trust the client: the JS meter is UX, the server rule is enforcement.
+NIST 800-63B and OWASP now say **length plus breach screening beats composition rules**. Forcing upper/lower/number/symbol just herds users to `Password1!` — predictable, not strong. So we require 15+ characters and screen against Have I Been Pwned (wire the filter to its range API), enforced server-side on save and reset. The JS meter is UX; the server rule is the wall.
 
 ---
 
@@ -271,19 +279,20 @@ Now the quality-of-life defaults. These are more about the daily experience and 
 
 ---
 ```php
-// title-only admin search (scoped!)
-add_filter( 'posts_search', function ( $sql, $q ) {
-  if ( ! is_admin() || ! $q->is_main_query() )
-      return $sql;   // front-end untouched
-  // ...match post_title only
-}, 10, 2 );
+// title-only admin search — narrow the COLUMNS
+add_filter( 'post_search_columns',
+  function ( $cols, $s, $q ) {
+    if ( is_admin() && $q->is_main_query() )
+        return array( 'post_title' );  // titles only
+    return $cols;                       // front-end untouched
+  }, 10, 3 );
 
 // hide bar for non-admins
 add_filter( 'show_admin_bar', fn( $s ) =>
   current_user_can('manage_options') ? $s : false );
 ```
 
-On big sites the admin list-table search scans post content and crawls; title-only search is far faster. Note the `is_admin()` guard — we scope the change so the visitor-facing search is never touched. Scoping filters correctly is the real craft here.
+On big sites the admin list-table search scans post content and crawls; title-only is far faster. Use `post_search_columns` (WP 6.2+) to narrow the *columns* rather than rewriting the whole SQL clause — that keeps core's term parsing and the logged-out password guard intact. Scoping filters correctly is the real craft here.
 
 ---
 
@@ -314,20 +323,20 @@ The last pair: a branding touch on the login screen, then two performance levers
 
 ## Own the login screen
 
-`wpyeg_login_logo_behavior` / `wpyeg_login_logo_link_home` · **remove_logo / yes**
+`wpyeg_login_logo_behavior` · default **keep_default** (keep / remove / unlink / replace)
 
 ---
 ```php
-add_action( 'login_head', function () {
-  echo '<style>#login h1 a{display:none}</style>';
-} );
+// remove, unlink, or replace — a deliberate choice
+add_action( 'login_head', $logo_css ); // hide or swap image
 
+// any change points the link home (no separate toggle)
 add_filter( 'login_headerurl', 'home_url' );
 add_filter( 'login_headertext', fn() =>
             get_bloginfo( 'name' ) );
 ```
 
-The default WordPress "W" on `wp-login.php` links out to wordpress.org — a subtle trust and brand leak on the one page where trust matters most. Remove or replace it, and point the link home. Swap `display:none` for a background-image to drop in the client's own logo. Clients always notice this one.
+The default WordPress "W" on `wp-login.php` links out to wordpress.org — a subtle trust leak on the one page where trust matters most. But changing the login screen out of the box is intrusive, so the default is to **leave it alone**; removing, unlinking, or replacing the logo is an opt-in, and any of those always points the link home. Swap in a background-image to drop in the client's own logo. Clients always notice this one.
 
 ---
 
@@ -431,16 +440,14 @@ A great confidence-builder: it proves the data-driven pattern. Touch two spots a
 | Default | Core hook | Category |
 | --- | --- | --- |
 | Restrict REST user discovery | `rest_endpoints` | Security |
-| Disable XML-RPC | `xmlrpc_enabled` | Security |
-| Disable Application Passwords | `wp_is_application_passwords_available` | Security |
-| Require strong passwords | `user_profile_update_errors` | Security |
+| Lock down XML-RPC by category | `xmlrpc_methods` / `wp_xmlrpc_server_class` | Security |
+| Require strong passwords (15+ / breach-screened) | `user_profile_update_errors` | Security |
 | Remove version + security headers | `wp_generator` / `wp_headers` | Security |
 | Disable comments & pingbacks | `comments_open` / `pings_open` | Content |
 | Redirect author + attachment pages | `template_redirect` | Content / SEO |
 | Disable emoji script | `init` (remove_action) | Performance |
-| Own the login logo + link | `login_head` / `login_headerurl` | Branding |
 
-This is your screenshot slide — everything on-by-default in one view, mapped to the core hook so folks can find it in the code later.
+This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Two deliberate *non*-defaults worth calling out: Application Passwords stay **available** (the safer REST credential), and the login logo is **left alone** unless you opt in — both are choices, not oversights.
 
 ---
 
