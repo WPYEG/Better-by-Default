@@ -257,17 +257,18 @@ const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
  * @return mixed
  */
 function wpyeg_defaults_get( $key ) {
-	static $stored = null;
-	if ( null === $stored ) {
-		$stored = get_option( WPYEG_DEFAULTS_OPTION, array() );
-		if ( ! is_array( $stored ) ) {
-			$stored = array();
-		}
-	}
-
 	$schema = wpyeg_defaults_schema();
 	if ( ! isset( $schema[ $key ] ) ) {
 		return null;
+	}
+
+	// Deliberately uncached: the option is autoloaded, so get_option() answers
+	// from the options cache without a query. A static here would only add a
+	// second cache that goes stale the moment anything calls update_option()
+	// — which is exactly what saving the settings screen does.
+	$stored = get_option( WPYEG_DEFAULTS_OPTION, array() );
+	if ( ! is_array( $stored ) ) {
+		$stored = array();
 	}
 
 	return array_key_exists( $key, $stored ) ? $stored[ $key ] : $schema[ $key ]['default'];
@@ -632,7 +633,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 
 	if ( $length < $minimum ) {
 		return new WP_Error(
-			'wpyeg_pass_too_short',
+			'wpyeg_password_too_short',
 			sprintf(
 				/* translators: %d: minimum password length. */
 				__( '<strong>Error:</strong> Password must be at least %d characters.', 'sane-defaults' ),
@@ -655,7 +656,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 
 	if ( in_array( $normalize( $password ), array_map( $normalize, $blocklist ), true ) ) {
 		return new WP_Error(
-			'wpyeg_pass_common',
+			'wpyeg_password_common',
 			__( '<strong>Error:</strong> Choose a password that is not commonly used.', 'sane-defaults' )
 		);
 	}
@@ -674,7 +675,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 			$value = $normalize( $value );
 			if ( strlen( $value ) >= 4 && false !== strpos( $normalize( $password ), $value ) ) {
 				return new WP_Error(
-					'wpyeg_pass_personal',
+					'wpyeg_password_personal',
 					__( '<strong>Error:</strong> Password must not contain your username or email name.', 'sane-defaults' )
 				);
 			}
@@ -683,7 +684,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 
 	if ( wpyeg_password_is_pwned( $password ) ) {
 		return new WP_Error(
-			'wpyeg_pass_pwned',
+			'wpyeg_password_pwned',
 			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
 		);
 	}
