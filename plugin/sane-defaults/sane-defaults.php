@@ -629,10 +629,14 @@ function wpyeg_defaults_bootstrap() {
  * @param stdClass|WP_User $user
  */
 function wpyeg_enforce_strong_password( $errors, $update, $user ) {
-	$password = isset( $_POST['pass1'] ) ? (string) wp_unslash( $_POST['pass1'] ) : '';
+	// Core's edit_user() trims the password and stores the TRIMMED value, but
+	// fires this hook with $_POST untouched. Validate the untrimmed string and
+	// "              a" sails past the 15-character rule while core saves a
+	// one-character password. Measure exactly what core will store.
+	$password = isset( $_POST['pass1'] ) ? trim( (string) wp_unslash( $_POST['pass1'] ) ) : '';
 
 	if ( '' === $password ) {
-		return; // No password change requested.
+		return; // No password change requested (or whitespace-only).
 	}
 
 	// NIST 800-63B / OWASP: favour length + breach screening over forced
