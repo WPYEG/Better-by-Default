@@ -9,7 +9,7 @@
  * Author:            WPYEG
  * License:           GPL-3.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-3.0.html
- * Text Domain:       better-by-default
+ * Text Domain:       sane-defaults
  *
  * ---------------------------------------------------------------------------
  * WORKSHOP NOTE
@@ -312,7 +312,7 @@ function wpyeg_defaults_bootstrap() {
 			if ( ! is_user_logged_in() ) {
 				return new WP_Error(
 					'rest_not_logged_in',
-					__( 'REST API restricted to authenticated users.', 'better-by-default' ),
+					__( 'REST API restricted to authenticated users.', 'sane-defaults' ),
 					array( 'status' => 401 )
 				);
 			}
@@ -636,27 +636,81 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 	if ( strlen( $password ) < 15 ) {
 		$errors->add(
 			'wpyeg_pass_too_short',
-			__( '<strong>Error:</strong> Password must be at least 15 characters.', 'better-by-default' )
+			__( '<strong>Error:</strong> Password must be at least 15 characters.', 'sane-defaults' )
 		);
 		return;
 	}
 
-	/*
-	 * Screening stand-in. A production build should plug in a real strength
-	 * estimator (a zxcvbn PHP port) and a breach check — the Have I Been Pwned
-	 * range API, queried by k-anonymity (send only the first 5 SHA-1 hex chars,
-	 * never the password). The wpyeg_password_is_pwned filter is that seam.
-	 */
-	$obvious = array( 'passwordpassword', '123456789012345', 'qwertyuiopasdfg', 'administratoradmin' );
-	$pwned   = in_array( strtolower( $password ), $obvious, true )
-		|| (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
-
-	if ( $pwned ) {
+	// Breach screening against Have I Been Pwned (see wpyeg_password_is_pwned).
+	if ( wpyeg_password_is_pwned( $password ) ) {
 		$errors->add(
 			'wpyeg_pass_pwned',
-			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'better-by-default' )
+			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
 		);
 	}
+}
+
+/**
+ * Check a password against the Have I Been Pwned range API using k-anonymity.
+ *
+ * Only the first five characters of the SHA-1 hash ever leave the site. HIBP
+ * returns every hash suffix sharing that prefix and the comparison happens
+ * locally, so the password itself is never transmitted. `Add-Padding` asks HIBP
+ * to pad the response so its size cannot reveal how many real matches it held;
+ * padded rows carry a count of 0 and are ignored.
+ *
+ * Fails OPEN: if HIBP is unreachable the password is allowed, rather than
+ * locking everyone out of password changes during an outage.
+ *
+ * @param string $password Plain-text password to screen.
+ * @return bool True when the password appears in a known breach.
+ */
+function wpyeg_password_is_pwned( $password ) {
+	$hash   = strtoupper( sha1( $password ) );
+	$prefix = substr( $hash, 0, 5 );
+	$suffix = substr( $hash, 5 );
+
+	$cache_key = 'wpyeg_hibp_' . $prefix;
+	$body      = get_transient( $cache_key );
+
+	if ( false === $body ) {
+		$response = wp_remote_get(
+			'https://api.pwnedpasswords.com/range/' . $prefix,
+			array(
+				'timeout' => 4,
+				'headers' => array( 'Add-Padding' => 'true' ),
+			)
+		);
+
+		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			// Fail open — never block a password change because HIBP is down.
+			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+		}
+
+		$body = (string) wp_remote_retrieve_body( $response );
+		set_transient( $cache_key, $body, 12 * HOUR_IN_SECONDS );
+	}
+
+	$pwned = false;
+
+	foreach ( preg_split( '/\r\n|\n/', (string) $body ) as $line ) {
+		$parts = array_pad( explode( ':', trim( $line ), 2 ), 2, '0' );
+
+		// Padded rows report a count of 0 and are not real matches.
+		if ( (int) $parts[1] > 0 && 0 === strcasecmp( $parts[0], $suffix ) ) {
+			$pwned = true;
+			break;
+		}
+	}
+
+	/**
+	 * Filter the breach-screening verdict (e.g. to use a local blocklist, or to
+	 * skip the network call on an air-gapped site).
+	 *
+	 * @param bool   $pwned    Whether the password appeared in a known breach.
+	 * @param string $password The password being screened.
+	 */
+	return (bool) apply_filters( 'wpyeg_password_is_pwned', $pwned, $password );
 }
 
 
@@ -666,10 +720,10 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 
 add_action( 'admin_menu', function () {
 	add_options_page(
-		__( 'Better by Default', 'better-by-default' ),
-		__( 'Better by Default', 'better-by-default' ),
+		__( 'Better by Default', 'sane-defaults' ),
+		__( 'Better by Default', 'sane-defaults' ),
 		'manage_options',
-		'better-by-default',
+		'sane-defaults',
 		'wpyeg_defaults_render_settings_page'
 	);
 } );
@@ -728,8 +782,8 @@ function wpyeg_defaults_render_settings_page() {
 	$groups = wpyeg_defaults_groups();
 	?>
 	<div class="wrap">
-		<h1><?php esc_html_e( 'Better by Default', 'better-by-default' ); ?></h1>
-		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'better-by-default' ); ?></p>
+		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
+		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'sane-defaults' ); ?></p>
 
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
@@ -751,7 +805,7 @@ function wpyeg_defaults_render_settings_page() {
 											name="<?php echo esc_attr( $name ); ?>"
 											value="yes"
 											<?php checked( 'yes', $value ); ?> />
-										<?php esc_html_e( 'Enabled', 'better-by-default' ); ?>
+										<?php esc_html_e( 'Enabled', 'sane-defaults' ); ?>
 									</label>
 								<?php elseif ( 'select' === $field['type'] ) : ?>
 									<select name="<?php echo esc_attr( $name ); ?>">
@@ -782,7 +836,7 @@ function wpyeg_defaults_render_settings_page() {
 		</form>
 
 		<hr />
-		<p><em><?php esc_html_e( 'Three hardening moves live in wp-config.php and cannot be toggled here:', 'better-by-default' ); ?></em></p>
+		<p><em><?php esc_html_e( 'Three hardening moves live in wp-config.php and cannot be toggled here:', 'sane-defaults' ); ?></em></p>
 		<pre style="background:#f6f7f7;padding:12px;border:1px solid #dcdcde;max-width:640px;">define( 'DISALLOW_FILE_EDIT', true );
 define( 'AUTOSAVE_INTERVAL', 120 );
 define( 'WP_POST_REVISIONS', 10 );</pre>

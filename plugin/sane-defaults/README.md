@@ -9,7 +9,7 @@ thing is built around one idea worth carrying home:
 
 ## Install
 
-1. Copy the `better-by-default` folder into `wp-content/plugins/`
+1. Copy the `sane-defaults` folder into `wp-content/plugins/`
    (or upload the zip via **Plugins → Add New → Upload Plugin**).
 2. Activate. On activation the documented defaults are seeded automatically.
 3. Visit **Settings → Better by Default** to flip switches.
@@ -17,7 +17,7 @@ thing is built around one idea worth carrying home:
 WP-CLI:
 
 ```bash
-wp plugin install ./better-by-default.zip --activate
+wp plugin install ./sane-defaults.zip --activate
 ```
 
 For production you can also drop the main PHP file into `wp-content/mu-plugins/` so the

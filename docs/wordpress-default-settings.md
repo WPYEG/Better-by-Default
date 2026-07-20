@@ -8,7 +8,7 @@ plugin), a recommended **default value**, a short **description**, and a **code 
 can drop into a plugin, an mu-plugin, or a theme's `functions.php`.
 
 > Built for the **WPYEG — Edmonton WordPress Meetup** hands-on workshop. The companion
-> `better-by-default` plugin wires every one of these behind a toggle.
+> `sane-defaults` plugin wires every one of these behind a toggle.
 
 **How to read this:** the option key/default columns assume these are user-toggleable
 settings. The snippet under each item is the "on" behavior — the code that runs when the
@@ -43,8 +43,9 @@ add_filter( 'rest_endpoints', function ( $endpoints ) {
 
 ### Disable REST API for Anonymous Requests
 - **Option:** `wpyeg_disable_rest`
-- **Default:** `no` *(leave off unless the site is a pure brochure site — the block editor,
-  many blocks, and core AJAX rely on REST)*
+- **Default:** `no` *(leave off unless the site is a pure brochure site — anonymous front-end
+  blocks, embeds, and outside integrations rely on unauthenticated REST; the logged-in block
+  editor is unaffected, since it authenticates with a cookie plus a REST nonce)*
 - **Why:** Fully disabling REST is a blunt instrument. The safer posture is to require
   authentication for all REST calls, which blocks anonymous scraping without breaking the
   editor for logged-in users.
@@ -195,11 +196,13 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
     }
 }
 ```
-> **Note:** `wpyeg_zxcvbn_score()` and `wpyeg_is_pwned()` are your helpers — score with a zxcvbn
-> PHP port (`bjeavons/zxcvbn-php`) and screen with the Have I Been Pwned range API using
-> k-anonymity (send only the first 5 SHA-1 characters, never the password). Server-side
-> validation is the enforcement layer; pair it with the core JS meter for UX, but never trust
-> the client alone.
+> **Note:** the companion plugin ships a working `wpyeg_password_is_pwned()`. It queries the Have
+> I Been Pwned range API by k-anonymity (only the first 5 SHA-1 characters leave the site, never
+> the password), requests `Add-Padding` and ignores the padded count-0 rows, caches each prefix
+> for a few hours, and **fails open** when HIBP is unreachable so an outage can't block password
+> changes. A strength estimator (`wpyeg_zxcvbn_score()` via `bjeavons/zxcvbn-php`) is still yours
+> to add if you want one. Server-side validation is the enforcement layer; pair it with the core
+> JS meter for UX, but never trust the client alone.
 
 ### Disable AI Connectors
 - **Option:** `wpyeg_disable_ai_connectors`

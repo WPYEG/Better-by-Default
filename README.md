@@ -15,12 +15,12 @@ The whole thing rests on one idea worth carrying home:
 
 ```
 Better-by-Default/
-├── plugin/better-by-default/   → the installable plugin (main file, readme.txt, README)
+├── plugin/sane-defaults/   → the installable plugin (main file, readme.txt, README)
 ├── docs/                       → wordpress-default-settings.md — the full reference, every
 │                                 default with its "why" and a code snippet
 ├── workshop/                   → the meetup talk: PowerPoint, iA Presenter markdown,
 │                                 a PDF handout, and the deck build script
-├── dist/                       → better-by-default.zip — a ready-to-install build
+├── dist/                       → sane-defaults.zip — a ready-to-install build
 ├── LICENSE                     → GPL-3.0
 └── README.md                   → you are here
 ```
@@ -29,14 +29,14 @@ Better-by-Default/
 
 Install the plugin one of three ways:
 
-**Upload** — Plugins → Add New → Upload Plugin → `dist/better-by-default.zip` → Activate.
+**Upload** — Plugins → Add New → Upload Plugin → `dist/sane-defaults.zip` → Activate.
 
-**Copy** — drop `plugin/better-by-default/` into `wp-content/plugins/` and activate.
+**Copy** — drop `plugin/sane-defaults/` into `wp-content/plugins/` and activate.
 
 **WP-CLI**
 
 ```bash
-wp plugin install ./dist/better-by-default.zip --activate
+wp plugin install ./dist/sane-defaults.zip --activate
 ```
 
 On activation the documented defaults are seeded automatically. Then visit

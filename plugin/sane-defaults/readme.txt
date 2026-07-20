@@ -46,13 +46,13 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 
 == Installation ==
 
-1. Upload the `better-by-default` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload Plugin.
+1. Upload the `sane-defaults` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload Plugin.
 2. Activate. Documented defaults are seeded automatically on activation.
 3. Visit **Settings → Better by Default** to flip switches.
 
 WP-CLI:
 
-`wp plugin install ./better-by-default.zip --activate`
+`wp plugin install ./sane-defaults.zip --activate`
 
 == Frequently Asked Questions ==
 
