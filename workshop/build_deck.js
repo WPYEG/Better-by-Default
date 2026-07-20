@@ -372,24 +372,27 @@ codeSlide(11, "SECURITY · 5 of 6",
 
 codeSlide(12, "SECURITY · 6 of 6",
   "Remove fingerprints, add headers",
-  "One default and one deliberate non-default. Hiding the version is obscurity, not hardening — it buys quieter logs, not a safer site — so it ships off. The three headers are real, low-risk defaults most sites can adopt without breaking anything.",
-  "wpyeg_remove_version (no) / wpyeg_security_headers (yes)", "opt-in / on",
+  "Two headers with no real downside ship on; framing is its own setting, because it is the only one that can break a working site. Hiding the version is obscurity, not hardening, so it ships off.",
+  "wpyeg_security_headers (yes) / wpyeg_frame_options (SAMEORIGIN)", "on / separate",
   [
     { t: "remove_action( 'wp_head', 'wp_generator' );", k: "h" },
     { t: "", k: "" },
     { t: "add_filter( 'wp_headers', function ( $h ) {", k: "" },
-    { t: "  $h['X-Content-Type-Options'] = 'nosniff';", k: "h" },
-    { t: "  $h['X-Frame-Options']        = 'SAMEORIGIN';", k: "h" },
-    { t: "  $h['Referrer-Policy'] =", k: "h" },
-    { t: "        'strict-origin-when-cross-origin';", k: "h" },
+    { t: "  // only fill in what nothing else set", k: "c" },
+    { t: "  if ( ! isset( $h['X-Content-Type-Options'] ) )", k: "" },
+    { t: "    $h['X-Content-Type-Options'] = 'nosniff';", k: "h" },
+    { t: "  if ( ! isset( $h['Referrer-Policy'] ) )", k: "" },
+    { t: "    $h['Referrer-Policy'] =", k: "h" },
+    { t: "      'strict-origin-when-cross-origin';", k: "h" },
     { t: "  return $h;", k: "" },
     { t: "} );", k: "" },
+    { t: "// framing is its own setting - see the notes", k: "c" },
   ]).addNotes(
   "One default and one deliberate non-default — and the difference is the lesson. Hiding the version is obscurity, not hardening: it does not make an out-of-date site any safer, and it does not even hide much, since the version still leaks from asset query strings and feeds. What it genuinely buys is quieter logs. That is worth opting into, not worth shipping on and calling security — so it defaults to off. The headers are the opposite: real, low-risk defaults most sites can adopt without breaking anything:\n\n" +
   "- X-Content-Type-Options: nosniff — the browser must trust the declared Content-Type instead of guessing; kills \"a .txt the browser decides to run as JavaScript\" tricks.\n" +
-  "- X-Frame-Options: SAMEORIGIN — only your own site may load the page in an iframe; blocks clickjacking, where your login or admin is hidden under an attacker's page.\n" +
   "- Referrer-Policy: strict-origin-when-cross-origin — sends the full URL within your own site, only the bare domain to other sites, and nothing on an HTTPS→HTTP downgrade; keeps tokens and private paths from leaking in the Referer.\n\n" +
-  "A full Content-Security-Policy is a bigger conversation for another time!"
+  "X-Frame-Options is deliberately a SEPARATE setting (wpyeg_frame_options, default SAMEORIGIN), and that split is the point worth teaching. It is the only one of the three that can break a working site: blocking cross-origin framing also blocks legitimate embedding — a client intranet, a partner site, a preview tool — and it fails as a silent blank frame, which is miserable to debug. Bundled with the other two, a site that needs to be embeddable would have to give up nosniff as well.\n\n" +
+  "Note the isset() guards: a managed host or CDN often sets these already and we should not fight that layer. Be honest about the limit though — PHP only sees headers set in PHP, so one added by nginx or a CDN is invisible here. Check the response, not just the code. A full Content-Security-Policy is a bigger conversation for another time!"
 );
 
 /* =================================================================== */
@@ -506,20 +509,18 @@ codeSlide(21, "BRANDING",
   ], 12).addNotes("The login page is a WordPress site's staff entrance — the one door you and your clients actually log in through — and by default the welcome mat links to someone else's house! That little WordPress \"W\" on wp-login.php points out to wordpress.org. Changing a site's login screen out of the box is intrusive, though, so the default is to LEAVE IT ALONE. Removing, unlinking, or replacing the logo is an opt-in — and whichever you choose, the link always points home. Swap in a background-image to drop in the site's own logo.");
 
 codeSlide(22, "PERFORMANCE · opt-in",
-  "Throttle Heartbeat, defer scripts (opt-in)",
-  "The Heartbeat API polls admin-ajax every 15–60s; throttle it to ease up on weak shared hosting. Deferring non-critical scripts keeps them from being render-blocking.",
-  "wpyeg_throttle_heartbeat / wpyeg_defer_scripts", "no / no",
+  "Throttle Heartbeat — and a default we deleted",
+  "Throttle Heartbeat to ease up on weak shared hosting. The more interesting half is the toggle that used to be here: WordPress 6.3 gave scripts a per-script loading strategy, so our blanket defer filter had to go.",
+  "wpyeg_throttle_heartbeat", "no (opt-in)",
   [
     { t: "add_filter( 'heartbeat_settings', fn( $s ) => {", k: "" },
     { t: "  $s['interval'] = 60; return $s;", k: "h" },
     { t: "} );", k: "" },
     { t: "", k: "" },
-    { t: "add_filter( 'script_loader_tag',", k: "" },
-    { t: "  function ( $tag, $handle ) {", k: "" },
-    { t: "    // add ' defer' (skip jquery-core)", k: "c" },
-    { t: "    return $tag;", k: "" },
-    { t: "}, 10, 2 );", k: "" },
-  ]).addNotes("The Heartbeat API polls admin-ajax every 15–60s. Throttle it to ease up on weak shared hosting. Deferring non-critical scripts keeps them from being render-blocking, but this can also break plugins expecting synchronous jQuery.");
+    { t: "// Deferring is NOT a setting here. Since WP 6.3:", k: "c" },
+    { t: "wp_enqueue_script( 'front', $src, array(), '1.0',", k: "" },
+    { t: "  array( 'strategy' => 'defer' ) );", k: "h" },
+  ]).addNotes("The Heartbeat API polls admin-ajax every 15-60s. Throttle it to ease up on weak shared hosting.\n\nThe more interesting half of this slide is the toggle that USED to be here. We shipped a \"defer front-end scripts\" default that hooked script_loader_tag and string-replaced ' src=' with ' defer src=' on every handle. It had to skip jQuery core, and it still broke anything expecting a particular execution order — because a blanket filter cannot know which scripts are safe to defer.\n\nWordPress 6.3 added a per-script loading strategy, so core now answers this precisely, at the point of enqueue, where the person who wrote the script decides. Keeping our version would have meant teaching a workaround for a problem the platform already solved. Deleting a default is a legitimate result.");
 
 /* =================================================================== */
 /* 23. wp-config things                                                */

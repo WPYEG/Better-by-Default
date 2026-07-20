@@ -276,10 +276,16 @@ wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'],
  * version still leaks from asset query strings and feeds — so it is offered as
  * noise reduction you opt into, not a security default.
  *
- * Still open from PR #1: whether attachment redirects should also be opt-in,
- * and whether security_headers / defer_scripts should be dropped as
- * unsafe-or-generic. Those assertions pin today's behaviour so a change is
- * deliberate rather than accidental.
+ * defer_scripts is gone, also per PR #1, but for a sharper reason than "generic":
+ * WordPress 6.3 added a per-script loading strategy
+ * ( wp_enqueue_script( ..., array( 'strategy' => 'defer' ) ) ), so blanket
+ * script_loader_tag rewriting is teaching a superseded technique.
+ *
+ * security_headers was not dropped. It was split: nosniff and Referrer-Policy
+ * are low-risk and stay on, while X-Frame-Options — the only one of the three
+ * that can break a working site — became its own setting.
+ *
+ * Still open from PR #1: whether attachment redirects should also be opt-in.
  *
  * PR #1 also wanted disable_ai_connectors dropped as a no-op, which it was — it
  * only fired an action nobody listened to. It now does real work against core's
@@ -287,7 +293,10 @@ wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'],
  */
 wpyeg_test_assert( 'yes' === $schema['redirect_attachment_pages']['default'], 'Attachment redirects ship on (PR #1 proposed opt-in).' );
 wpyeg_test_assert( 'no' === $schema['remove_version']['default'], 'Generator-tag removal is opt-in, not presented as hardening.' );
-wpyeg_test_assert( isset( $schema['security_headers'], $schema['defer_scripts'], $schema['disable_ai_connectors'] ), 'The generic policies still ship (PR #1 proposed removing them).' );
+wpyeg_test_assert( ! isset( $schema['defer_scripts'] ), 'Blanket script deferral is gone; core has a per-script strategy since 6.3.' );
+wpyeg_test_assert( isset( $schema['security_headers'], $schema['frame_options'] ), 'Security headers are split, so framing can be changed without giving up nosniff.' );
+wpyeg_test_assert( 'SAMEORIGIN' === $schema['frame_options']['default'], 'Framing still defaults to SAMEORIGIN.' );
+wpyeg_test_assert( array_key_exists( '', $schema['frame_options']['choices'] ), 'Framing can be left to the host or CDN.' );
 
 $sanitized = wpyeg_defaults_sanitize(
 	array(
@@ -581,6 +590,51 @@ wpyeg_test_assert( '__return_false' === $ai_gate['callback'], 'The AI gate retur
 wpyeg_test_assert( null !== wpyeg_test_find_hook( 'admin_menu' ), 'The core Connectors screen is removed from the menu.' );
 wpyeg_test_assert( null !== wpyeg_test_find_hook( 'admin_init' ), 'The Connectors screen is closed, not merely unlinked.' );
 wpyeg_test_assert( in_array( 'wpyeg_disable_ai_connectors', $GLOBALS['wpyeg_test_did_actions'], true ), 'The seam still fires for AI integrations core does not know about.' );
+
+/**
+ * Run every registered wp_headers filter over a starting set of headers.
+ *
+ * @param array $headers Starting headers.
+ * @return array
+ */
+function wpyeg_test_send_headers( $headers ) {
+	foreach ( $GLOBALS['wpyeg_test_hooks'] as $entry ) {
+		if ( 'wp_headers' === $entry['hook'] ) {
+			$headers = call_user_func( $entry['callback'], $headers );
+		}
+	}
+	return $headers;
+}
+
+// Header defaults: the two low-risk ones ship on, framing is its own setting.
+$GLOBALS['wpyeg_test_hooks'] = array();
+wpyeg_defaults_bootstrap();
+$sent = wpyeg_test_send_headers( array() );
+
+wpyeg_test_assert( 'nosniff' === $sent['X-Content-Type-Options'], 'nosniff ships on.' );
+wpyeg_test_assert( isset( $sent['Referrer-Policy'] ), 'Referrer-Policy ships on.' );
+wpyeg_test_assert( 'SAMEORIGIN' === $sent['X-Frame-Options'], 'Framing ships as SAMEORIGIN.' );
+
+// A host or CDN may already own these; do not fight that layer.
+$preset = wpyeg_test_send_headers(
+	array(
+		'X-Frame-Options'        => 'DENY',
+		'X-Content-Type-Options' => 'set-by-the-cdn',
+	)
+);
+wpyeg_test_assert( 'DENY' === $preset['X-Frame-Options'], 'An X-Frame-Options set elsewhere is left alone.' );
+wpyeg_test_assert( 'set-by-the-cdn' === $preset['X-Content-Type-Options'], 'A nosniff header set elsewhere is left alone.' );
+
+// The point of splitting them: framing can be handed back to the host without
+// also giving up nosniff, which the old single toggle made impossible.
+$GLOBALS['wpyeg_test_option'] = array( 'frame_options' => '' );
+$GLOBALS['wpyeg_test_hooks']  = array();
+wpyeg_defaults_bootstrap();
+$unframed = wpyeg_test_send_headers( array() );
+unset( $GLOBALS['wpyeg_test_option'] );
+
+wpyeg_test_assert( ! isset( $unframed['X-Frame-Options'] ), 'Choosing "leave unchanged" sends no X-Frame-Options.' );
+wpyeg_test_assert( 'nosniff' === $unframed['X-Content-Type-Options'], 'Turning framing off does not also give up nosniff.' );
 
 /*
  * Breach screening (Have I Been Pwned, k-anonymity).

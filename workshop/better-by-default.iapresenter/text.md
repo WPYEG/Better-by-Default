@@ -180,27 +180,32 @@ The rules changed recently, and most people didn't notice: NIST 800-63B and OWAS
 
 ## Remove fingerprints, add headers
 
-	`wpyeg_remove_version` · default **no** (opt-in) · `wpyeg_security_headers` · default **yes**
+	`wpyeg_remove_version` **no** · `wpyeg_security_headers` **yes** · `wpyeg_frame_options` **SAMEORIGIN**
 
 ```php
 remove_action( 'wp_head', 'wp_generator' );
 
 add_filter( 'wp_headers', function ( $h ) {
-  $h['X-Content-Type-Options'] = 'nosniff';
-  $h['X-Frame-Options']        = 'SAMEORIGIN';
-  $h['Referrer-Policy'] =
-        'strict-origin-when-cross-origin';
+  // only fill in what nothing else set
+  if ( ! isset( $h['X-Content-Type-Options'] ) )
+    $h['X-Content-Type-Options'] = 'nosniff';
+  if ( ! isset( $h['Referrer-Policy'] ) )
+    $h['Referrer-Policy'] =
+      'strict-origin-when-cross-origin';
   return $h;
 } );
+
+// framing is its own setting — see the notes
 ```
 
 One default and one deliberate non-default — and the difference is the lesson. Hiding the version is **obscurity, not hardening**: it does not make an out-of-date site any safer, and it does not even hide much, since the version still leaks from asset query strings and feeds. What it genuinely buys is quieter logs. That is worth opting into, not worth shipping on and calling security — so it defaults to off. The headers are the opposite: real, low-risk defaults most sites can adopt without breaking anything:
 
 - **`X-Content-Type-Options: nosniff`** — the browser must trust the declared `Content-Type` instead of guessing; kills "a `.txt` the browser decides to run as JavaScript" tricks.
-- **`X-Frame-Options: SAMEORIGIN`** — only your own site may load the page in an `<iframe>`; blocks clickjacking, where your login or admin is hidden under an attacker's page.
 - **`Referrer-Policy: strict-origin-when-cross-origin`** — sends the full URL within your own site, only the bare domain to other sites, and nothing on an HTTPS→HTTP downgrade; keeps tokens and private paths from leaking in the `Referer`.
 
-A full Content-Security-Policy is a bigger conversation for another time!
+**`X-Frame-Options` is deliberately a separate setting** (`wpyeg_frame_options`, default `SAMEORIGIN`), and that split is the point worth teaching. It is the only one of the three that can break a working site: blocking cross-origin framing also blocks *legitimate* embedding — a client intranet, a partner site, a preview tool — and it fails as a silent blank frame, which is a miserable thing to debug. Bundled with the other two, a site that needs to be embeddable would have to give up `nosniff` as well. Two headers with no real downside and one with a genuine trade-off do not belong behind one checkbox.
+
+Note the `isset()` guards too: a managed host or CDN often sets these already, and we should not fight that layer. Be honest about the limit, though — PHP only sees headers set in PHP, so one added by nginx or a CDN is invisible here. Check the response, not just the code. A full Content-Security-Policy is a bigger conversation for another time!
 
 ---
 
@@ -337,23 +342,21 @@ The login page is a WordPress site's staff entrance — the one door you and you
 
 ---
 
-## Throttle Heartbeat, defer scripts (opt-in)
+## Throttle Heartbeat — and a default we deleted
 
-	`wpyeg_throttle_heartbeat` / `wpyeg_defer_scripts` · default **no / no**
+	`wpyeg_throttle_heartbeat` · default **no** (opt-in)
 
 ```php
 add_filter( 'heartbeat_settings', fn( $s ) => {
   $s['interval'] = 60; return $s;
 } );
 
-add_filter( 'script_loader_tag',
-  function ( $tag, $handle ) {
-    // add ' defer' (skip jquery-core)
-    return $tag;
-}, 10, 2 );
+// Deferring scripts is NOT a setting here. Since WP 6.3:
+wp_enqueue_script( 'front', $src, array(), '1.0',
+  array( 'strategy' => 'defer' ) );
 ```
 
-The Heartbeat API polls `admin-ajax` every 15–60s. Throttle it to ease up on weak shared hosting. Deferring non-critical scripts keeps them from being render-blocking, but this can also break plugins expecting synchronous jQuery. 
+The Heartbeat API polls `admin-ajax` every 15–60s. Throttle it to ease up on weak shared hosting. The more interesting half of this slide is the toggle that *used* to be here. We shipped a "defer front-end scripts" default that hooked `script_loader_tag` and string-replaced ` src=` with ` defer src=` on every handle. It had to skip jQuery core, and it still broke anything expecting a particular execution order — because a blanket filter cannot know which scripts are safe to defer. WordPress 6.3 added a per-script loading strategy, so core now answers this precisely, at the point of enqueue, where the person who wrote the script decides. Keeping our version would have meant teaching a workaround for a problem the platform already solved. Deleting a default is a legitimate result.
 
 ---
 

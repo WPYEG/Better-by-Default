@@ -41,7 +41,7 @@ Off by default (opt-in, because they change behavior): require-auth-for-all-REST
 Application Passwords (left available by default — the safer, revocable REST credential),
 block the XML-RPC endpoint entirely, title-only admin search, remove/unlink/replace the login
 logo (the WordPress logo is kept by default), hide the front-end admin bar, disable Remember Me,
-throttle Heartbeat, defer scripts, and remove the version fingerprint — that last one because it
+throttle Heartbeat, and remove the version fingerprint — that last one because it
 is obscurity, not hardening: it trims scanner noise but does not make an out-of-date site safer.
 
 ## Three things this plugin can't do for you

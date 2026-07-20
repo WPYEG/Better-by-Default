@@ -104,7 +104,19 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Send baseline security headers',
-			'help'    => 'X-Content-Type-Options, X-Frame-Options, Referrer-Policy.',
+			'help'    => 'X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
+		),
+		'frame_options' => array(
+			'default' => 'SAMEORIGIN',
+			'type'    => 'select',
+			'group'   => 'security',
+			'label'   => 'X-Frame-Options (clickjacking)',
+			'help'    => 'Controls who may embed this site in an iframe. SAMEORIGIN blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — a client intranet, a partner site, or a preview/proofing tool — usually as a silent blank frame. Leave unchanged if your host or CDN already sets this header, or if the site is meant to be embedded elsewhere.',
+			'choices' => array(
+				'SAMEORIGIN' => 'SAMEORIGIN — only this site may frame it',
+				'DENY'       => 'DENY — nobody may frame it',
+				''           => 'Leave unchanged (host/CDN sets it, or the site is embedded elsewhere)',
+			),
 		),
 		'disable_ai_connectors' => array(
 			'default' => 'yes',
@@ -224,13 +236,6 @@ function wpyeg_defaults_schema() {
 			'group'   => 'performance',
 			'label'   => 'Throttle the Heartbeat API',
 			'help'    => 'Slows admin polling to 60s and drops it on the dashboard home.',
-		),
-		'defer_scripts' => array(
-			'default' => 'no',
-			'type'    => 'toggle',
-			'group'   => 'performance',
-			'label'   => 'Defer front-end scripts',
-			'help'    => 'Adds defer to enqueued front-end scripts (skips jQuery core).',
 		),
 	);
 }
@@ -403,9 +408,29 @@ function wpyeg_defaults_bootstrap() {
 
 	if ( wpyeg_defaults_enabled( 'security_headers' ) ) {
 		add_filter( 'wp_headers', function ( $headers ) {
-			$headers['X-Content-Type-Options'] = 'nosniff';
-			$headers['X-Frame-Options']        = 'SAMEORIGIN';
-			$headers['Referrer-Policy']        = 'strict-origin-when-cross-origin';
+			// Only fill in what nothing else has set. A managed host or CDN often
+			// owns these, and two sources setting the same header is at best
+			// redundant. Caveat worth knowing: PHP can only see headers set in
+			// PHP — one added by nginx or a CDN is invisible here, so this
+			// cannot catch every duplicate. Check the response, not just this.
+			if ( ! isset( $headers['X-Content-Type-Options'] ) ) {
+				$headers['X-Content-Type-Options'] = 'nosniff';
+			}
+			if ( ! isset( $headers['Referrer-Policy'] ) ) {
+				$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+			}
+			return $headers;
+		} );
+	}
+
+	// Framing is its own setting: it is the only one of the three that can break
+	// a working site, so it must be switchable without also giving up nosniff.
+	$wpyeg_frame_options = wpyeg_defaults_get( 'frame_options' );
+	if ( '' !== $wpyeg_frame_options ) {
+		add_filter( 'wp_headers', function ( $headers ) use ( $wpyeg_frame_options ) {
+			if ( ! isset( $headers['X-Frame-Options'] ) ) {
+				$headers['X-Frame-Options'] = $wpyeg_frame_options;
+			}
 			return $headers;
 		} );
 	}
@@ -621,21 +646,6 @@ function wpyeg_defaults_bootstrap() {
 		} );
 	}
 
-	if ( wpyeg_defaults_enabled( 'defer_scripts' ) ) {
-		add_filter( 'script_loader_tag', function ( $tag, $handle ) {
-			if ( is_admin() ) {
-				return $tag;
-			}
-			$skip = array( 'jquery-core' );
-			if ( in_array( $handle, $skip, true ) ) {
-				return $tag;
-			}
-			if ( false === strpos( $tag, ' defer' ) && false !== strpos( $tag, ' src=' ) ) {
-				$tag = str_replace( ' src=', ' defer src=', $tag );
-			}
-			return $tag;
-		}, 10, 2 );
-	}
 }
 
 /**
