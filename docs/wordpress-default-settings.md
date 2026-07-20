@@ -134,8 +134,8 @@ add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
 > `jetpack.*` still resolve) — but that's a single connected-site check, not a guarantee. The
 > endpoint block is the one setting to genuinely avoid with Jetpack.
 > **`demo.*`:** the inert `demo.sayHello`/`demo.addTwoNumbers` methods still confirm XML-RPC is
-> live to a scanner — drop them too (`unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] )`)
-> if you want a quiet endpoint.
+> live to a scanner, so the companion plugin always drops them — no toggle:
+> `unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] )`.
 
 ### Application Passwords — leave available (don't reflexively disable)
 - **Option:** `wpyeg_disable_application_passwords`

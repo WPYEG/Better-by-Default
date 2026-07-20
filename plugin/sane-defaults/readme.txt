@@ -2,7 +2,7 @@
 Contributors: wpyeg
 Tags: security, hardening, defaults, performance, cleanup
 Requires at least: 6.4
-Tested up to: 6.8
+Tested up to: 7.0.2
 Requires PHP: 7.4
 Stable tag: 1.0.0
 License: GPLv3 or later

@@ -328,6 +328,11 @@ function wpyeg_defaults_bootstrap() {
 	 * because IXR re-adds multicall after the filter runs.
 	 */
 	add_filter( 'xmlrpc_methods', function ( $methods ) {
+		// demo.* are inert core test methods with no legitimate use. Always drop
+		// them (no toggle) so a locked-down endpoint stops answering scanner
+		// probes like demo.sayHello with a cheerful "Hello!".
+		unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] );
+
 		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
 			unset( $methods['pingback.ping'], $methods['pingback.extensions.getPingbacks'] );
 		}
