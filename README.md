@@ -57,8 +57,8 @@ and disabling them pushes people to worse alternatives — and the login logo is
 
 **Opt-in, off by default** (they change behavior — turn on deliberately): require auth for all
 REST, prohibit Application Passwords, remove/replace the login logo, title-only admin search,
-hide the front-end admin bar, disable Remember Me, throttle the Heartbeat API, and defer
-front-end scripts. Removing the version fingerprint is here too, for a different reason: it is
+hide the front-end admin bar, disable Remember Me, and throttle the Heartbeat API. Removing the
+version fingerprint is here too, for a different reason: it is
 obscurity rather than hardening — useful for trimming scanner noise, but it does not make an
 out-of-date site safer, so it is not presented as a security default.
 

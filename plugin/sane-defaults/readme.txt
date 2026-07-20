@@ -43,7 +43,6 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Hide the front-end admin bar
 * Disable "Remember Me"
 * Throttle the Heartbeat API
-* Defer front-end scripts
 
 == Installation ==
 

@@ -489,16 +489,42 @@ remove_action( 'wp_head', 'wp_generator' );
 add_filter( 'the_generator', '__return_empty_string' );
 ```
 
-**Send baseline security headers.** Reasonable defaults that don't usually break sites.
+**Send baseline security headers** *(`wpyeg_security_headers`, default `yes`)*. Two headers with
+essentially no downside: `nosniff` stops the browser second-guessing a declared `Content-Type`,
+and `Referrer-Policy` keeps full URLs from leaking to other sites.
+
+Note what is *not* in this group. `X-Frame-Options` is a separate setting
+(`wpyeg_frame_options`, default `SAMEORIGIN`) because it is the only one of the three that can
+break a working site: blocking cross-origin framing also blocks *legitimate* embedding — a
+client intranet, a partner site, a preview or proofing tool — and it usually fails as a silent
+blank frame. Bundling it with `nosniff` would mean a site that needs to be embeddable has to
+give up `nosniff` as well. Set it to *leave unchanged* when a host or CDN already sends it.
 
 ```php
 add_filter( 'wp_headers', function ( $headers ) {
-    $headers['X-Content-Type-Options'] = 'nosniff';
-    $headers['X-Frame-Options']        = 'SAMEORIGIN';
-    $headers['Referrer-Policy']        = 'strict-origin-when-cross-origin';
+    // Only fill in what nothing else has set — a host or CDN may own these.
+    if ( ! isset( $headers['X-Content-Type-Options'] ) ) {
+        $headers['X-Content-Type-Options'] = 'nosniff';
+    }
+    if ( ! isset( $headers['Referrer-Policy'] ) ) {
+        $headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+    }
+    return $headers;
+} );
+
+// Framing, separately, so it can be changed without giving up the above.
+add_filter( 'wp_headers', function ( $headers ) {
+    if ( ! isset( $headers['X-Frame-Options'] ) ) {
+        $headers['X-Frame-Options'] = 'SAMEORIGIN'; // or DENY
+    }
     return $headers;
 } );
 ```
+
+> **Caveat on the `isset()` guards:** PHP can only see headers set in PHP. One added by nginx,
+> Apache, or a CDN is invisible here, so this cannot catch every duplicate — check the actual
+> response, not just this code. Headers are ultimately an edge concern; this is the fallback for
+> when you do not control the edge.
 
 **Disable self-pingbacks.** Stops your own internal links from creating pingback noise.
 
@@ -586,25 +612,27 @@ add_action( 'init', function () {
 } );
 ```
 
-**Defer non-critical scripts.** Add `defer` to enqueued front-end scripts so they don't block
-render.
+**Defer non-critical scripts** — *no plugin setting, because core does this properly now.*
+
+Since **WordPress 6.3**, `wp_enqueue_script()` takes a loading strategy, so deferral belongs on
+the script being enqueued rather than in a filter that rewrites everyone's `<script>` tags:
 
 ```php
-add_filter( 'script_loader_tag', function ( $tag, $handle ) {
-    if ( is_admin() ) {
-        return $tag;
-    }
-    // Skip anything that must run inline/early (e.g. jQuery core).
-    $skip = array( 'jquery-core' );
-    if ( in_array( $handle, $skip, true ) ) {
-        return $tag;
-    }
-    if ( false === strpos( $tag, ' defer' ) && false !== strpos( $tag, ' src=' ) ) {
-        $tag = str_replace( ' src=', ' defer src=', $tag );
-    }
-    return $tag;
-}, 10, 2 );
+wp_enqueue_script(
+    'my-theme-front',
+    get_theme_file_uri( 'build/front.js' ),
+    array(),
+    '1.0.0',
+    array( 'strategy' => 'defer' ) // or 'async'
+);
 ```
+
+The older pattern — hooking `script_loader_tag` and string-replacing ` src=` with ` defer src=`
+across every handle — predates that API and is worth retiring. It cannot know which scripts are
+safe to defer, so it breaks anything expecting synchronous jQuery or a particular execution
+order, and it hands you a blunt on/off switch where core now gives you per-script control. If
+you inherit a site that still does it, replacing it with `strategy` is a real improvement rather
+than a lateral move.
 
 **Remove query strings from static assets** for better proxy/CDN caching (many CDNs skip
 querystring'd URLs by default).
