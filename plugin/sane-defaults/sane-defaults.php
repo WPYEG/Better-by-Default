@@ -160,7 +160,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Redirect attachment pages',
-			'help'    => 'Sends thin attachment pages to the parent post or home.',
+			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides attachment.php or image.php, since that theme meant to render them. Core has its own switch since 6.4 (wp_attachment_pages_enabled); this prefers the parent post over the bare file.',
 		),
 		'disable_emojis' => array(
 			'default' => 'yes',
@@ -529,12 +529,32 @@ function wpyeg_defaults_bootstrap() {
 
 	if ( wpyeg_defaults_enabled( 'redirect_attachment_pages' ) ) {
 		add_action( 'template_redirect', function () {
-			if ( is_attachment() ) {
-				$parent = wp_get_post_parent_id( get_queried_object_id() );
-				$target = $parent ? get_permalink( $parent ) : home_url( '/' );
-				wp_safe_redirect( $target, 301 );
-				exit;
+			if ( ! is_attachment() ) {
+				return;
 			}
+
+			$target = wpyeg_defaults_attachment_redirect_target( get_queried_object_id() );
+
+			if ( '' === $target ) {
+				return; // Nothing better to offer — let WordPress render the page.
+			}
+
+			// wp_safe_redirect() bounces to wp-admin when the host is not on the
+			// allowlist, which offloaded media (S3, a CDN) would trigger. Allow
+			// this one host rather than dumping visitors on the dashboard.
+			add_filter(
+				'allowed_redirect_hosts',
+				function ( $hosts ) use ( $target ) {
+					$host = wp_parse_url( $target, PHP_URL_HOST );
+					if ( $host ) {
+						$hosts[] = $host;
+					}
+					return $hosts;
+				}
+			);
+
+			wp_safe_redirect( $target, 301 );
+			exit;
 		} );
 	}
 
@@ -646,6 +666,51 @@ function wpyeg_defaults_bootstrap() {
 		} );
 	}
 
+}
+
+/**
+ * Decide where an attachment page should send visitors, if anywhere.
+ *
+ * Kept separate from the redirect itself so the decision can be tested without
+ * a request: the hook does the exiting, this answers the question.
+ *
+ * WordPress 6.4 added a `wp_attachment_pages_enabled` option — new installs get
+ * `0` and core redirects attachment requests to the file, while sites upgraded
+ * from earlier get `1` and keep rendering the pages. This default overrides that
+ * destination, preferring the parent post, because landing on a real article
+ * beats landing on a bare JPEG. Where there is no parent it matches core and
+ * falls back to the file.
+ *
+ * @param int $attachment_id Attachment post ID.
+ * @return string Redirect target, or '' to leave the page alone.
+ */
+function wpyeg_defaults_attachment_redirect_target( $attachment_id ) {
+	/**
+	 * Let a theme that deliberately builds attachment pages keep them.
+	 *
+	 * A theme shipping attachment.php or image.php has opted into rendering
+	 * these, and quietly redirecting past it would delete a feature its author
+	 * wrote on purpose — the photography and portfolio case. Filter this to
+	 * force the redirect anyway, or to skip it on your own terms.
+	 *
+	 * @param bool $keep          Whether to leave the attachment page alone.
+	 * @param int  $attachment_id Attachment post ID.
+	 */
+	if ( (bool) apply_filters( 'wpyeg_keep_attachment_page', (bool) locate_template( array( 'attachment.php', 'image.php' ) ), $attachment_id ) ) {
+		return '';
+	}
+
+	$parent = wp_get_post_parent_id( $attachment_id );
+
+	if ( $parent ) {
+		return (string) get_permalink( $parent );
+	}
+
+	// Unattached media has no parent, and that is common — anything uploaded
+	// straight into the Media Library lands here. Sending all of those to the
+	// homepage is a soft-404 pattern search engines read badly, so fall back to
+	// the file itself, which is what core does when attachment pages are off.
+	return (string) wp_get_attachment_url( $attachment_id );
 }
 
 /**

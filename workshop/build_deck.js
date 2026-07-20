@@ -427,10 +427,10 @@ codeSlide(15, "CONTENT · 2 of 3",
     { t: "    exit;", k: "" },
     { t: "  }", k: "" },
     { t: "  if ( is_attachment() ) {", k: "h" },
-    { t: "    // 301 to parent post, or home", k: "c" },
+    { t: "    // parent post, else the FILE - never home", k: "c" },
     { t: "  }", k: "" },
     { t: "} );", k: "" },
-  ]).addNotes("Like the REST user routes, author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. Both dilute SEO and are targets for trouble. template_redirect fires before a template loads — the perfect place to bounce the unwanted requests. Same hook, two conditions.");
+  ]).addNotes("Like the REST user routes, author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. template_redirect fires before a template loads - the perfect place to bounce the unwanted requests. Same hook, two conditions.\n\nTwo details on the attachment half, because the obvious version is subtly wrong. Unattached media has no parent - and that is most of the Media Library - so a naive else-home_url() points every one of those at your homepage, which search engines read as a soft 404. Fall back to the FILE instead, which is what core does. And skip the redirect entirely when the theme ships attachment.php or image.php: that theme built those pages deliberately (the photography case), and quietly bouncing past it deletes someone's feature.\n\nCore moved here too: WordPress 6.4 added wp_attachment_pages_enabled, off for new installs. So this default is not adding the redirect so much as choosing a better destination than the bare file.");
 
 codeSlide(16, "CONTENT · 3 of 3",
   "Disable the emoji script",
