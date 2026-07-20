@@ -372,8 +372,8 @@ codeSlide(11, "SECURITY · 5 of 6",
 
 codeSlide(12, "SECURITY · 6 of 6",
   "Remove fingerprints, add headers",
-  "Two quick wins. Version hiding is obscurity, not security — but it cuts automated scanner noise. The three headers are safe defaults most sites can adopt without breaking anything.",
-  "wpyeg_remove_version / wpyeg_security_headers", "yes / yes",
+  "One default and one deliberate non-default. Hiding the version is obscurity, not hardening — it buys quieter logs, not a safer site — so it ships off. The three headers are real, low-risk defaults most sites can adopt without breaking anything.",
+  "wpyeg_remove_version (no) / wpyeg_security_headers (yes)", "opt-in / on",
   [
     { t: "remove_action( 'wp_head', 'wp_generator' );", k: "h" },
     { t: "", k: "" },
@@ -385,7 +385,7 @@ codeSlide(12, "SECURITY · 6 of 6",
     { t: "  return $h;", k: "" },
     { t: "} );", k: "" },
   ]).addNotes(
-  "Two quick wins. Version hiding is obscurity, not security — but it cuts automated scanner noise. The three headers are safe defaults most sites can adopt without breaking anything:\n\n" +
+  "One default and one deliberate non-default — and the difference is the lesson. Hiding the version is obscurity, not hardening: it does not make an out-of-date site any safer, and it does not even hide much, since the version still leaks from asset query strings and feeds. What it genuinely buys is quieter logs. That is worth opting into, not worth shipping on and calling security — so it defaults to off. The headers are the opposite: real, low-risk defaults most sites can adopt without breaking anything:\n\n" +
   "- X-Content-Type-Options: nosniff — the browser must trust the declared Content-Type instead of guessing; kills \"a .txt the browser decides to run as JavaScript\" tricks.\n" +
   "- X-Frame-Options: SAMEORIGIN — only your own site may load the page in an iframe; blocks clickjacking, where your login or admin is hidden under an attacker's page.\n" +
   "- Referrer-Policy: strict-origin-when-cross-origin — sends the full URL within your own site, only the bare domain to other sites, and nothing on an HTTPS→HTTP downgrade; keeps tokens and private paths from leaking in the Referer.\n\n" +
@@ -663,7 +663,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     ["Restrict REST user discovery", "rest_endpoints", "Security"],
     ["Lock down XML-RPC by category", "xmlrpc_methods / wp_xmlrpc_server_class", "Security"],
     ["Require strong passwords (15+ / breach-screened)", "user_profile_update_errors", "Security"],
-    ["Remove version + security headers", "wp_generator / wp_headers", "Security"],
+    ["Send baseline security headers", "wp_headers", "Security"],
     ["Disable comments & pingbacks", "comments_open / pings_open", "Content"],
     ["Redirect author + attachment pages", "template_redirect", "Content / SEO"],
     ["Disable emoji script", "init (remove_action)", "Performance"],
@@ -686,7 +686,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     border: { type: "solid", color: "DCE6EB", pt: 1 }, valign: "middle", rowH: 0.44,
   });
   footer(s, 27);
-  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Two deliberate *non*-defaults worth calling out: Application Passwords stay AVAILABLE (the safer REST credential), and the login logo is LEFT ALONE unless you opt in — both are choices, not oversights.");
+  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Three deliberate *non*-defaults worth calling out: Application Passwords stay AVAILABLE (the safer REST credential), the login logo is LEFT ALONE unless you opt in, and removing the version fingerprint is OFF, because it is obscurity rather than hardening. All three are choices, not oversights — and the last one is the honest test of the whole talk: if a default doesn't actually make the site safer, don't ship it as security.");
 })();
 
 /* =================================================================== */
