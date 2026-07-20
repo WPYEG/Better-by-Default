@@ -306,19 +306,57 @@ add_action( 'template_redirect', function () {
 ### Redirect Attachment Pages
 - **Option:** `wpyeg_redirect_attachment_pages`
 - **Default:** `yes`
-- **Why:** Standalone attachment pages (`?attachment_id=…`) are thin, index-bloating pages
-  that expose media out of context. Redirect them to the parent or home.
+- **Why:** Standalone attachment pages (`?attachment_id=…`) are thin, index-bloating pages that
+  expose media out of context. Core agrees: **WordPress 6.4** added a `wp_attachment_pages_enabled`
+  option, set to `0` on new installs (core redirects to the file) and `1` on sites upgraded from
+  earlier, which keeps rendering them. This default overrides the destination, preferring the
+  **parent post** — landing on a real article beats landing on a bare JPEG.
+
+Two details matter more than the toggle itself.
+
+**Do not fall back to the homepage.** Unattached media has no parent, and that is common — anything
+uploaded straight into the Media Library. Pointing all of those at `/` is a soft-404 pattern search
+engines read badly. Fall back to the file, which is what core does.
+
+**Respect a theme that built these pages.** A theme shipping `attachment.php` or `image.php` opted
+into rendering them — the photography and portfolio case — and redirecting past it silently deletes
+a feature someone wrote on purpose.
 
 ```php
-add_action( 'template_redirect', function () {
-    if ( is_attachment() ) {
-        $parent = wp_get_post_parent_id( get_queried_object_id() );
-        $target = $parent ? get_permalink( $parent ) : home_url( '/' );
-        wp_safe_redirect( $target, 301 );
-        exit;
+/**
+ * Decide the target separately from performing the redirect, so the decision is
+ * testable without a request.
+ */
+function wpyeg_attachment_redirect_target( $attachment_id ) {
+    $keep = (bool) locate_template( array( 'attachment.php', 'image.php' ) );
+    if ( apply_filters( 'wpyeg_keep_attachment_page', $keep, $attachment_id ) ) {
+        return '';
     }
+
+    $parent = wp_get_post_parent_id( $attachment_id );
+
+    // Parent post if there is one; otherwise the file — never the homepage.
+    return $parent ? (string) get_permalink( $parent ) : (string) wp_get_attachment_url( $attachment_id );
+}
+
+add_action( 'template_redirect', function () {
+    if ( ! is_attachment() ) {
+        return;
+    }
+
+    $target = wpyeg_attachment_redirect_target( get_queried_object_id() );
+    if ( '' === $target ) {
+        return;
+    }
+
+    wp_safe_redirect( $target, 301 );
+    exit;
 } );
 ```
+
+> **Offloaded media:** if the file lives on S3 or a CDN, `wp_safe_redirect()` will refuse the
+> off-site host and bounce to `wp-admin`. Add that one host via `allowed_redirect_hosts` for the
+> redirect rather than reaching for the unguarded `wp_redirect()`.
 
 ### Disable Emojis
 - **Option:** `wpyeg_disable_emojis`

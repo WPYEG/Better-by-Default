@@ -249,6 +249,62 @@ function wp_remote_retrieve_body( $response ) {
 	return isset( $response['body'] ) ? $response['body'] : '';
 }
 
+/**
+ * Home-URL test double.
+ *
+ * Present so a regression that sends attachment pages back to the homepage
+ * fails as an assertion rather than an undefined-function fatal.
+ *
+ * @param string $path Optional path.
+ * @return string
+ */
+function home_url( $path = '/' ) {
+	return 'https://example.test' . $path;
+}
+
+/**
+ * Template-lookup test double.
+ *
+ * @param array $templates Template names.
+ * @return string Path when the theme provides one, '' otherwise.
+ */
+function locate_template( $templates ) {
+	unset( $templates );
+	return isset( $GLOBALS['wpyeg_test_template'] ) ? $GLOBALS['wpyeg_test_template'] : '';
+}
+
+/**
+ * Post-parent test double.
+ *
+ * @param int $post_id Post ID.
+ * @return int
+ */
+function wp_get_post_parent_id( $post_id ) {
+	unset( $post_id );
+	return isset( $GLOBALS['wpyeg_test_parent'] ) ? (int) $GLOBALS['wpyeg_test_parent'] : 0;
+}
+
+/**
+ * Permalink test double.
+ *
+ * @param int $post_id Post ID.
+ * @return string
+ */
+function get_permalink( $post_id ) {
+	return 'https://example.test/parent-post-' . (int) $post_id . '/';
+}
+
+/**
+ * Attachment-URL test double.
+ *
+ * @param int $attachment_id Attachment ID.
+ * @return string
+ */
+function wp_get_attachment_url( $attachment_id ) {
+	unset( $attachment_id );
+	return isset( $GLOBALS['wpyeg_test_file_url'] ) ? $GLOBALS['wpyeg_test_file_url'] : 'https://example.test/wp-content/uploads/photo.jpg';
+}
+
 require_once __DIR__ . '/class-wp-error.php';
 require_once __DIR__ . '/class-wp-rest-request.php';
 require_once dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php';
@@ -635,6 +691,31 @@ unset( $GLOBALS['wpyeg_test_option'] );
 
 wpyeg_test_assert( ! isset( $unframed['X-Frame-Options'] ), 'Choosing "leave unchanged" sends no X-Frame-Options.' );
 wpyeg_test_assert( 'nosniff' === $unframed['X-Content-Type-Options'], 'Turning framing off does not also give up nosniff.' );
+
+// Attachment pages: where the redirect actually points.
+$GLOBALS['wpyeg_test_template'] = '';
+$GLOBALS['wpyeg_test_parent']   = 42;
+wpyeg_test_assert(
+	'https://example.test/parent-post-42/' === wpyeg_defaults_attachment_redirect_target( 7 ),
+	'An attached file redirects to its parent post.'
+);
+
+// The case the old code got wrong: unattached media has no parent, and sending
+// every one of those to the homepage is a soft 404.
+$GLOBALS['wpyeg_test_parent'] = 0;
+$target                       = wpyeg_defaults_attachment_redirect_target( 7 );
+wpyeg_test_assert( 'https://example.test/wp-content/uploads/photo.jpg' === $target, 'Unattached media falls back to the file, as core does.' );
+wpyeg_test_assert( false === strpos( $target, 'example.test/?' ) && '/' !== substr( $target, -1 ), 'Unattached media is never sent to the homepage.' );
+
+// A theme that ships an attachment template meant to render these pages.
+$GLOBALS['wpyeg_test_template'] = '/themes/portfolio/attachment.php';
+wpyeg_test_assert( '' === wpyeg_defaults_attachment_redirect_target( 7 ), 'A theme attachment template suppresses the redirect.' );
+
+// ...and a site can overrule that either way.
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_keep_attachment_page'] = false;
+wpyeg_test_assert( '' !== wpyeg_defaults_attachment_redirect_target( 7 ), 'wpyeg_keep_attachment_page can force the redirect anyway.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_keep_attachment_page'] );
+unset( $GLOBALS['wpyeg_test_template'], $GLOBALS['wpyeg_test_parent'] );
 
 /*
  * Breach screening (Have I Been Pwned, k-anonymity).
