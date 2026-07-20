@@ -8,7 +8,7 @@ plugin), a recommended **default value**, a short **description**, and a **code 
 can drop into a plugin, an mu-plugin, or a theme's `functions.php`.
 
 > Built for the **WPYEG — Edmonton WordPress Meetup** hands-on workshop. The companion
-> `better-by-default` plugin wires every one of these behind a toggle.
+> `sane-defaults` plugin wires every one of these behind a toggle.
 
 **How to read this:** the option key/default columns assume these are user-toggleable
 settings. The snippet under each item is the "on" behavior — the code that runs when the
@@ -43,8 +43,9 @@ add_filter( 'rest_endpoints', function ( $endpoints ) {
 
 ### Disable REST API for Anonymous Requests
 - **Option:** `wpyeg_disable_rest`
-- **Default:** `no` *(leave off unless the site is a pure brochure site — the block editor,
-  many blocks, and core AJAX rely on REST)*
+- **Default:** `no` *(leave off unless the site is a pure brochure site — anonymous front-end
+  blocks, embeds, and outside integrations rely on unauthenticated REST; the logged-in block
+  editor is unaffected, since it authenticates with a cookie plus a REST nonce)*
 - **Why:** Fully disabling REST is a blunt instrument. The safer posture is to require
   authentication for all REST calls, which blocks anonymous scraping without breaking the
   editor for logged-in users.
@@ -67,39 +68,106 @@ add_filter( 'rest_authentication_errors', function ( $result ) {
 } );
 ```
 
-### Disable XML-RPC
-- **Option:** `wpyeg_disable_xmlrpc`
-- **Default:** `yes`
-- **Why:** `xmlrpc.php` is a classic amplification vector for brute-force and pingback-DDoS
-  attacks. Unless you run the legacy Jetpack/mobile-app path over XML-RPC, kill it.
+### Harden XML-RPC (per-category, not all-or-nothing)
+- **Options:** `wpyeg_xmlrpc_allow_pingbacks` / `wpyeg_xmlrpc_allow_remote_publishing` / `wpyeg_xmlrpc_allow_multicall` / `wpyeg_block_xmlrpc_endpoint`
+- **Defaults:** `no` / `no` / `no` / `no`
+- **Why:** `xmlrpc.php` is a classic amplification vector for brute-force and pingback-DDoS.
+  But `add_filter( 'xmlrpc_enabled', '__return_false' )` is a blunt half-measure — it only
+  disables the *authenticated* methods and leaves `pingback.ping` and the `system.*` methods
+  reachable. The better model is to remove the WordPress methods you don't use, **by category**,
+  and keep the endpoint reachable for anything that legitimately needs it (Jetpack registers its
+  own `jetpack.*` methods, which this leaves untouched).
+
+Three independent categories, all off by default:
 
 ```php
-add_filter( 'xmlrpc_enabled', '__return_false' );
+add_filter( 'xmlrpc_methods', function ( $methods ) {
+    // 1. Incoming pingbacks.
+    if ( 'yes' !== get_option( 'wpyeg_xmlrpc_allow_pingbacks', 'no' ) ) {
+        unset( $methods['pingback.ping'], $methods['pingback.extensions.getPingbacks'] );
+    }
+    // 2. Remote publishing (blogging apps) — the credential-authenticated methods.
+    if ( 'yes' !== get_option( 'wpyeg_xmlrpc_allow_remote_publishing', 'no' ) ) {
+        foreach ( array_keys( $methods ) as $name ) {
+            if ( preg_match( '/^(wp|metaWeblog|mt|blogger)\./', (string) $name ) ) {
+                unset( $methods[ $name ] );
+            }
+        }
+    }
+    return $methods;
+}, PHP_INT_MAX );
 
-// Also strip the RSD/pingback discovery header so bots stop probing.
+// Remote publishing also gates xmlrpc_enabled and the RSD discovery link.
+add_filter( 'xmlrpc_enabled', function ( $enabled ) {
+    return 'yes' === get_option( 'wpyeg_xmlrpc_allow_remote_publishing', 'no' ) ? $enabled : false;
+} );
+
+// Pingbacks off → drop the X-Pingback discovery header.
 add_filter( 'wp_headers', function ( $headers ) {
-    unset( $headers['X-Pingback'] );
+    if ( 'yes' !== get_option( 'wpyeg_xmlrpc_allow_pingbacks', 'no' ) ) {
+        unset( $headers['X-Pingback'] );
+    }
     return $headers;
 } );
-remove_action( 'wp_head', 'rsd_link' );
 ```
 
-### Disable Application Passwords
-- **Option:** `wpyeg_disable_application_passwords`
-- **Default:** `yes`
-- **Why:** Application Passwords create long-lived credentials for the REST API. If you
-  aren't using headless clients or external integrations, remove the feature so there's
-  nothing to leak.
+`system.multicall` **can't be removed with the `xmlrpc_methods` filter** — `IXR_Server::setCallbacks()`
+re-adds it after the filter runs — so refuse it with a replacement server. Multicall is the
+amplification lever attackers use to batch thousands of credential guesses into one request:
 
 ```php
-add_filter( 'wp_is_application_passwords_available', '__return_false' );
+add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
+    if ( 'yes' === get_option( 'wpyeg_block_xmlrpc_endpoint', 'no' ) ) {
+        return 'Wpyeg_Blocked_XMLRPC_Server';     // serve_request() → 403 for everything
+    }
+    if ( 'yes' !== get_option( 'wpyeg_xmlrpc_allow_multicall', 'no' ) ) {
+        return 'Wpyeg_Multicall_Disabled_Server'; // extends wp_xmlrpc_server, overrides multiCall() → IXR_Error
+    }
+    return $class;
+} );
 ```
+
+> **Jetpack:** Jetpack still uses XML-RPC for its WordPress.com connection, so don't *block the
+> endpoint* on a Jetpack site — a blanket 403 breaks it. The pingback and remote-publishing toggles
+> only remove WordPress methods, leaving `jetpack.*` untouched. Refusing `system.multicall` didn't
+> break a Jetpack connection in testing (the replacement server overrides only `multiCall()`, so
+> `jetpack.*` still resolve) — but that's a single connected-site check, not a guarantee. The
+> endpoint block is the one setting to genuinely avoid with Jetpack.
+> **`demo.*`:** the inert `demo.sayHello`/`demo.addTwoNumbers` methods still confirm XML-RPC is
+> live to a scanner, so the companion plugin always drops them — no toggle:
+> `unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] )`.
+
+### Application Passwords — leave available (don't reflexively disable)
+- **Option:** `wpyeg_disable_application_passwords`
+- **Default:** `no` *(available)*
+- **Why:** The reflexive advice is "disable them," but that's usually the wrong call.
+  Application Passwords are hashed, per-application, individually revocable credentials that
+  carry the same access as the owning account — and core accepts **only** Application Passwords
+  for REST Basic Auth, never the account's real password. Prohibiting them doesn't remove an
+  integration's need; it pushes people to a third-party auth plugin or a shared login —
+  credentials that are harder to isolate and revoke and that bypass 2FA the same way. Keep them
+  available; offer an opt-in to prohibit them for sites whose policy forbids non-interactive
+  credentials.
+
+```php
+// Off by default — the feature stays available. Only prohibit when explicitly opted in.
+add_filter( 'wp_is_application_passwords_available', function ( $available ) {
+    return 'yes' === get_option( 'wpyeg_disable_application_passwords', 'no' ) ? false : $available;
+} );
+```
+> **Note:** they authenticate REST/XML-RPC without the login form, so a 2FA companion never
+> challenges them. That's a real trade — but it's core behavior, and the alternatives are worse.
+> Use core's `wp_is_application_passwords_available_for_user` filter to withhold them per account
+> (e.g. from human 2FA accounts) if that gap matters.
 
 ### Require Strong Passwords
 - **Option:** `wpyeg_require_strong_passwords`
 - **Default:** `yes`
-- **Why:** Core ships a password meter but won't *enforce* strength. This rejects weak
-  passwords server-side on profile updates and user creation, so a warning becomes a wall.
+- **Why:** Core ships a password meter but won't *enforce* strength. Enforce it server-side —
+  but follow current **OWASP/NIST** guidance: favor **length and breached-password screening**
+  over forced composition rules. NIST 800-63B explicitly *discourages* upper/lower/number/symbol
+  requirements — they push users toward predictable patterns like `Password1!` without adding
+  real entropy.
 
 ```php
 add_action( 'user_profile_update_errors', 'wpyeg_enforce_strong_password', 10, 3 );
@@ -114,22 +182,27 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
         return; // No password change requested.
     }
 
-    $long_enough = strlen( $password ) >= 12;
-    $has_mixed   = preg_match( '/[A-Z]/', $password )
-                && preg_match( '/[a-z]/', $password )
-                && preg_match( '/[0-9]/', $password )
-                && preg_match( '/[^A-Za-z0-9]/', $password );
+    // Length first — NIST favours length over composition.
+    if ( strlen( $password ) < 15 ) {
+        $errors->add( 'pass_too_short', __( '<strong>Error:</strong> Password must be at least 15 characters.' ) );
+        return;
+    }
 
-    if ( ! $long_enough || ! $has_mixed ) {
-        $errors->add(
-            'pass_too_weak',
-            __( '<strong>Error:</strong> Password must be at least 12 characters and include upper, lower, number, and symbol.' )
-        );
+    // Strength + breach screening beat forced upper/lower/number/symbol rules:
+    // require "medium" or better on the bundled zxcvbn meter, and reject passwords
+    // that appear in a known breach corpus.
+    if ( wpyeg_zxcvbn_score( $password ) < 3 || wpyeg_is_pwned( $password ) ) {
+        $errors->add( 'pass_too_weak', __( '<strong>Error:</strong> Choose a stronger password that has not appeared in a known data breach.' ) );
     }
 }
 ```
-> **Note:** Server-side validation is the enforcement layer. Pair it with the core JS meter
-> for good UX, but never trust the client alone.
+> **Note:** the companion plugin ships a working `wpyeg_password_is_pwned()`. It queries the Have
+> I Been Pwned range API by k-anonymity (only the first 5 SHA-1 characters leave the site, never
+> the password), requests `Add-Padding` and ignores the padded count-0 rows, caches each prefix
+> for a few hours, and **fails open** when HIBP is unreachable so an outage can't block password
+> changes. A strength estimator (`wpyeg_zxcvbn_score()` via `bjeavons/zxcvbn-php`) is still yours
+> to add if you want one. Server-side validation is the enforcement layer; pair it with the core
+> JS meter for UX, but never trust the client alone.
 
 ### Disable AI Connectors
 - **Option:** `wpyeg_disable_ai_connectors`
@@ -253,24 +326,22 @@ add_action( 'init', function () {
 - **Default:** `no`
 - **Why:** On big sites, the admin list-table search scans post content and can be painfully
   slow. Restricting it to titles is much faster — but it changes editor expectations, so it's
-  off by default. Scope the filter to admin list tables only so front-end search is untouched.
+  off by default. **Narrow the search *columns*, don't replace the whole search clause:** the
+  `post_search_columns` filter keeps core's term parsing, `-exclusions`, and the logged-out
+  `post_password` guard intact, where a raw `posts_search` string throws all of that away.
 
 ```php
-add_filter( 'posts_search', function ( $search, WP_Query $query ) {
-    if ( ! is_admin() || ! $query->is_main_query() || ! $query->is_search() ) {
-        return $search;
+add_filter( 'post_search_columns', function ( $columns, $search, WP_Query $query ) {
+    if ( is_admin() && $query->is_main_query() ) {
+        return array( 'post_title' );
     }
-
-    global $wpdb;
-    $term = $query->get( 's' );
-    if ( '' === $term ) {
-        return $search;
-    }
-
-    $like = '%' . $wpdb->esc_like( $term ) . '%';
-    return $wpdb->prepare( " AND {$wpdb->posts}.post_title LIKE %s ", $like );
-}, 10, 2 );
+    return $columns;
+}, 10, 3 );
 ```
+> **Note:** `post_search_columns` landed in WordPress 6.2. The older pattern — returning a
+> hand-built `posts_search` SQL string — *replaces* core's entire search clause and silently
+> drops term parsing, `-term` exclusions, and the `AND post_password = ''` guard core appends for
+> logged-out users. Prefer the columns filter.
 
 ### Disable Front-End Admin Bar
 - **Option:** `wpyeg_frontend_admin_bar_behavior`
@@ -333,23 +404,37 @@ add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remembe
 ```
 
 ### Login Logo & Link
-- **Option:** `wpyeg_login_logo_behavior` / `wpyeg_login_logo_link_home`
-- **Defaults:** `remove_logo` / `yes`
-- **Why:** The default WordPress "W" logo on `wp-login.php` links to wordpress.org — a subtle
-  brand and trust leak. Remove it (or swap it) and point the link at the site home.
+- **Option:** `wpyeg_login_logo_behavior`
+- **Default:** `keep_default` *(leave the login screen untouched)*
+- **Why:** The default WordPress "W" on `wp-login.php` links to wordpress.org — a subtle brand
+  and trust leak. Removing or replacing it is worthwhile, but changing the login screen out of
+  the box is intrusive, so the safe default is to **leave it alone** and let an administrator opt
+  in. Behaviors: `keep_default` (unchanged), `remove_logo` (recommended — drop the logo and the
+  wp.org link), `unlink_logo` (keep the logo, kill the link), `replace_logo` (swap in the site
+  logo/icon, linked to the site home).
 
 ```php
-// Remove the default logo (or replace the background-image URL to use your own).
-add_action( 'login_head', function () {
-    echo '<style>#login h1 a, .login h1 a { display: none; }</style>';
-} );
+$behavior = get_option( 'wpyeg_login_logo_behavior', 'keep_default' );
 
-// Point the logo link at the site home and use the site name as its text.
-add_filter( 'login_headerurl', 'home_url' );
-add_filter( 'login_headertext', function () {
-    return get_bloginfo( 'name' );
-} );
+if ( 'remove_logo' === $behavior ) {
+    add_action( 'login_head', function () {
+        echo '<style>#login h1 a, .login h1 a { display: none; }</style>';
+    } );
+}
+
+// Whenever the logo is removed or replaced, point the header link at the site home
+// instead of wordpress.org — a replacement logo always links home, so there is no
+// separate toggle for it.
+if ( in_array( $behavior, array( 'remove_logo', 'unlink_logo', 'replace_logo' ), true ) ) {
+    add_filter( 'login_headerurl', 'home_url' );
+    add_filter( 'login_headertext', function () {
+        return get_bloginfo( 'name' );
+    } );
+}
 ```
+> **Note:** an earlier version of this reference paired the behavior with a separate
+> `wpyeg_login_logo_link_home` toggle. That was redundant — a replacement logo should always link
+> home — so the toggle is gone and the behavior option alone covers it.
 
 ---
 
@@ -517,8 +602,9 @@ function wpyeg_strip_asset_ver( $src ) {
 | Disable Pingbacks (new-post default) | `wpyeg_disable_pingbacks` | `yes` | Content |
 | Restrict REST User Discovery | `wpyeg_restrict_rest_user_discovery` | `yes` | Security |
 | Disable REST (anon) | `wpyeg_disable_rest` | `no` | Security |
-| Disable XML-RPC | `wpyeg_disable_xmlrpc` | `yes` | Security |
-| Disable Application Passwords | `wpyeg_disable_application_passwords` | `yes` | Security |
+| XML-RPC categories: pingbacks / remote publishing / multicall | `wpyeg_xmlrpc_allow_pingbacks` / `_remote_publishing` / `_multicall` | `no` (each) | Security |
+| Block XML-RPC endpoint | `wpyeg_block_xmlrpc_endpoint` | `no` | Security |
+| Application Passwords (leave available) | `wpyeg_disable_application_passwords` | `no` | Security |
 | Require Strong Passwords | `wpyeg_require_strong_passwords` | `yes` | Security |
 | Disable AI Connectors *(PMP-specific)* | `wpyeg_disable_ai_connectors` | `yes` | Security |
 | Disable Public Author Archives | `wpyeg_disable_author_archives` | `yes` | Content |
@@ -529,8 +615,7 @@ function wpyeg_strip_asset_ver( $src ) {
 | Disable Remember Me | `wpyeg_disable_remember_me` | `no` | Login |
 | Remember Me Policy / Days | `wpyeg_remember_me_policy` / `_days` | `default` / `5` | Login |
 | Regular Session Hours | `wpyeg_session_regular_hours` | `0` | Login |
-| Login Logo Behavior | `wpyeg_login_logo_behavior` | `remove_logo` | Branding |
-| Login Logo Link Home | `wpyeg_login_logo_link_home` | `yes` | Branding |
+| Login Logo Behavior | `wpyeg_login_logo_behavior` | `keep_default` | Branding |
 
 ---
 

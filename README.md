@@ -15,12 +15,12 @@ The whole thing rests on one idea worth carrying home:
 
 ```
 Better-by-Default/
-├── plugin/better-by-default/   → the installable plugin (main file, readme.txt, README)
+├── plugin/sane-defaults/   → the installable plugin (main file, readme.txt, README)
 ├── docs/                       → wordpress-default-settings.md — the full reference, every
 │                                 default with its "why" and a code snippet
 ├── workshop/                   → the meetup talk: PowerPoint, iA Presenter markdown,
 │                                 a PDF handout, and the deck build script
-├── dist/                       → better-by-default.zip — a ready-to-install build
+├── dist/                       → sane-defaults.zip — a ready-to-install build
 ├── LICENSE                     → GPL-3.0
 └── README.md                   → you are here
 ```
@@ -29,14 +29,14 @@ Better-by-Default/
 
 Install the plugin one of three ways:
 
-**Upload** — Plugins → Add New → Upload Plugin → `dist/better-by-default.zip` → Activate.
+**Upload** — Plugins → Add New → Upload Plugin → `dist/sane-defaults.zip` → Activate.
 
-**Copy** — drop `plugin/better-by-default/` into `wp-content/plugins/` and activate.
+**Copy** — drop `plugin/sane-defaults/` into `wp-content/plugins/` and activate.
 
 **WP-CLI**
 
 ```bash
-wp plugin install ./dist/better-by-default.zip --activate
+wp plugin install ./dist/sane-defaults.zip --activate
 ```
 
 On activation the documented defaults are seeded automatically. Then visit
@@ -44,14 +44,21 @@ On activation the documented defaults are seeded automatically. Then visit
 
 ## The defaults
 
-**On out of the box** (safe for nearly any site): restrict REST user discovery, disable
-XML-RPC, disable Application Passwords, require strong passwords, remove the version
-fingerprint + send security headers, disable comments / pingbacks / self-pingbacks, redirect
-public author archives and attachment pages, disable the emoji script, and own the login logo.
+**On out of the box** (safe for nearly any site): restrict REST user discovery, lock down
+XML-RPC by category (pingbacks / remote publishing / multicall all off), require strong
+passwords (length + breach screening, not forced composition), remove the version fingerprint +
+send security headers, disable comments / pingbacks / self-pingbacks, redirect public author
+archives and attachment pages, and disable the emoji script.
+
+**Deliberately *not* locked down by default** (opinionated calls, explained in the reference):
+Application Passwords stay **available** — they're the safer, revocable integration credential,
+and disabling them pushes people to worse alternatives — and the login logo is left
+**untouched** (`keep_default`), because changing the login screen out of the box is intrusive.
 
 **Opt-in, off by default** (they change behavior — turn on deliberately): require auth for all
-REST, title-only admin search, hide the front-end admin bar, disable Remember Me, throttle the
-Heartbeat API, and defer front-end scripts.
+REST, prohibit Application Passwords, remove/replace the login logo, title-only admin search,
+hide the front-end admin bar, disable Remember Me, throttle the Heartbeat API, and defer
+front-end scripts.
 
 Three more live in `wp-config.php`, above the plugin layer, and are documented as manual steps:
 `DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, and `WP_POST_REVISIONS`.

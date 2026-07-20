@@ -9,7 +9,7 @@
  * Author:            WPYEG
  * License:           GPL-3.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-3.0.html
- * Text Domain:       better-by-default
+ * Text Domain:       sane-defaults
  *
  * ---------------------------------------------------------------------------
  * WORKSHOP NOTE
@@ -50,26 +50,47 @@ function wpyeg_defaults_schema() {
 			'label'   => 'Require auth for all REST requests',
 			'help'    => 'Blocks anonymous REST entirely. Leave OFF unless this is a pure brochure site — the block editor needs REST.',
 		),
-		'disable_xmlrpc' => array(
-			'default' => 'yes',
+		'xmlrpc_allow_pingbacks' => array(
+			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
-			'label'   => 'Disable XML-RPC',
-			'help'    => 'Turns off xmlrpc.php and strips the pingback discovery header.',
+			'label'   => 'XML-RPC: accept incoming pingbacks',
+			'help'    => 'OFF (default) removes pingback.ping — a spam/reflection-DDoS vector — and the X-Pingback header.',
+		),
+		'xmlrpc_allow_remote_publishing' => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'security',
+			'label'   => 'XML-RPC: allow remote publishing (blogging apps)',
+			'help'    => 'OFF (default) removes the credential-authenticated wp.*/metaWeblog/MT/blogger methods (a brute-force target) and the RSD link.',
+		),
+		'xmlrpc_allow_multicall' => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'security',
+			'label'   => 'XML-RPC: allow system.multicall',
+			'help'    => 'OFF (default) refuses system.multicall — the amplification lever for batched brute force — via a replacement server. A filter cannot remove it.',
+		),
+		'block_xmlrpc_endpoint' => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'security',
+			'label'   => 'XML-RPC: block the endpoint entirely',
+			'help'    => 'Strictest tier — xmlrpc.php returns 403 for every request. Do NOT enable on a Jetpack site; it breaks the WordPress.com connection.',
 		),
 		'disable_application_passwords' => array(
-			'default' => 'yes',
+			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
-			'label'   => 'Disable Application Passwords',
-			'help'    => 'Removes long-lived REST credentials. Turn OFF if you run headless / external integrations.',
+			'label'   => 'Prohibit Application Passwords',
+			'help'    => 'OFF (default) keeps them available — they are the safer, revocable integration credential, and core accepts only them for REST Basic Auth. Turn ON only if site policy forbids non-interactive credentials.',
 		),
 		'require_strong_passwords' => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require strong passwords',
-			'help'    => 'Server-side rule: 12+ chars with upper, lower, number, and symbol.',
+			'help'    => 'Server-side rule: 15+ characters, screened for known breaches — length + screening, not forced composition (per NIST).',
 		),
 		'remove_version' => array(
 			'default' => 'yes',
@@ -183,22 +204,17 @@ function wpyeg_defaults_schema() {
 
 		// --- Branding ---------------------------------------------------
 		'login_logo_behavior' => array(
-			'default' => 'remove_logo',
+			'default' => 'keep_default',
 			'type'    => 'select',
 			'group'   => 'branding',
 			'label'   => 'Login logo',
-			'help'    => 'The default logo links to wordpress.org — a small trust leak.',
+			'help'    => 'The default logo links to wordpress.org — a small trust leak. Left untouched by default, since changing the login screen out of the box is intrusive. Removing, unlinking, or replacing the logo always points the header link at your home page.',
 			'choices' => array(
-				'default'     => 'Leave the WordPress logo',
-				'remove_logo' => 'Remove the logo',
+				'keep_default' => 'Keep the WordPress logo and wp.org link (WordPress default)',
+				'remove_logo'  => 'Remove the logo and the wp.org link',
+				'unlink_logo'  => 'Keep the logo, drop the wp.org link',
+				'replace_logo' => 'Replace the logo with the site icon',
 			),
-		),
-		'login_logo_link_home' => array(
-			'default' => 'yes',
-			'type'    => 'toggle',
-			'group'   => 'branding',
-			'label'   => 'Point login logo link at site home',
-			'help'    => 'Sends the login-header link to your home URL instead of wordpress.org.',
 		),
 
 		// --- Performance ------------------------------------------------
@@ -296,7 +312,7 @@ function wpyeg_defaults_bootstrap() {
 			if ( ! is_user_logged_in() ) {
 				return new WP_Error(
 					'rest_not_logged_in',
-					__( 'REST API restricted to authenticated users.', 'better-by-default' ),
+					__( 'REST API restricted to authenticated users.', 'sane-defaults' ),
 					array( 'status' => 401 )
 				);
 			}
@@ -304,14 +320,81 @@ function wpyeg_defaults_bootstrap() {
 		} );
 	}
 
-	if ( wpyeg_defaults_enabled( 'disable_xmlrpc' ) ) {
-		add_filter( 'xmlrpc_enabled', '__return_false' );
-		add_filter( 'wp_headers', function ( $headers ) {
+	/*
+	 * XML-RPC is per-category, not all-or-nothing. Each category is off by
+	 * default (locked down) and opt-in to re-enable — the same shape PMP uses.
+	 * pingbacks and remote publishing come off via the xmlrpc_methods filter;
+	 * system.multicall and a full endpoint block need a server-class swap,
+	 * because IXR re-adds multicall after the filter runs.
+	 */
+	add_filter( 'xmlrpc_methods', function ( $methods ) {
+		// demo.* are inert core test methods with no legitimate use. Always drop
+		// them (no toggle) so a locked-down endpoint stops answering scanner
+		// probes like demo.sayHello with a cheerful "Hello!".
+		unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] );
+
+		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
+			unset( $methods['pingback.ping'], $methods['pingback.extensions.getPingbacks'] );
+		}
+		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ) {
+			foreach ( array_keys( $methods ) as $name ) {
+				if ( preg_match( '/^(wp|metaWeblog|mt|blogger)\./', (string) $name ) ) {
+					unset( $methods[ $name ] );
+				}
+			}
+		}
+		return $methods;
+	}, PHP_INT_MAX );
+
+	// Gate the whole endpoint off unless remote publishing is allowed.
+	add_filter( 'xmlrpc_enabled', function ( $enabled ) {
+		return wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ? $enabled : false;
+	} );
+
+	// Strip the pingback discovery header when pingbacks are off.
+	add_filter( 'wp_headers', function ( $headers ) {
+		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
 			unset( $headers['X-Pingback'] );
-			return $headers;
-		} );
+		}
+		return $headers;
+	} );
+
+	// Drop the RSD link (blogging-client discovery) when remote publishing is off.
+	if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ) {
 		remove_action( 'wp_head', 'rsd_link' );
 	}
+
+	/*
+	 * The replacement server class is defined lazily inside this filter: it only
+	 * runs from xmlrpc.php, where the parent wp_xmlrpc_server is already loaded,
+	 * so extending it at plugin-load time (on every ordinary request) is avoided.
+	 */
+	add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
+		if ( wpyeg_defaults_enabled( 'block_xmlrpc_endpoint' ) ) {
+			if ( ! class_exists( 'Wpyeg_Blocked_XMLRPC_Server' ) ) {
+				class Wpyeg_Blocked_XMLRPC_Server {
+					public function serve_request() {
+						status_header( 403 );
+						exit( 'XML-RPC services are disabled on this site.' );
+					}
+				}
+			}
+			return 'Wpyeg_Blocked_XMLRPC_Server';
+		}
+
+		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
+			if ( ! class_exists( 'Wpyeg_Multicall_Disabled_Server' ) ) {
+				class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
+					public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
+						return new IXR_Error( 405, 'system.multicall is disabled on this site.' );
+					}
+				}
+			}
+			return 'Wpyeg_Multicall_Disabled_Server';
+		}
+
+		return $class;
+	} );
 
 	if ( wpyeg_defaults_enabled( 'disable_application_passwords' ) ) {
 		add_filter( 'wp_is_application_passwords_available', '__return_false' );
@@ -429,18 +512,16 @@ function wpyeg_defaults_bootstrap() {
 	/* ----- Admin & front-end UX ----- */
 
 	if ( wpyeg_defaults_enabled( 'title_only_admin_search' ) ) {
-		add_filter( 'posts_search', function ( $search, $query ) {
-			if ( ! is_admin() || ! $query->is_main_query() || ! $query->is_search() ) {
-				return $search;
+		// Narrow the search COLUMNS, don't rewrite the whole clause. The
+		// post_search_columns filter (WP 6.2+) keeps core's term parsing,
+		// -exclusions, and the logged-out post_password guard intact — the
+		// blunt posts_search rewrite throws all of that away.
+		add_filter( 'post_search_columns', function ( $columns, $search, $query ) {
+			if ( is_admin() && $query->is_main_query() ) {
+				return array( 'post_title' );
 			}
-			global $wpdb;
-			$term = $query->get( 's' );
-			if ( '' === $term ) {
-				return $search;
-			}
-			$like = '%' . $wpdb->esc_like( $term ) . '%';
-			return $wpdb->prepare( " AND {$wpdb->posts}.post_title LIKE %s ", $like );
-		}, 10, 2 );
+			return $columns;
+		}, 10, 3 );
 	}
 
 	$bar = wpyeg_defaults_get( 'frontend_admin_bar_behavior' );
@@ -481,13 +562,25 @@ function wpyeg_defaults_bootstrap() {
 
 	/* ----- Branding ----- */
 
-	if ( 'remove_logo' === wpyeg_defaults_get( 'login_logo_behavior' ) ) {
+	$login_logo = wpyeg_defaults_get( 'login_logo_behavior' );
+
+	if ( 'remove_logo' === $login_logo ) {
 		add_action( 'login_head', function () {
 			echo '<style>#login h1 a, .login h1 a { display:none; }</style>';
 		} );
+	} elseif ( 'replace_logo' === $login_logo ) {
+		add_action( 'login_head', function () {
+			$icon = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 84 ) : '';
+			if ( $icon ) {
+				echo '<style>#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }</style>';
+			}
+		} );
 	}
 
-	if ( wpyeg_defaults_enabled( 'login_logo_link_home' ) ) {
+	// Removing, unlinking, or replacing the logo all repoint the header link
+	// at the site home instead of wordpress.org. There is no separate toggle:
+	// a replacement/removed logo linking back to wp.org makes no sense.
+	if ( in_array( $login_logo, array( 'remove_logo', 'unlink_logo', 'replace_logo' ), true ) ) {
 		add_filter( 'login_headerurl', 'home_url' );
 		add_filter( 'login_headertext', function () {
 			return get_bloginfo( 'name' );
@@ -542,18 +635,87 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 		return; // No password change requested.
 	}
 
-	$long_enough = strlen( $password ) >= 12;
-	$has_mixed   = preg_match( '/[A-Z]/', $password )
-				&& preg_match( '/[a-z]/', $password )
-				&& preg_match( '/[0-9]/', $password )
-				&& preg_match( '/[^A-Za-z0-9]/', $password );
-
-	if ( ! $long_enough || ! $has_mixed ) {
+	// NIST 800-63B / OWASP: favour length + breach screening over forced
+	// composition rules (upper/lower/number/symbol). Composition rules push
+	// users toward predictable patterns (Password1!) without adding entropy.
+	if ( strlen( $password ) < 15 ) {
 		$errors->add(
-			'wpyeg_pass_too_weak',
-			__( '<strong>Error:</strong> Password must be at least 12 characters and include upper, lower, number, and symbol.', 'better-by-default' )
+			'wpyeg_pass_too_short',
+			__( '<strong>Error:</strong> Password must be at least 15 characters.', 'sane-defaults' )
+		);
+		return;
+	}
+
+	// Breach screening against Have I Been Pwned (see wpyeg_password_is_pwned).
+	if ( wpyeg_password_is_pwned( $password ) ) {
+		$errors->add(
+			'wpyeg_pass_pwned',
+			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
 		);
 	}
+}
+
+/**
+ * Check a password against the Have I Been Pwned range API using k-anonymity.
+ *
+ * Only the first five characters of the SHA-1 hash ever leave the site. HIBP
+ * returns every hash suffix sharing that prefix and the comparison happens
+ * locally, so the password itself is never transmitted. `Add-Padding` asks HIBP
+ * to pad the response so its size cannot reveal how many real matches it held;
+ * padded rows carry a count of 0 and are ignored.
+ *
+ * Fails OPEN: if HIBP is unreachable the password is allowed, rather than
+ * locking everyone out of password changes during an outage.
+ *
+ * @param string $password Plain-text password to screen.
+ * @return bool True when the password appears in a known breach.
+ */
+function wpyeg_password_is_pwned( $password ) {
+	$hash   = strtoupper( sha1( $password ) );
+	$prefix = substr( $hash, 0, 5 );
+	$suffix = substr( $hash, 5 );
+
+	$cache_key = 'wpyeg_hibp_' . $prefix;
+	$body      = get_transient( $cache_key );
+
+	if ( false === $body ) {
+		$response = wp_remote_get(
+			'https://api.pwnedpasswords.com/range/' . $prefix,
+			array(
+				'timeout' => 4,
+				'headers' => array( 'Add-Padding' => 'true' ),
+			)
+		);
+
+		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			// Fail open — never block a password change because HIBP is down.
+			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+		}
+
+		$body = (string) wp_remote_retrieve_body( $response );
+		set_transient( $cache_key, $body, 12 * HOUR_IN_SECONDS );
+	}
+
+	$pwned = false;
+
+	foreach ( preg_split( '/\r\n|\n/', (string) $body ) as $line ) {
+		$parts = array_pad( explode( ':', trim( $line ), 2 ), 2, '0' );
+
+		// Padded rows report a count of 0 and are not real matches.
+		if ( (int) $parts[1] > 0 && 0 === strcasecmp( $parts[0], $suffix ) ) {
+			$pwned = true;
+			break;
+		}
+	}
+
+	/**
+	 * Filter the breach-screening verdict (e.g. to use a local blocklist, or to
+	 * skip the network call on an air-gapped site).
+	 *
+	 * @param bool   $pwned    Whether the password appeared in a known breach.
+	 * @param string $password The password being screened.
+	 */
+	return (bool) apply_filters( 'wpyeg_password_is_pwned', $pwned, $password );
 }
 
 
@@ -563,10 +725,10 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 
 add_action( 'admin_menu', function () {
 	add_options_page(
-		__( 'Better by Default', 'better-by-default' ),
-		__( 'Better by Default', 'better-by-default' ),
+		__( 'Better by Default', 'sane-defaults' ),
+		__( 'Better by Default', 'sane-defaults' ),
 		'manage_options',
-		'better-by-default',
+		'sane-defaults',
 		'wpyeg_defaults_render_settings_page'
 	);
 } );
@@ -625,8 +787,8 @@ function wpyeg_defaults_render_settings_page() {
 	$groups = wpyeg_defaults_groups();
 	?>
 	<div class="wrap">
-		<h1><?php esc_html_e( 'Better by Default', 'better-by-default' ); ?></h1>
-		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'better-by-default' ); ?></p>
+		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
+		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'sane-defaults' ); ?></p>
 
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
@@ -648,7 +810,7 @@ function wpyeg_defaults_render_settings_page() {
 											name="<?php echo esc_attr( $name ); ?>"
 											value="yes"
 											<?php checked( 'yes', $value ); ?> />
-										<?php esc_html_e( 'Enabled', 'better-by-default' ); ?>
+										<?php esc_html_e( 'Enabled', 'sane-defaults' ); ?>
 									</label>
 								<?php elseif ( 'select' === $field['type'] ) : ?>
 									<select name="<?php echo esc_attr( $name ); ?>">
@@ -679,7 +841,7 @@ function wpyeg_defaults_render_settings_page() {
 		</form>
 
 		<hr />
-		<p><em><?php esc_html_e( 'Three hardening moves live in wp-config.php and cannot be toggled here:', 'better-by-default' ); ?></em></p>
+		<p><em><?php esc_html_e( 'Three hardening moves live in wp-config.php and cannot be toggled here:', 'sane-defaults' ); ?></em></p>
 		<pre style="background:#f6f7f7;padding:12px;border:1px solid #dcdcde;max-width:640px;">define( 'DISALLOW_FILE_EDIT', true );
 define( 'AUTOSAVE_INTERVAL', 120 );
 define( 'WP_POST_REVISIONS', 10 );</pre>

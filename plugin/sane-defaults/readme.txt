@@ -2,7 +2,7 @@
 Contributors: wpyeg
 Tags: security, hardening, defaults, performance, cleanup
 Requires at least: 6.4
-Tested up to: 6.8
+Tested up to: 7.0.2
 Requires PHP: 7.4
 Stable tag: 1.0.0
 License: GPLv3 or later
@@ -12,7 +12,7 @@ Sane defaults for every new WordPress site. A menu of security, UX, SEO, and per
 
 == Description ==
 
-Better by Default bundles a menu of sensible defaults that most sites want on every build: restrict REST user discovery, disable XML-RPC and Application Passwords, require strong passwords, close comment spam, redirect thin author and attachment pages, drop the emoji script, right-size login sessions, own the login screen, and more.
+Better by Default bundles a menu of sensible defaults that most sites want on every build: restrict REST user discovery, lock down XML-RPC by category (incoming pingbacks, remote publishing, and system.multicall off — full-endpoint block available), require strong passwords, close comment spam, redirect thin author and attachment pages, drop the emoji script, right-size login sessions, own the login screen, and more. Application Passwords are deliberately left available — they are the safer, revocable REST credential, so prohibiting them is opt-in rather than a default.
 
 Every policy is individually toggleable under **Settings → Better by Default**, and the whole plugin is built around one idea:
 
@@ -25,19 +25,20 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 = Defaults ON out of the box =
 
 * Restrict REST API user discovery
-* Disable XML-RPC (and strip the pingback header)
-* Disable Application Passwords
-* Require strong passwords (server-side)
+* Lock down XML-RPC by category — incoming pingbacks off (header stripped), remote publishing off (RSD link dropped), system.multicall refused
+* Require strong passwords (server-side: 15+ characters, breach-screened, no forced composition)
 * Remove the version fingerprint + send baseline security headers
 * Disable comments, pingbacks & self-pingbacks
 * Redirect public author archives and attachment pages
 * Disable the emoji script
-* Remove/replace the login logo and point its link home
 
 = Opt-in (OFF by default) =
 
 * Require authentication for ALL REST requests
+* Prohibit Application Passwords (left available by default — the safer, revocable REST credential)
+* Block the XML-RPC endpoint entirely (403 for every request — not for Jetpack sites)
 * Title-only admin search
+* Remove, unlink, or replace the login logo (the WordPress logo and its wp.org link are kept by default; any change points the link home)
 * Hide the front-end admin bar
 * Disable "Remember Me"
 * Throttle the Heartbeat API
@@ -45,13 +46,13 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 
 == Installation ==
 
-1. Upload the `better-by-default` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload Plugin.
+1. Upload the `sane-defaults` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload Plugin.
 2. Activate. Documented defaults are seeded automatically on activation.
 3. Visit **Settings → Better by Default** to flip switches.
 
 WP-CLI:
 
-`wp plugin install ./better-by-default.zip --activate`
+`wp plugin install ./sane-defaults.zip --activate`
 
 == Frequently Asked Questions ==
 

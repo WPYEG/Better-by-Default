@@ -9,7 +9,7 @@ thing is built around one idea worth carrying home:
 
 ## Install
 
-1. Copy the `better-by-default` folder into `wp-content/plugins/`
+1. Copy the `sane-defaults` folder into `wp-content/plugins/`
    (or upload the zip via **Plugins → Add New → Upload Plugin**).
 2. Activate. On activation the documented defaults are seeded automatically.
 3. Visit **Settings → Better by Default** to flip switches.
@@ -17,7 +17,7 @@ thing is built around one idea worth carrying home:
 WP-CLI:
 
 ```bash
-wp plugin install ./better-by-default.zip --activate
+wp plugin install ./sane-defaults.zip --activate
 ```
 
 For production you can also drop the main PHP file into `wp-content/mu-plugins/` so the
@@ -31,14 +31,17 @@ defines a key, its default, its type (`toggle` / `select` / `number`), and its g
 bootstrap function then wires each *enabled* policy to its WordPress hook. The `wpyeg_`
 option prefix is kept deliberately as the WPYEG org convention.
 
-Defaults on out of the box: restrict REST user discovery, disable XML-RPC, disable
-Application Passwords, require strong passwords, remove the version fingerprint, send security
-headers, disable comments/pingbacks/self-pingbacks, disable author archives, redirect
-attachment pages, disable emojis, remove the login logo + point it home.
+Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by category
+(incoming pingbacks off, remote publishing off, system.multicall refused), require strong
+passwords (15+ chars, breach-screened, no forced composition), remove the version fingerprint,
+send security headers, disable comments/pingbacks/self-pingbacks, disable author archives,
+redirect attachment pages, disable emojis.
 
-Off by default (opt-in, because they change behavior): require-auth-for-all-REST, title-only
-admin search, hide the front-end admin bar, disable Remember Me, throttle Heartbeat, defer
-scripts.
+Off by default (opt-in, because they change behavior): require-auth-for-all-REST, prohibit
+Application Passwords (left available by default — the safer, revocable REST credential),
+block the XML-RPC endpoint entirely, title-only admin search, remove/unlink/replace the login
+logo (the WordPress logo is kept by default), hide the front-end admin bar, disable Remember Me,
+throttle Heartbeat, defer scripts.
 
 ## Three things this plugin can't do for you
 
