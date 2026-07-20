@@ -305,19 +305,7 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_rest' ) ) {
-		add_filter( 'rest_authentication_errors', function ( $result ) {
-			if ( ! empty( $result ) ) {
-				return $result;
-			}
-			if ( ! is_user_logged_in() ) {
-				return new WP_Error(
-					'rest_not_logged_in',
-					__( 'REST API restricted to authenticated users.', 'sane-defaults' ),
-					array( 'status' => 401 )
-				);
-			}
-			return $result;
-		} );
+		add_filter( 'rest_authentication_errors', 'wpyeg_defaults_require_rest_auth', PHP_INT_MAX );
 	}
 
 	/*
@@ -401,10 +389,10 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'require_strong_passwords' ) ) {
-		add_action( 'user_profile_update_errors', 'wpyeg_enforce_strong_password', 10, 3 );
-		add_action( 'validate_password_reset', function ( $errors, $user ) {
-			wpyeg_enforce_strong_password( $errors, true, $user );
-		}, 10, 2 );
+		add_action( 'user_profile_update_errors', 'wpyeg_defaults_validate_profile_password', 10, 3 );
+		add_action( 'validate_password_reset', 'wpyeg_defaults_validate_reset_password', 10, 2 );
+		add_filter( 'rest_endpoints', 'wpyeg_defaults_guard_rest_password_arg' );
+		add_filter( 'rest_pre_insert_user', 'wpyeg_defaults_validate_rest_password', 10, 2 );
 	}
 
 	if ( wpyeg_defaults_enabled( 'remove_version' ) ) {
@@ -622,41 +610,289 @@ function wpyeg_defaults_bootstrap() {
 }
 
 /**
- * Shared strong-password validator (used for profile update + reset).
+ * Validate a password against the policy.
  *
- * @param WP_Error         $errors
- * @param bool             $update
- * @param stdClass|WP_User $user
+ * One reusable validator behind every entry point — profile screen, password
+ * reset, and the REST users controller — so a password cannot get in through a
+ * door the policy does not watch.
+ *
+ * @param string                $password Proposed password.
+ * @param WP_User|stdClass|null $user     User context, when available.
+ * @return true|WP_Error True when acceptable, WP_Error describing the failure.
  */
-function wpyeg_enforce_strong_password( $errors, $update, $user ) {
+function wpyeg_defaults_validate_password( $password, $user = null ) {
+	// NIST 800-63B / OWASP: favour length + screening over forced composition
+	// rules (upper/lower/number/symbol), which push users toward predictable
+	// patterns like Password1! without adding entropy.
+	$minimum = (int) apply_filters( 'wpyeg_minimum_password_length', 15 );
+
+	// Count characters, not bytes: strlen() would read eight emoji as 32 and
+	// wave through a password far shorter than the rule intends.
+	$length = function_exists( 'mb_strlen' ) ? mb_strlen( $password ) : strlen( $password );
+
+	if ( $length < $minimum ) {
+		return new WP_Error(
+			'wpyeg_pass_too_short',
+			sprintf(
+				/* translators: %d: minimum password length. */
+				__( '<strong>Error:</strong> Password must be at least %d characters.', 'sane-defaults' ),
+				$minimum
+			)
+		);
+	}
+
+	$normalize = static function ( $value ) {
+		$value = (string) $value;
+		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $value ) : strtolower( $value );
+	};
+
+	// A small local blocklist still catches the obvious cases when the breach
+	// API below is unreachable (that check deliberately fails open).
+	$blocklist = (array) apply_filters(
+		'wpyeg_password_blocklist',
+		array( 'password', 'password123', '123456789012345', 'qwertyuiopasdfg', 'letmeinletmeinletmein', 'wordpresswordpress' )
+	);
+
+	if ( in_array( $normalize( $password ), array_map( $normalize, $blocklist ), true ) ) {
+		return new WP_Error(
+			'wpyeg_pass_common',
+			__( '<strong>Error:</strong> Choose a password that is not commonly used.', 'sane-defaults' )
+		);
+	}
+
+	// NIST also says to reject passwords derived from personal context.
+	if ( $user ) {
+		$context = array_filter(
+			array(
+				isset( $user->user_login ) ? $user->user_login : '',
+				isset( $user->user_nicename ) ? $user->user_nicename : '',
+				isset( $user->user_email ) ? strtok( $user->user_email, '@' ) : '',
+			)
+		);
+
+		foreach ( $context as $value ) {
+			$value = $normalize( $value );
+			if ( strlen( $value ) >= 4 && false !== strpos( $normalize( $password ), $value ) ) {
+				return new WP_Error(
+					'wpyeg_pass_personal',
+					__( '<strong>Error:</strong> Password must not contain your username or email name.', 'sane-defaults' )
+				);
+			}
+		}
+	}
+
+	if ( wpyeg_password_is_pwned( $password ) ) {
+		return new WP_Error(
+			'wpyeg_pass_pwned',
+			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
+		);
+	}
+
+	return true;
+}
+
+/**
+ * Validate a password submitted from a user profile screen.
+ *
+ * @param WP_Error         $errors Validation errors.
+ * @param bool             $update Whether this is an update.
+ * @param WP_User|stdClass $user   User context.
+ */
+function wpyeg_defaults_validate_profile_password( $errors, $update, $user ) {
+	unset( $update );
+
 	// Core's edit_user() trims the password and stores the TRIMMED value, but
 	// fires this hook with $_POST untouched. Validate the untrimmed string and
-	// "              a" sails past the 15-character rule while core saves a
+	// "              a" sails past the length rule while core saves a
 	// one-character password. Measure exactly what core will store.
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Passwords must not be sanitized.
 	$password = isset( $_POST['pass1'] ) ? trim( (string) wp_unslash( $_POST['pass1'] ) ) : '';
 
 	if ( '' === $password ) {
 		return; // No password change requested (or whitespace-only).
 	}
 
-	// NIST 800-63B / OWASP: favour length + breach screening over forced
-	// composition rules (upper/lower/number/symbol). Composition rules push
-	// users toward predictable patterns (Password1!) without adding entropy.
-	if ( strlen( $password ) < 15 ) {
-		$errors->add(
-			'wpyeg_pass_too_short',
-			__( '<strong>Error:</strong> Password must be at least 15 characters.', 'sane-defaults' )
-		);
+	$result = wpyeg_defaults_validate_password( $password, $user );
+
+	if ( is_wp_error( $result ) ) {
+		$errors->add( $result->get_error_code(), $result->get_error_message() );
+	}
+}
+
+/**
+ * Validate a password submitted from the password-reset screen.
+ *
+ * @param WP_Error $errors Validation errors.
+ * @param WP_User  $user   User context.
+ */
+function wpyeg_defaults_validate_reset_password( $errors, $user ) {
+	// wp-login.php already trims $_POST['pass1'] in place before firing this
+	// hook; trimming again keeps both entry points measuring the same string.
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Passwords must not be sanitized.
+	$password = isset( $_POST['pass1'] ) ? trim( (string) wp_unslash( $_POST['pass1'] ) ) : '';
+
+	if ( '' === $password ) {
 		return;
 	}
 
-	// Breach screening against Have I Been Pwned (see wpyeg_password_is_pwned).
-	if ( wpyeg_password_is_pwned( $password ) ) {
-		$errors->add(
-			'wpyeg_pass_pwned',
-			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
+	$result = wpyeg_defaults_validate_password( $password, $user );
+
+	if ( is_wp_error( $result ) ) {
+		$errors->add( $result->get_error_code(), $result->get_error_message() );
+	}
+}
+
+/**
+ * Validate a password submitted through the core REST users controller.
+ *
+ * Backstop for any route the argument guard below does not reach.
+ *
+ * @param object          $prepared_user Prepared user object.
+ * @param WP_REST_Request $request       REST request.
+ * @return object|WP_Error
+ */
+function wpyeg_defaults_validate_rest_password( $prepared_user, $request ) {
+	$password = $request->get_param( 'password' );
+
+	if ( null === $password || '' === $password ) {
+		return $prepared_user;
+	}
+
+	$user   = ! empty( $prepared_user->ID ) ? get_userdata( $prepared_user->ID ) : $prepared_user;
+	$result = wpyeg_defaults_validate_password( (string) $password, $user );
+
+	return is_wp_error( $result ) ? $result : $prepared_user;
+}
+
+/**
+ * Require an authenticated user for every REST request.
+ *
+ * Registered at PHP_INT_MAX on purpose. Core resolves Application Password auth
+ * at priority 90 and cookie auth at 100, and rest_cookie_check_errors() returns
+ * true after calling wp_set_current_user( 0 ) when a cookie carries no
+ * X-WP-Nonce. Deciding before core has finished — or treating any truthy
+ * $result as success — would read that true as "authenticated" and let the
+ * request dispatch as user 0. Only an existing WP_Error short-circuits.
+ *
+ * @param WP_Error|true|null $result Authentication result so far.
+ * @return WP_Error|true|null
+ */
+function wpyeg_defaults_require_rest_auth( $result ) {
+	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	if ( ! is_user_logged_in() ) {
+		return new WP_Error(
+			'rest_not_logged_in',
+			__( 'REST API restricted to authenticated users.', 'sane-defaults' ),
+			array( 'status' => 401 )
 		);
 	}
+
+	return $result;
+}
+
+/**
+ * Enforce the password policy on the users controller's `password` argument.
+ *
+ * rest_pre_insert_user is the documented seam, but the controller never checks
+ * its return for an error: update_item() assigns ID onto the WP_Error and hands
+ * it to wp_update_user(), which finds no user_pass and answers 200 OK with the
+ * user unchanged; create_item() casts it to an array with no user_login and
+ * answers 500 "empty login name". Either way the policy message is lost.
+ *
+ * An argument-level error is different. WP_REST_Request::sanitize_params()
+ * turns it into rest_invalid_param, which dispatch() returns as a 400 before
+ * the callback runs, so the caller sees the actual reason.
+ *
+ * @param array $endpoints Registered REST endpoints, keyed by route.
+ * @return array
+ */
+function wpyeg_defaults_guard_rest_password_arg( $endpoints ) {
+	foreach ( $endpoints as $route => $handlers ) {
+		// Application Passwords are core-generated and carry a readonly password
+		// field, so they are never in scope for a human password policy.
+		if ( ! preg_match( '#^/wp/v2/users(?:/|$)#', $route ) || false !== strpos( $route, 'application-password' ) ) {
+			continue;
+		}
+
+		if ( ! is_array( $handlers ) ) {
+			continue;
+		}
+
+		foreach ( $handlers as $index => $handler ) {
+			if ( ! is_array( $handler ) || ! isset( $handler['args']['password'] ) ) {
+				continue;
+			}
+
+			$inner = isset( $handler['args']['password']['sanitize_callback'] )
+				? $handler['args']['password']['sanitize_callback']
+				: null;
+
+			$endpoints[ $route ][ $index ]['args']['password']['sanitize_callback'] = function ( $value, $request, $param ) use ( $inner ) {
+				// Let core sanitize first; it rejects empty and backslashed passwords.
+				if ( $inner ) {
+					$value = call_user_func( $inner, $value, $request, $param );
+					if ( is_wp_error( $value ) ) {
+						return $value;
+					}
+				}
+
+				$result = wpyeg_defaults_validate_password(
+					(string) $value,
+					wpyeg_defaults_rest_password_context( $request )
+				);
+
+				if ( is_wp_error( $result ) ) {
+					return new WP_Error(
+						$result->get_error_code(),
+						$result->get_error_message(),
+						array( 'status' => 400 )
+					);
+				}
+
+				return $value;
+			};
+		}
+	}
+
+	return $endpoints;
+}
+
+/**
+ * Resolve the user a REST password change applies to.
+ *
+ * Argument sanitizing runs before the controller prepares a user, so the
+ * context has to come from the request: update_item() takes the id from the
+ * route, and update_current_item() only assigns it after dispatch. A create
+ * has no stored user at all, so the submitted fields are the only context.
+ *
+ * @param WP_REST_Request $request REST request.
+ * @return WP_User|stdClass
+ */
+function wpyeg_defaults_rest_password_context( $request ) {
+	$user_id = 0;
+
+	if ( preg_match( '#/wp/v2/users/me$#', (string) $request->get_route() ) ) {
+		$user_id = get_current_user_id();
+	} elseif ( null !== $request['id'] ) {
+		$user_id = (int) $request['id'];
+	}
+
+	if ( $user_id ) {
+		$existing = get_userdata( $user_id );
+		if ( $existing ) {
+			return $existing;
+		}
+	}
+
+	$context                = new stdClass();
+	$context->user_login    = (string) $request['username'];
+	$context->user_email    = (string) $request['email'];
+	$context->user_nicename = (string) $request['slug'];
+
+	return $context;
 }
 
 /**
