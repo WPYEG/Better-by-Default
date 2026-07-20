@@ -269,13 +269,15 @@ function wpyeg_test_assert( $condition, $message ) {
 $schema = wpyeg_defaults_schema();
 wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'], 'Application Passwords remain available by default.' );
 /*
- * Policy snapshot, not endorsement. PR #1 argued three of these should change:
- * attachment redirects and generator-tag removal should be opt-in (hiding the
- * version is obscurity, not hardening), and security_headers / defer_scripts /
- * disable_ai_connectors should be dropped as unsafe-or-no-op — disable_ai_connectors
- * in particular only fires an action nobody listens to, so the toggle advertises
- * protection it does not provide. Those are open product questions. These
- * assertions pin what ships today so any change is deliberate, not accidental.
+ * Policy snapshot, not endorsement. PR #1 argued attachment redirects and
+ * generator-tag removal should be opt-in (hiding the version is obscurity, not
+ * hardening), and that security_headers / defer_scripts should be dropped as
+ * unsafe-or-generic. Those stay open product questions; these assertions pin
+ * what ships today so any change is deliberate rather than accidental.
+ *
+ * PR #1 also wanted disable_ai_connectors dropped as a no-op, which it was — it
+ * only fired an action nobody listened to. It now does real work against core's
+ * wp_supports_ai gate (WordPress 7.0), so it stays, and is covered below.
  */
 wpyeg_test_assert( 'yes' === $schema['redirect_attachment_pages']['default'], 'Attachment redirects ship on (PR #1 proposed opt-in).' );
 wpyeg_test_assert( 'yes' === $schema['remove_version']['default'], 'Generator-tag removal ships on (PR #1 proposed opt-in).' );
@@ -560,6 +562,19 @@ unset( $GLOBALS['wpyeg_test_option'] );
 
 wpyeg_test_assert( null !== $auth_gate, 'Enabling disable_rest registers the authentication gate.' );
 wpyeg_test_assert( PHP_INT_MAX === $auth_gate['priority'], 'The gate runs after core resolves cookie and Application Password auth.' );
+
+// disable_ai_connectors ships on. It used to only fire its own action, which is
+// what made it a no-op; check it now reaches core's WP 7.0 AI gate.
+$GLOBALS['wpyeg_test_hooks']       = array();
+$GLOBALS['wpyeg_test_did_actions'] = array();
+wpyeg_defaults_bootstrap();
+$ai_gate = wpyeg_test_find_hook( 'wp_supports_ai' );
+
+wpyeg_test_assert( null !== $ai_gate, 'Disabling AI connectors filters core wp_supports_ai.' );
+wpyeg_test_assert( '__return_false' === $ai_gate['callback'], 'The AI gate returns false, so provider connectors never register.' );
+wpyeg_test_assert( null !== wpyeg_test_find_hook( 'admin_menu' ), 'The core Connectors screen is removed from the menu.' );
+wpyeg_test_assert( null !== wpyeg_test_find_hook( 'admin_init' ), 'The Connectors screen is closed, not merely unlinked.' );
+wpyeg_test_assert( in_array( 'wpyeg_disable_ai_connectors', $GLOBALS['wpyeg_test_did_actions'], true ), 'The seam still fires for AI integrations core does not know about.' );
 
 /*
  * Breach screening (Have I Been Pwned, k-anonymity).

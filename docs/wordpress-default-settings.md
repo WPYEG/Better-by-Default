@@ -207,11 +207,35 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 ### Disable AI Connectors
 - **Option:** `wpyeg_disable_ai_connectors`
 - **Default:** `yes`
-- **Description:** Disables the plugin's built-in AI connector recommendations and related
-  WordPress AI support.
-- **Plugin-specific** — no stable core equivalent. This is plugin-policy logic; there's no
-  core hook to switch off "AI support" generically as of now, so it lives entirely in your
-  plugin. The workshop plugin exposes a `wpyeg_disable_ai_connectors` action as the seam.
+- **Why:** AI connectors can transmit unpublished content, media, prompts, and user data to
+  third-party services. WordPress 7.0 added a core gate for exactly this, so the default
+  posture is off-until-asked-for rather than on-by-inheritance.
+
+WordPress 7.0 introduced the `wp_supports_ai` filter (default `true`), which decides whether
+the current request may use AI. Returning `false` stops core's AI provider connectors from
+registering:
+
+```php
+add_filter( 'wp_supports_ai', '__return_false' );
+
+// Settings → Connectors configures those providers, so take the menu out too.
+add_action( 'admin_menu', function () {
+    remove_submenu_page( 'options-general.php', 'options-connectors.php' );
+}, 11 );
+
+// Removing a menu hides the link, it does not block the URL. Close the screen.
+add_action( 'admin_init', function () {
+    global $pagenow;
+    if ( 'options-connectors.php' === $pagenow ) {
+        wp_die( esc_html__( 'AI connectors are disabled on this site.' ), '', array( 'response' => 403 ) );
+    }
+} );
+```
+
+> **Note:** core also honours a `WP_AI_SUPPORT` constant, which a deployment can set to
+> `false` in `wp-config.php` to hard-lock the disabled posture above the plugin layer. The
+> workshop plugin additionally fires a `wpyeg_disable_ai_connectors` action as a seam for AI
+> integrations core does not know about (a plugin's own provider, say).
 
 ---
 

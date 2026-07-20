@@ -111,7 +111,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Disable AI connectors',
-			'help'    => 'Fires the wpyeg_disable_ai_connectors action. No stable WP core hook yet — this is a policy stub for your own plugin logic.',
+			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the wp_supports_ai gate and closes the core Connectors screen. Also fires wpyeg_disable_ai_connectors for AI integrations core does not know about.',
 		),
 
 		// --- Content & public surfaces ---------------------------------
@@ -411,10 +411,38 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_ai_connectors' ) ) {
+		// WordPress 7.0 gates AI provider connectors behind wp_supports_ai
+		// (default true). Returning false stops them registering.
+		add_filter( 'wp_supports_ai', '__return_false' );
+
+		// Settings → Connectors is where those providers get configured.
+		add_action(
+			'admin_menu',
+			function () {
+				remove_submenu_page( 'options-general.php', 'options-connectors.php' );
+			},
+			11
+		);
+
+		// Hiding a menu is not access control — the URL still resolves — so
+		// close the screen itself, not just the link to it.
+		add_action(
+			'admin_init',
+			function () {
+				global $pagenow;
+				if ( 'options-connectors.php' === $pagenow ) {
+					wp_die(
+						esc_html__( 'AI connectors are disabled on this site.', 'sane-defaults' ),
+						'',
+						array( 'response' => 403 )
+					);
+				}
+			}
+		);
+
 		/**
-		 * No stable WordPress core hook exists to switch off "AI support"
-		 * generically yet. This action is the seam for your own plugin
-		 * policy — hook it to unregister providers, hide UI, etc.
+		 * Seam for AI integrations core does not know about — hook this to
+		 * unregister your own providers or hide their UI.
 		 */
 		do_action( 'wpyeg_disable_ai_connectors' );
 	}
