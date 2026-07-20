@@ -475,8 +475,14 @@ compromised admin account can't rewrite PHP on the fly. Set in `wp-config.php`:
 define( 'DISALLOW_FILE_EDIT', true );
 ```
 
-**Remove the WordPress version fingerprint.** Stops broadcasting your exact core version to
-vulnerability scanners.
+**Remove the WordPress version fingerprint** *(opt-in — `wpyeg_remove_version`, default `no`)*.
+Stops the generator tag broadcasting your exact core version.
+
+Deliberately **not** on by default, because this is obscurity rather than hardening. It does
+not make an out-of-date site any safer, and it is not even a complete cover: the version still
+leaks through asset query strings (`?ver=`), feeds, and readme files. What it genuinely buys is
+less automated scanner noise in your logs — worth opting into, not worth presenting as
+security.
 
 ```php
 remove_action( 'wp_head', 'wp_generator' );

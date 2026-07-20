@@ -269,18 +269,24 @@ function wpyeg_test_assert( $condition, $message ) {
 $schema = wpyeg_defaults_schema();
 wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'], 'Application Passwords remain available by default.' );
 /*
- * Policy snapshot, not endorsement. PR #1 argued attachment redirects and
- * generator-tag removal should be opt-in (hiding the version is obscurity, not
- * hardening), and that security_headers / defer_scripts should be dropped as
- * unsafe-or-generic. Those stay open product questions; these assertions pin
- * what ships today so any change is deliberate rather than accidental.
+ * Policy snapshot, not endorsement.
+ *
+ * remove_version now ships OFF, per PR #1: stripping the generator tag is
+ * obscurity, not hardening. It does not make an out-of-date site safer, and the
+ * version still leaks from asset query strings and feeds — so it is offered as
+ * noise reduction you opt into, not a security default.
+ *
+ * Still open from PR #1: whether attachment redirects should also be opt-in,
+ * and whether security_headers / defer_scripts should be dropped as
+ * unsafe-or-generic. Those assertions pin today's behaviour so a change is
+ * deliberate rather than accidental.
  *
  * PR #1 also wanted disable_ai_connectors dropped as a no-op, which it was — it
  * only fired an action nobody listened to. It now does real work against core's
  * wp_supports_ai gate (WordPress 7.0), so it stays, and is covered below.
  */
 wpyeg_test_assert( 'yes' === $schema['redirect_attachment_pages']['default'], 'Attachment redirects ship on (PR #1 proposed opt-in).' );
-wpyeg_test_assert( 'yes' === $schema['remove_version']['default'], 'Generator-tag removal ships on (PR #1 proposed opt-in).' );
+wpyeg_test_assert( 'no' === $schema['remove_version']['default'], 'Generator-tag removal is opt-in, not presented as hardening.' );
 wpyeg_test_assert( isset( $schema['security_headers'], $schema['defer_scripts'], $schema['disable_ai_connectors'] ), 'The generic policies still ship (PR #1 proposed removing them).' );
 
 $sanitized = wpyeg_defaults_sanitize(

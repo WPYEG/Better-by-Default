@@ -180,7 +180,7 @@ The rules changed recently, and most people didn't notice: NIST 800-63B and OWAS
 
 ## Remove fingerprints, add headers
 
-	`wpyeg_remove_version` / `wpyeg_security_headers` · default **yes / yes**
+	`wpyeg_remove_version` · default **no** (opt-in) · `wpyeg_security_headers` · default **yes**
 
 ```php
 remove_action( 'wp_head', 'wp_generator' );
@@ -194,7 +194,7 @@ add_filter( 'wp_headers', function ( $h ) {
 } );
 ```
 
-Two quick wins. Version hiding is obscurity, not security — but it cuts automated scanner noise. The three headers are safe defaults most sites can adopt without breaking anything:
+One default and one deliberate non-default — and the difference is the lesson. Hiding the version is **obscurity, not hardening**: it does not make an out-of-date site any safer, and it does not even hide much, since the version still leaks from asset query strings and feeds. What it genuinely buys is quieter logs. That is worth opting into, not worth shipping on and calling security — so it defaults to off. The headers are the opposite: real, low-risk defaults most sites can adopt without breaking anything:
 
 - **`X-Content-Type-Options: nosniff`** — the browser must trust the declared `Content-Type` instead of guessing; kills "a `.txt` the browser decides to run as JavaScript" tricks.
 - **`X-Frame-Options: SAMEORIGIN`** — only your own site may load the page in an `<iframe>`; blocks clickjacking, where your login or admin is hidden under an attacker's page.
@@ -432,12 +432,12 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | Restrict REST user discovery | `rest_endpoints` | Security |
 | Lock down XML-RPC by category | `xmlrpc_methods` / `wp_xmlrpc_server_class` | Security |
 | Require strong passwords (15+ / breach-screened) | `user_profile_update_errors` | Security |
-| Remove version + security headers | `wp_generator` / `wp_headers` | Security |
+| Send baseline security headers | `wp_headers` | Security |
 | Disable comments & pingbacks | `comments_open` / `pings_open` | Content |
 | Redirect author + attachment pages | `template_redirect` | Content / SEO |
 | Disable emoji script | `init` (remove_action) | Performance |
 
-[This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Two deliberate *non*-defaults worth calling out: Application Passwords stay **available** (the safer REST credential), and the login logo is **left alone** unless you opt in — both are choices, not oversights.]
+[This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Three deliberate *non*-defaults worth calling out: Application Passwords stay **available** (the safer REST credential), the login logo is **left alone** unless you opt in, and removing the version fingerprint is **off**, because it is obscurity rather than hardening. All three are choices, not oversights — and the last one is the honest test of the whole talk: if a default doesn't actually make the site safer, don't ship it as security.]
 
 ---
 

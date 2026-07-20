@@ -93,11 +93,11 @@ function wpyeg_defaults_schema() {
 			'help'    => 'Server-side rule: 15+ characters, screened for known breaches — length + screening, not forced composition (per NIST).',
 		),
 		'remove_version' => array(
-			'default' => 'yes',
+			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Remove WordPress version fingerprint',
-			'help'    => 'Strips the generator meta tag so scanners can\'t read your exact version.',
+			'help'    => 'Strips the generator meta tag. Obscurity, not hardening: it trims scanner noise but does not make an out-of-date site any safer, and the version still leaks from asset query strings and feeds. Off by default — patch instead. Turn on if you want the noise reduction.',
 		),
 		'security_headers' => array(
 			'default' => 'yes',

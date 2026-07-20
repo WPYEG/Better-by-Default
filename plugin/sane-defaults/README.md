@@ -33,15 +33,16 @@ option prefix is kept deliberately as the WPYEG org convention.
 
 Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by category
 (incoming pingbacks off, remote publishing off, system.multicall refused), require strong
-passwords (15+ chars, breach-screened, no forced composition), remove the version fingerprint,
-send security headers, disable comments/pingbacks/self-pingbacks, disable author archives,
-redirect attachment pages, disable emojis.
+passwords (15+ chars, breach-screened, no forced composition), send security headers, disable
+comments/pingbacks/self-pingbacks, disable author archives, redirect attachment pages, disable
+emojis.
 
 Off by default (opt-in, because they change behavior): require-auth-for-all-REST, prohibit
 Application Passwords (left available by default — the safer, revocable REST credential),
 block the XML-RPC endpoint entirely, title-only admin search, remove/unlink/replace the login
 logo (the WordPress logo is kept by default), hide the front-end admin bar, disable Remember Me,
-throttle Heartbeat, defer scripts.
+throttle Heartbeat, defer scripts, and remove the version fingerprint — that last one because it
+is obscurity, not hardening: it trims scanner noise but does not make an out-of-date site safer.
 
 ## Three things this plugin can't do for you
 

@@ -27,7 +27,7 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Restrict REST API user discovery
 * Lock down XML-RPC by category — incoming pingbacks off (header stripped), remote publishing off (RSD link dropped), system.multicall refused
 * Require strong passwords (server-side: 15+ characters, breach-screened, no forced composition)
-* Remove the version fingerprint + send baseline security headers
+* Send baseline security headers
 * Disable comments, pingbacks & self-pingbacks
 * Redirect public author archives and attachment pages
 * Disable the emoji script
@@ -35,6 +35,7 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 = Opt-in (OFF by default) =
 
 * Require authentication for ALL REST requests
+* Remove the WordPress version fingerprint (obscurity, not hardening — it trims scanner noise but does not make an out-of-date site safer)
 * Prohibit Application Passwords (left available by default — the safer, revocable REST credential)
 * Block the XML-RPC endpoint entirely (403 for every request — not for Jetpack sites)
 * Title-only admin search

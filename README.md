@@ -46,9 +46,9 @@ On activation the documented defaults are seeded automatically. Then visit
 
 **On out of the box** (safe for nearly any site): restrict REST user discovery, lock down
 XML-RPC by category (pingbacks / remote publishing / multicall all off), require strong
-passwords (length + breach screening, not forced composition), remove the version fingerprint +
-send security headers, disable comments / pingbacks / self-pingbacks, redirect public author
-archives and attachment pages, and disable the emoji script.
+passwords (length + breach screening, not forced composition), send security headers, disable
+comments / pingbacks / self-pingbacks, redirect public author archives and attachment pages,
+and disable the emoji script.
 
 **Deliberately *not* locked down by default** (opinionated calls, explained in the reference):
 Application Passwords stay **available** — they're the safer, revocable integration credential,
@@ -58,7 +58,9 @@ and disabling them pushes people to worse alternatives — and the login logo is
 **Opt-in, off by default** (they change behavior — turn on deliberately): require auth for all
 REST, prohibit Application Passwords, remove/replace the login logo, title-only admin search,
 hide the front-end admin bar, disable Remember Me, throttle the Heartbeat API, and defer
-front-end scripts.
+front-end scripts. Removing the version fingerprint is here too, for a different reason: it is
+obscurity rather than hardening — useful for trimming scanner noise, but it does not make an
+out-of-date site safer, so it is not presented as a security default.
 
 Three more live in `wp-config.php`, above the plugin layer, and are documented as manual steps:
 `DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, and `WP_POST_REVISIONS`.
