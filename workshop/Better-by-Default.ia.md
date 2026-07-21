@@ -443,9 +443,9 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | Disable comments & pingbacks | `comments_open` / `pings_open` | Content |
 | Redirect author + attachment pages | `template_redirect` | Content / SEO |
 | Disable emoji script | `init` (remove_action) | Performance |
-| Auto-update core security/maintenance + translations | `allow_minor_auto_core_updates` / `auto_update_translation` | Updates |
+| Auto-update core security/maintenance releases | `allow_minor_auto_core_updates` | Updates |
 
-[This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Updates follow the same principle: maintenance/security core releases and translations install automatically; major core releases wait for testing; plugin and theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate *non*-defaults worth calling out: Application Passwords stay **available** (the safer REST credential), the login logo is **left alone** unless you opt in, and removing the version fingerprint is **off**, because it is obscurity rather than hardening.]
+[This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. The plugin installs maintenance/security core releases automatically while major core releases wait for testing. Translation files retain WordPress's existing automatic-update behavior, and plugin/theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate *non*-defaults worth calling out: Application Passwords stay **available** (the safer REST credential), the login logo is **left alone** unless you opt in, and removing the version fingerprint is **off**, because it is obscurity rather than hardening.]
 
 ---
 

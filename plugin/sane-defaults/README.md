@@ -36,7 +36,7 @@ Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by c
 passwords (15+ chars, breach-screened, no forced composition), send security headers, disable
 comments/pingbacks/self-pingbacks, disable author archives, redirect attachment pages, disable
 emojis, install core maintenance/security releases automatically while holding major releases
-for testing, and update translation files automatically.
+for testing. Translation files retain WordPress's existing automatic-update behavior.
 
 Off by default (opt-in, because they change behavior): require-auth-for-all-REST, prohibit
 Application Passwords (left available by default — the safer, revocable REST credential),

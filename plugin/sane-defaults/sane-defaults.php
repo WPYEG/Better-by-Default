@@ -140,14 +140,6 @@ function wpyeg_defaults_schema() {
 				'inherit' => 'Leave unchanged (WordPress, host, or another plugin decides)',
 			),
 		),
-		'auto_update_translations' => array(
-			'default' => 'yes',
-			'type'    => 'toggle',
-			'group'   => 'updates',
-			'label'   => 'Automatically update translations',
-			'help'    => 'Installs available WordPress, plugin, and theme language updates. Plugin and theme code updates remain controlled by WordPress\'s individual per-item choices.',
-		),
-
 		// --- Content & public surfaces ---------------------------------
 		'disable_comments' => array(
 			'default' => 'yes',
@@ -354,18 +346,6 @@ function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
 	return 'inherit' === wpyeg_defaults_get( 'core_update_policy' ) ? $enabled : false;
 }
 
-/**
- * Apply the translation update toggle.
- *
- * @param bool $enabled WordPress's current decision.
- * @return bool
- */
-function wpyeg_defaults_allow_translation_updates( $enabled ) {
-	unset( $enabled );
-	return wpyeg_defaults_enabled( 'auto_update_translations' );
-}
-
-
 /* =======================================================================
  * BOOTSTRAP — wire each enabled policy to its hook.
  * ===================================================================== */
@@ -387,8 +367,6 @@ function wpyeg_defaults_bootstrap() {
 		add_filter( 'allow_major_auto_core_updates', 'wpyeg_defaults_allow_major_core_updates' );
 		add_filter( 'allow_dev_auto_core_updates', 'wpyeg_defaults_allow_dev_core_updates' );
 	}
-
-	add_filter( 'auto_update_translation', 'wpyeg_defaults_allow_translation_updates' );
 
 	/* ----- Security ----- */
 

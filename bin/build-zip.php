@@ -43,7 +43,7 @@ if ( empty( $files ) ) {
  * @param string $source_dir Plugin source directory.
  * @param string $slug       Directory prefix inside the zip.
  * @param array  $files      Expected file names.
- * @return array Names that are missing or out of date.
+ * @return array Names that are missing, out of date, or unexpected.
  */
 function wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files ) {
 	if ( ! file_exists( $zip_path ) ) {
@@ -55,12 +55,36 @@ function wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files ) {
 		return $files;
 	}
 
-	$stale = array();
+	$stale            = array();
+	$expected_entries = array( $slug . '/' );
 	foreach ( $files as $file ) {
-		$packed = $zip->getFromName( $slug . '/' . $file );
+		$entry              = $slug . '/' . $file;
+		$expected_entries[] = $entry;
+		$packed             = $zip->getFromName( $entry );
 		if ( false === $packed || file_get_contents( $source_dir . '/' . $file ) !== $packed ) {
 			$stale[] = $file;
 		}
+	}
+
+	$actual_entries = array();
+	$entry_count    = count( $zip );
+	for ( $index = 0; $index < $entry_count; $index++ ) {
+		$entry = $zip->getNameIndex( $index );
+		if ( false !== $entry ) {
+			$actual_entries[] = $entry;
+		}
+	}
+
+	$unexpected_entries = $actual_entries;
+	foreach ( $expected_entries as $expected_entry ) {
+		$index = array_search( $expected_entry, $unexpected_entries, true );
+		if ( false !== $index ) {
+			unset( $unexpected_entries[ $index ] );
+		}
+	}
+
+	foreach ( $unexpected_entries as $entry ) {
+		$stale[] = $entry . ' (unexpected)';
 	}
 	$zip->close();
 

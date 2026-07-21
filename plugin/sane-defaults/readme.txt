@@ -32,7 +32,7 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Redirect public author archives and attachment pages
 * Disable the emoji script
 * Automatically install WordPress core maintenance/security releases, while holding major releases for testing
-* Automatically update WordPress, plugin, and theme translation files
+* Leave WordPress's existing automatic translation-file updates unchanged
 
 = Opt-in (OFF by default) =
 

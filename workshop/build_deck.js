@@ -668,7 +668,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     ["Disable comments & pingbacks", "comments_open / pings_open", "Content"],
     ["Redirect author + attachment pages", "template_redirect", "Content / SEO"],
     ["Disable emoji script", "init (remove_action)", "Performance"],
-    ["Auto-update core security/maintenance + translations", "allow_minor_auto_core_updates / auto_update_translation", "Updates"],
+    ["Auto-update core security/maintenance releases", "allow_minor_auto_core_updates", "Updates"],
   ];
   const tblRows = [[
     { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
@@ -688,7 +688,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     border: { type: "solid", color: "DCE6EB", pt: 1 }, valign: "middle", rowH: 0.44,
   });
   footer(s, 27);
-  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Updates follow the same principle: maintenance/security core releases and translations install automatically; major core releases wait for testing; plugin and theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate non-defaults worth calling out: Application Passwords stay AVAILABLE, the login logo is LEFT ALONE, and removing the version fingerprint is OFF because it is obscurity rather than hardening.");
+  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. The plugin installs maintenance/security core releases automatically while major core releases wait for testing. Translation files retain WordPress's existing automatic-update behavior, and plugin/theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate non-defaults worth calling out: Application Passwords stay AVAILABLE, the login logo is LEFT ALONE, and removing the version fingerprint is OFF because it is obscurity rather than hardening.");
 })();
 
 /* =================================================================== */
