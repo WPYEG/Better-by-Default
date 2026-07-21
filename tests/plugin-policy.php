@@ -325,14 +325,13 @@ function wpyeg_test_assert( $condition, $message ) {
 $schema = wpyeg_defaults_schema();
 wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'], 'Application Passwords remain available by default.' );
 wpyeg_test_assert( 'minor' === $schema['core_update_policy']['default'], 'Core maintenance and security releases update automatically by default.' );
-wpyeg_test_assert( 'yes' === $schema['auto_update_translations']['default'], 'Translation files update automatically by default.' );
+wpyeg_test_assert( ! isset( $schema['auto_update_translations'] ), 'WordPress retains ownership of translation-file updates.' );
 
 // The explicit update policy is stable across the installation-age defaults
 // WordPress stores for major core updates.
 wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( false ), 'The default policy enables maintenance/security core releases.' );
 wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( true ), 'The default policy blocks automatic major core releases.' );
 wpyeg_test_assert( false === wpyeg_defaults_allow_dev_core_updates( true ), 'The default stable policy blocks development builds.' );
-wpyeg_test_assert( true === wpyeg_defaults_allow_translation_updates( false ), 'The default policy enables translation updates.' );
 
 $GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'all' );
 wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( false ), 'The all-stable policy enables maintenance releases.' );
@@ -347,8 +346,6 @@ $GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'inherit' );
 wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( true ), 'The inherit policy preserves an enabled core decision.' );
 wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( false ), 'The inherit policy preserves a disabled core decision.' );
 
-$GLOBALS['wpyeg_test_option'] = array( 'auto_update_translations' => 'no' );
-wpyeg_test_assert( false === wpyeg_defaults_allow_translation_updates( true ), 'Translation auto-updates can be explicitly disabled.' );
 unset( $GLOBALS['wpyeg_test_option'] );
 
 /*
@@ -632,7 +629,7 @@ wpyeg_test_assert( in_array( 'rest_pre_insert_user', $registered_hooks, true ), 
 wpyeg_test_assert( in_array( 'allow_minor_auto_core_updates', $registered_hooks, true ), 'The maintenance/security core update policy is registered.' );
 wpyeg_test_assert( in_array( 'allow_major_auto_core_updates', $registered_hooks, true ), 'The major core update policy is registered.' );
 wpyeg_test_assert( in_array( 'allow_dev_auto_core_updates', $registered_hooks, true ), 'Development core builds are kept out of stable policies.' );
-wpyeg_test_assert( in_array( 'auto_update_translation', $registered_hooks, true ), 'The translation update policy is registered.' );
+wpyeg_test_assert( ! in_array( 'auto_update_translation', $registered_hooks, true ), 'Translation updates remain on WordPress defaults.' );
 wpyeg_test_assert( ! in_array( 'auto_update_plugin', $registered_hooks, true ), 'Plugin code updates remain on WordPress per-item settings.' );
 wpyeg_test_assert( ! in_array( 'auto_update_theme', $registered_hooks, true ), 'Theme code updates remain on WordPress per-item settings.' );
 wpyeg_test_assert( ! in_array( 'script_loader_tag', $registered_hooks, true ), 'Blanket script-tag mutation is not registered.' );

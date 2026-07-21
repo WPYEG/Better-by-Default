@@ -544,16 +544,12 @@ References:
 - [`Core_Upgrader::should_update_to_version()`](https://developer.wordpress.org/reference/classes/core_upgrader/should_update_to_version/)
 - [Supported WordPress versions](https://wordpress.org/documentation/article/supported-versions/)
 
-### Automatically update translations
+### Leave translation updates unchanged
 
-*(`wpyeg_auto_update_translations`, default `yes`)*
-
-WordPress, plugin, and theme language packs are low-risk and update automatically. Turning the
-setting off explicitly refuses translation auto-updates.
-
-```php
-add_filter( 'auto_update_translation', '__return_true' );
-```
+WordPress already updates translation files automatically by default. Better by Default does not
+register `auto_update_translation`, so WordPress, the host, or fleet-management tooling retains
+ownership of that policy. These are language-pack updates for WordPress core and installed plugins
+and themes; they do not update plugin or theme code.
 
 Plugin and theme **code** updates are intentionally left to WordPress's individual per-item
 choices. The plugin ecosystem has no enforceable semantic-versioning or security-release
@@ -766,7 +762,6 @@ function wpyeg_strip_asset_ver( $src ) {
 | Require Strong Passwords | `wpyeg_require_strong_passwords` | `yes` | Security |
 | Disable AI Connectors *(PMP-specific)* | `wpyeg_disable_ai_connectors` | `yes` | Security |
 | Core automatic updates | `wpyeg_core_update_policy` | `minor` | Updates |
-| Translation automatic updates | `wpyeg_auto_update_translations` | `yes` | Updates |
 | Disable Public Author Archives | `wpyeg_disable_author_archives` | `yes` | Content |
 | Disable Emojis | `wpyeg_disable_emojis` | `yes` | Performance |
 | Redirect Attachment Pages | `wpyeg_redirect_attachment_pages` | `yes` | SEO |

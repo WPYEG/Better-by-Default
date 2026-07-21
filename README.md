@@ -47,7 +47,7 @@ XML-RPC by category (pingbacks / remote publishing / multicall all off), require
 passwords (length + breach screening, not forced composition), send security headers, disable
 comments / pingbacks / self-pingbacks, redirect public author archives and attachment pages,
 disable the emoji script, automatically install core maintenance/security releases while
-holding major releases for testing, and automatically update translation files.
+holding major releases for testing.
 
 **Deliberately *not* locked down by default** (opinionated calls, explained in the reference):
 Application Passwords stay **available** — they're the safer, revocable integration credential,
@@ -67,6 +67,7 @@ Three more live in `wp-config.php`, above the plugin layer, and are documented a
 Plugin and theme code updates keep using WordPress's individual per-item choices. Better by
 Default does not guess release risk from version numbers, and it reports rather than overrides
 an explicit `WP_AUTO_UPDATE_CORE`, `AUTOMATIC_UPDATER_DISABLED`, or `DISALLOW_FILE_MODS` policy.
+Translation files retain WordPress's existing automatic-update behavior.
 
 See [`docs/wordpress-default-settings.md`](docs/wordpress-default-settings.md) for the full
 reference — every default, the reasoning, and the snippet.
