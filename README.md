@@ -44,10 +44,11 @@ On activation the documented defaults are seeded automatically. Then visit
 
 **On out of the box** (safe for nearly any site): restrict REST user discovery, lock down
 XML-RPC by category (pingbacks / remote publishing / multicall all off), require strong
-passwords (length + breach screening, not forced composition), send security headers, disable
-comments / pingbacks / self-pingbacks, redirect public author archives and attachment pages,
-disable the emoji script, automatically install core maintenance/security releases while
-holding major releases for testing.
+passwords (length + breach screening, not forced composition), send baseline security headers,
+set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments / pingbacks /
+self-pingbacks, redirect public author archives and attachment pages, disable the emoji script,
+cap remembered sessions at 5 days, and automatically install core maintenance/security releases
+while holding major releases for testing.
 
 **Deliberately *not* locked down by default** (opinionated calls, explained in the reference):
 Application Passwords stay **available** — they're the safer, revocable integration credential,

@@ -28,9 +28,12 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Lock down XML-RPC by category — incoming pingbacks off (header stripped), remote publishing off (RSD link dropped), system.multicall refused
 * Require strong passwords (server-side: 15+ characters, breach-screened, no forced composition)
 * Send baseline security headers
+* Set X-Frame-Options to SAMEORIGIN
+* Disable AI connectors
 * Disable comments, pingbacks & self-pingbacks
 * Redirect public author archives and attachment pages
 * Disable the emoji script
+* Cap remembered login sessions at 5 days
 * Automatically install WordPress core maintenance/security releases, while holding major releases for testing
 * Leave WordPress's existing automatic translation-file updates unchanged
 
