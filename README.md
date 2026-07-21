@@ -7,9 +7,7 @@ defaults onto any WordPress install — each one individually toggleable under
 **Settings → Better by Default**. Built as the teaching project for the
 [WPYEG — Edmonton WordPress Meetup](https://wpyeg.ca/).
 
-The whole thing rests on one idea worth carrying home:
-
-> A "default" is just an opinionated `add_filter()` sitting behind a toggle.
+Default settings are powerful things. Here they are opinionated filters sitting behind a toggle. Whose opinions do they reflect? Don't let your site be a product of an environment you didn't define. Make your environment a thoughtful product of your own intentions.
 
 ## What's in this repo
 
