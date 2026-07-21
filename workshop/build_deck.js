@@ -202,7 +202,38 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 })();
 
 /* =================================================================== */
-/* 5. ROADMAP                                                          */
+/* 5. PRECEDENCE                                                       */
+/* =================================================================== */
+(() => {
+  const s = p.addSlide();
+  s.background = { color: CLOUD };
+  dot(s, 0.6, 0.55, "↓", WHEAT, INK, 0.7);
+  s.addText("What wins when settings overlap?", {
+    x: 1.45, y: 0.55, w: 11, h: 0.75, fontFace: HEAD, fontSize: 30, bold: true, color: INK, margin: 0, valign: "middle",
+  });
+  const steps = [
+    { n: "1", t: "wp-config.php constants", d: "Load first. When core treats one as authoritative, plugin settings cannot override it." },
+    { n: "2", t: "Must-use plugins", d: "Load before normal plugins, so their callbacks register first." },
+    { n: "3", t: "Normal plugins", d: "Load in active_plugins order — PMP before BBD on this demo site." },
+    { n: "4", t: "Hook priority", d: "Lower runs earlier; higher runs later. Ties keep registration order." },
+  ];
+  steps.forEach((c, i) => {
+    const y = 1.5 + i * 1.14;
+    s.addShape(p.ShapeType.roundRect, { x: 0.6, y, w: 12.1, h: 1.0, rectRadius: 0.08, fill: { color: WHITE }, line: { color: "DCE6EB", width: 1 }, shadow: { type: "outer", color: "C7D4DB", blur: 4, offset: 2, angle: 90, opacity: 0.5 } });
+    dot(s, 0.9, y + 0.25, c.n, STEEL, WHITE, 0.5);
+    s.addText(c.t, { x: 1.6, y: y + 0.08, w: 3.6, h: 0.85, fontFace: HEAD, fontSize: 17, bold: true, color: INK, margin: 0, valign: "middle" });
+    s.addText(c.d, { x: 5.2, y: y + 0.08, w: 7.3, h: 0.85, fontFace: BODY, fontSize: 14, color: SLATE, margin: 0, valign: "middle" });
+  });
+  s.addShape(p.ShapeType.roundRect, { x: 0.6, y: 6.1, w: 12.1, h: 0.72, rectRadius: 0.07, fill: { color: CODEBG }, line: { color: STEEL, width: 1 } });
+  s.addText("effective behavior = hard constants + every callback, in execution order", {
+    x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 13, bold: true, color: CGOLD, valign: "middle", margin: 0,
+  });
+  footer(s, 5);
+  s.addNotes("This is a debugging model, not a universal 'last plugin wins' rule. Constants cannot be redefined; filters pass a value through every callback; actions may accumulate effects. wp-config.php is loaded before plugins. Must-use plugins load before normal plugins. Normal plugins are included in the stored active_plugins order — PMP before BBD on this demo site. Within a hook, lower priorities run earlier, higher priorities later, and equal priorities retain registration order. Sources: https://developer.wordpress.org/advanced-administration/plugins/mu-plugins/ ; https://developer.wordpress.org/plugins/hooks/actions/#priority ; https://developer.wordpress.org/reference/functions/wp_get_active_and_valid_plugins/ ; https://developer.wordpress.org/advanced-administration/wordpress/wp-config/");
+})();
+
+/* =================================================================== */
+/* 6. ROADMAP                                                          */
 /* =================================================================== */
 (() => {
   const s = p.addSlide();
@@ -227,7 +258,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(c.t, { x: x + 0.35, y: y + 1.15, w: cw - 0.7, h: 0.5, fontFace: HEAD, fontSize: 21, bold: true, color: INK, margin: 0 });
     s.addText(c.d, { x: x + 0.35, y: y + 1.6, w: cw - 0.7, h: 0.45, fontFace: BODY, fontSize: 13.5, color: SLATE, margin: 0 });
   });
-  footer(s, 5);
+  footer(s, 6);
   s.addNotes("We'll spend most of our time on security and content, then move quickly through UX, login, branding, and performance, and end up with a plugin that covers them all.");
 })();
 
@@ -256,10 +287,10 @@ function codeSlide(num, kicker, title, why, optKey, def, lines, fs) {
   // left column
   s.addText(why, { x: 0.6, y: 1.95, w: 5.35, h: 3.2, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0, valign: "top", lineSpacingMultiple: 1.12 });
 
-  // option chip
+  // setting-key chip
   s.addShape(p.ShapeType.roundRect, { x: 0.6, y: 5.55, w: 5.35, h: 1.05, rectRadius: 0.08, fill: { color: "EAF1F5" }, line: { color: STEEL2, width: 1 } });
   s.addText([
-    { text: "OPTION   ", options: { color: STEEL2, bold: true } },
+    { text: "KEY      ", options: { color: STEEL2, bold: true } },
     { text: optKey, options: { color: INK, bold: true } },
     { text: "\nDEFAULT   ", options: { color: STEEL2, bold: true } },
     { text: def, options: { color: def.includes("no") ? WHEATD : STEEL, bold: true } },
@@ -277,10 +308,10 @@ function codeSlide(num, kicker, title, why, optKey, def, lines, fs) {
 divider("1", "SECTION ONE", "Security &\nAttack Surface", "Every item here removes something an attacker can poke — usually in one line.")
   .addNotes("Every item in this section removes something an attacker can poke — usually in one line. The theme is simple: disable what you don't use. You can't exploit an endpoint that isn't there.");
 
-codeSlide(7, "SECURITY · 1 of 6",
+codeSlide(8, "SECURITY · 1 of 6",
   "Restrict REST API user discovery",
   "The /wp/v2/users endpoint hands out every author's login name to anyone — half of a brute-force guess, for free. Closing it for logged-out requests only keeps the editor and legit integrations working.",
-  "wpyeg_restrict_rest_user_discovery", "yes",
+  "restrict_rest_user_discovery", "yes",
   [
     { t: "add_filter( 'rest_endpoints', function ( $ep ) {", k: "" },
     { t: "    if ( ! is_user_logged_in() ) {", k: "" },
@@ -293,10 +324,10 @@ codeSlide(7, "SECURITY · 1 of 6",
     { t: "} );", k: "" },
   ]).addNotes("The /wp/v2/users endpoint hands out every author's login name to anyone — half of a brute-force guess, for free. Author enumeration is step one of many attack scripts. By closing it for logged-out requests only, the editor and legit integrations will keep working. It's arguably an example of security-by-obscurity, but it also prevents a lot of junk traffic and bots that are up to no good.");
 
-codeSlide(8, "SECURITY · 2 of 6 · opt-in",
+codeSlide(9, "SECURITY · 2 of 6 · opt-in",
   "Lock REST to logged-in users (opt-in)",
   "The sledgehammer version of the slide before: requiring auth for ALL REST calls stops anonymous scraping cold. It breaks anonymous REST — front-end blocks, embeds, search, outside integrations — so it ships off.",
-  "wpyeg_disable_rest", "no",
+  "disable_rest", "no",
   [
     { t: "add_filter( 'rest_authentication_errors',", k: "" },
     { t: "  function ( $result ) {", k: "" },
@@ -310,10 +341,10 @@ codeSlide(8, "SECURITY · 2 of 6 · opt-in",
     { t: "} );", k: "" },
   ]).addNotes("The sledgehammer version of the slide before. Requiring auth for ALL REST calls stops anonymous scraping cold. It does *not* break the block editor, though — you're logged in there, and the editor authenticates with your cookie plus a REST nonce, so it sails through this filter. What it breaks is ANONYMOUS REST: front-end blocks that fetch data for logged-out visitors, embeds, search, and outside integrations. That's why it ships off. Not every default should default to on; some are opt-in because they trade functionality for safety. Usually it's a better tradeoff to restrict a few REST routes — like the users endpoint we just closed — than to lock ALL of them.");
 
-codeSlide(9, "SECURITY · 3 of 6",
+codeSlide(10, "SECURITY · 3 of 6",
   "Lock XML-RPC down by category",
   "XML-RPC is legitimate but aging — an extra surface, not a backdoor. We unplug unused method families while preserving the endpoint for integrations that need it.",
-  "wpyeg_xmlrpc_allow_* + _block_xmlrpc_endpoint", "no (all four)",
+  "xmlrpc allow keys + block_xmlrpc_endpoint", "no (all four)",
   [
     { t: "// each category off → remove its methods", k: "c" },
     { t: "add_filter( 'xmlrpc_methods', function ( $m ) {", k: "" },
@@ -337,10 +368,10 @@ codeSlide(9, "SECURITY · 3 of 6",
   "[Aside — what's \"IXR\"? The Incutio XML-RPC library. Simon Willison released it in September 2002, one of his first open-source projects, while blogging from the University of Bath; both WordPress *and* Drupal adopted it, and it then sat largely untouched for 15+ years — long enough to pick up a CVE. Willison went on to co-create Django (2003–05 at the Lawrence Journal-World), build Lanyrd (sold to Eventbrite in 2013) and Datasette (2017), and is now one of the most-read writers on LLMs.]"
 );
 
-codeSlide(10, "SECURITY · 4 of 6",
+codeSlide(11, "SECURITY · 4 of 6",
   "Keep Application Passwords available",
   "This is an existing default we don't lock down. An Application Password is like a spare key cut for one app: hashed, per-application, revocable on its own — the safer REST credential, and the only one core accepts for REST Basic Auth.",
-  "wpyeg_disable_application_passwords", "no (available)",
+  "disable_application_passwords", "no (available)",
   [
     { t: "// available by default —", k: "c" },
     { t: "// prohibit only if opted in", k: "c" },
@@ -353,27 +384,28 @@ codeSlide(10, "SECURITY · 4 of 6",
     { t: "}", k: "" },
   ], 12.5).addNotes("This is an existing default we *don't* lock down. An Application Password is like a spare key cut for one app: each app gets its own hashed key, so you can revoke one without touching the others or changing the account password. That makes it the safer REST credential and the only one core accepts for REST Basic Auth. So they are good — they just don't have a toggle in WordPress core settings. You might need to prohibit application passwords on a site that forbids non-interactive credentials, but switching them off doesn't stop people connecting things, it just pushes them to worse habits, like sharing an account.");
 
-codeSlide(11, "SECURITY · 5 of 6",
-  "Require strong passwords",
-  "NIST 800-63B and OWASP now say length plus breach screening beats composition rules. So we require 15+ characters and screen every new password against Have I Been Pwned — all enforced server-side.",
-  "wpyeg_require_strong_passwords", "yes",
+codeSlide(12, "SECURITY · 5 of 6",
+  "Screen breaches without sending the password",
+  "NIST SP 800-63B-4 § 3.1.1.2: use 15+ characters, a blocklist, and no composition rules. BBD hashes the candidate locally, sends HIBP only the first 5 SHA-1 characters, and matches the remaining 35 locally. The password and full hash never leave WordPress; unavailable or invalid HIBP data fails open.",
+  "require_strong_passwords", "yes",
   [
-    { t: "// hooked on user_profile_update_errors", k: "c" },
-    { t: "if ( strlen( $pw ) < 15 ) {", k: "h" },
-    { t: "    $errors->add( 'short', 'Use 15+ characters.' );", k: "" },
-    { t: "}", k: "" },
+    { t: "$hash   = strtoupper( sha1( $pw ) );", k: "" },
+    { t: "$prefix = substr( $hash, 0, 5 );", k: "h" },
+    { t: "$suffix = substr( $hash, 5 );", k: "" },
     { t: "", k: "" },
-    { t: "// screen against known breaches (HIBP) —", k: "c" },
-    { t: "// length + screening, not composition rules", k: "c" },
-    { t: "if ( wpyeg_password_is_pwned( $pw ) ) {", k: "h" },
-    { t: "    $errors->add( 'pwned', 'Seen in a breach.' );", k: "" },
+    { t: "// HIBP receives $prefix and returns", k: "c" },
+    { t: "// matching suffixes plus breach counts.", k: "c" },
+    { t: "// BBD compares $suffix locally.", k: "c" },
+    { t: "if ( response_contains( $suffix ) ) {", k: "h" },
+    { t: "    reject( 'Seen in a breach.' );", k: "" },
     { t: "}", k: "" },
-  ]).addNotes("The rules changed recently, and most people didn't notice: NIST 800-63B and OWASP now say LENGTH PLUS BREACH SCREENING BEATS COMPOSITION RULES. Forcing upper/lower/number/symbol just herds everyone to Password1! — predictable, not strong. So we require 15+ characters and screen every new password against Have I Been Pwned — by k-anonymity, meaning only the first five characters of the SHA-1 hash ever leave the site; HIBP returns every hash sharing that prefix and the match happens locally, so the password itself is never transmitted. If HIBP is unreachable the check FAILS OPEN rather than locking someone out of a password change. All enforced server-side on save and reset: the JS meter is UX; the server rule is the wall.");
+    { t: "// invalid or 128 KiB => fail open", k: "c" },
+  ]).addNotes("NIST SP 800-63B-4 § 3.1.1.2 calls for at least 15 characters for single-factor passwords, no composition rules, and a blocklist of commonly used, expected, or compromised passwords. BBD first applies its length rule, a small local blocklist, and checks for the username or email name. It then screens the candidate against the Have I Been Pwned Pwned Passwords range API.\n\nThe privacy trick is k-anonymity. BBD computes the candidate's SHA-1 hash locally, sends HIBP only the first five hexadecimal characters, and receives roughly 800–1,000 suffixes that share that prefix. BBD compares the remaining 35 characters locally. The password and its full hash never leave WordPress. SHA-1 is only HIBP's lookup format here; WordPress still owns password storage and uses its normal password hashing.\n\nBBD also sends Add-Padding: true, so response size does not disclose how many real matches exist; synthetic rows have a count of zero and are ignored. WordPress caps the response at 128 KiB with limit_response_size. Because a response reaching that cap may be truncated, capped, empty, malformed, failed, and non-200 responses are treated as unavailable and fail open. Only structurally valid prefix responses are cached for 12 hours; the local length, blocklist, and personal-context checks still apply. The same server-side validator covers profile changes, password resets, and REST user-password requests.\n\nSources: HIBP API v3, Pwned Passwords — Searching by hash range using k-anonymity and Introducing padding: https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange ; NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers: https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver");
 
-codeSlide(12, "SECURITY · 6 of 6",
+codeSlide(13, "SECURITY · 6 of 6",
   "Remove fingerprints, add headers",
   "Two headers with no real downside ship on; framing is its own setting, because it is the only one that can break a working site. Hiding the version is obscurity, not hardening, so it ships off.",
-  "wpyeg_security_headers (yes) / wpyeg_frame_options (SAMEORIGIN)", "on / separate",
+  "security_headers / frame_options", "yes / SAMEORIGIN",
   [
     { t: "remove_action( 'wp_head', 'wp_generator' );", k: "h" },
     { t: "", k: "" },
@@ -401,10 +433,10 @@ codeSlide(12, "SECURITY · 6 of 6",
 divider("2", "SECTION TWO", "Content &\nPublic Surfaces", "Close the spam funnels and the thin pages Google (and bots) love to crawl.")
   .addNotes("These reduce channels for spam and clean up the thin, duplicate URLs that bots and search engines get lost in.");
 
-codeSlide(14, "CONTENT · 1 of 3",
+codeSlide(15, "CONTENT · 1 of 3",
   "Disable comments, trackbacks & pingbacks",
   "For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu.",
-  "wpyeg_disable_comments", "yes",
+  "disable_comments / disable_pingbacks / disable_self_pingbacks", "yes each",
   [
     { t: "add_filter( 'comments_open', '__return_false', 20 );", k: "h" },
     { t: "add_filter( 'pings_open',    '__return_false', 20 );", k: "h" },
@@ -416,10 +448,10 @@ codeSlide(14, "CONTENT · 1 of 3",
     { t: "// + drop the admin-bar comments node", k: "c" },
   ]).addNotes("For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu. If you want comments, leave this tuned off — but consider closing pingbacks and trackbacks, which are almost pure spam.");
 
-codeSlide(15, "CONTENT · 2 of 3",
+codeSlide(16, "CONTENT · 2 of 3",
   "Redirect author & attachment pages",
   "Author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. Both dilute SEO and are targets for trouble. Same hook, two conditions.",
-  "wpyeg_disable_author_archives / _redirect_attachment_pages", "yes / yes",
+  "disable_author_archives / redirect_attachment_pages", "yes / yes",
   [
     { t: "add_action( 'template_redirect', function () {", k: "" },
     { t: "  if ( is_author() ) {", k: "h" },
@@ -432,10 +464,10 @@ codeSlide(15, "CONTENT · 2 of 3",
     { t: "} );", k: "" },
   ]).addNotes("Like the REST user routes, author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. template_redirect fires before a template loads - the perfect place to bounce the unwanted requests. Same hook, two conditions.\n\nTwo details on the attachment half, because the obvious version is subtly wrong. Unattached media has no parent - and that is most of the Media Library - so a naive else-home_url() points every one of those at your homepage, which search engines read as a soft 404. Fall back to the FILE instead, which is what core does. And skip the redirect entirely when the theme ships attachment.php or image.php: that theme built those pages deliberately (the photography case), and quietly bouncing past it deletes someone's feature.\n\nCore moved here too: WordPress 6.4 added wp_attachment_pages_enabled, off for new installs. So this default is not adding the redirect so much as choosing a better destination than the bare file.");
 
-codeSlide(16, "CONTENT · 3 of 3",
+codeSlide(17, "CONTENT · 3 of 3",
   "Disable the emoji script",
   "WordPress core injects an emoji-detection script and inline CSS on every page load, plus a DNS-prefetch hint. Modern browsers render emoji natively, so this is pure dead weight.",
-  "wpyeg_disable_emojis", "yes",
+  "disable_emojis", "yes",
   [
     { t: "add_action( 'init', function () {", k: "" },
     { t: "  remove_action( 'wp_head',", k: "h" },
@@ -454,10 +486,10 @@ codeSlide(16, "CONTENT · 3 of 3",
 divider("3", "SECTION THREE", "Admin UX &\nLogin Sessions", "Small quality-of-life defaults: a calmer dashboard and sensible session policy.")
   .addNotes("Now the quality-of-life defaults. These are more about your daily user experience and session safety than raw hardening.");
 
-codeSlide(18, "ADMIN UX",
+codeSlide(19, "ADMIN UX",
   "Faster search, quieter admin bar",
   "Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster.",
-  "wpyeg_title_only_admin_search / _frontend_admin_bar_behavior", "no / ''",
+  "title_only_admin_search / frontend_admin_bar_behavior", "no / ''",
   [
     { t: "// title-only admin search — narrow the COLUMNS", k: "c" },
     { t: "add_filter( 'post_search_columns',", k: "" },
@@ -471,10 +503,10 @@ codeSlide(18, "ADMIN UX",
     { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
   ], 11).addNotes("Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster. The craft is in the *how*: post_search_columns (WP 6.2+) narrows the columns instead of rewriting the whole SQL clause, so core's term parsing and the logged-out password guard stay intact. Scope the filter; don't bulldoze the query.");
 
-codeSlide(19, "LOGIN & SESSIONS",
+codeSlide(20, "LOGIN & SESSIONS",
   "Right-size the login session",
   "Click “Remember Me” and you stay logged in for 14 days. Cap that extended session, optionally shorten the regular one, or hide the checkbox entirely. One filter covers all three.",
-  "wpyeg_remember_me_days / _session_regular_hours", "5 / 0",
+  "disable_remember_me / remember_me_days / session_regular_hours", "no / 5 / 0",
   [
     { t: "add_filter( 'auth_cookie_expiration',", k: "" },
     { t: "  function ( $exp, $uid, $remember ) {", k: "" },
@@ -493,10 +525,10 @@ codeSlide(19, "LOGIN & SESSIONS",
 divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, then shave the last bit of weight off every page.")
   .addNotes("The last pair brands the login screen. Then we end with two performance levers to shave some weight off every page.");
 
-codeSlide(21, "BRANDING",
+codeSlide(22, "BRANDING",
   "Own the login screen",
-  "The login page is a site's staff entrance, and by default the welcome mat links to someone else's house — that “W” points out to wordpress.org. Changing it uninvited is intrusive, so the default is to leave it alone.",
-  "wpyeg_login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
+  "The default WordPress logo sends users to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents an unexpected external destination. BBD leaves it unchanged unless you opt in.",
+  "login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
   [
     { t: "// remove, unlink, or replace — a choice", k: "c" },
     { t: "add_action( 'login_head', $logo_css );", k: "h" },
@@ -506,12 +538,12 @@ codeSlide(21, "BRANDING",
     { t: "add_filter( 'login_headerurl', 'home_url' );", k: "h" },
     { t: "add_filter( 'login_headertext', fn() =>", k: "" },
     { t: "            get_bloginfo( 'name' ) );", k: "h" },
-  ], 12).addNotes("The login page is a WordPress site's staff entrance — the one door you and your clients actually log in through — and by default the welcome mat links to someone else's house! That little WordPress \"W\" on wp-login.php points out to wordpress.org. Changing a site's login screen out of the box is intrusive, though, so the default is to LEAVE IT ALONE. Removing, unlinking, or replacing the logo is an opt-in — and whichever you choose, the link always points home. Swap in a background-image to drop in the site's own logo.");
+  ], 12).addNotes("The login page is a WordPress site's staff entrance, and the default WordPress \"W\" on wp-login.php links to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site. Changing a site's login screen out of the box is intrusive, though, so the default is to LEAVE IT ALONE. Any opt-in change points the link home. Swap in a background-image to use the site's own logo.");
 
-codeSlide(22, "PERFORMANCE · opt-in",
+codeSlide(23, "PERFORMANCE · opt-in",
   "Throttle Heartbeat — and a default we deleted",
   "Throttle Heartbeat to ease up on weak shared hosting. The more interesting half is the toggle that used to be here: WordPress 6.3 gave scripts a per-script loading strategy, so our blanket defer filter had to go.",
-  "wpyeg_throttle_heartbeat", "no (opt-in)",
+  "throttle_heartbeat", "no (opt-in)",
   [
     { t: "add_filter( 'heartbeat_settings', fn( $s ) => {", k: "" },
     { t: "  $s['interval'] = 60; return $s;", k: "h" },
@@ -551,12 +583,12 @@ codeSlide(22, "PERFORMANCE · opt-in",
     s.addText(c.t, { x: x + 0.95, y: 4.95, w: 2.75, h: 0.65, fontFace: HEAD, fontSize: 15, bold: true, color: INK, margin: 0, valign: "middle" });
     s.addText(c.d, { x: x + 0.28, y: 5.62, w: 3.35, h: 0.7, fontFace: BODY, fontSize: 12.5, color: SLATE, margin: 0, valign: "top" });
   });
-  footer(s, 23);
+  footer(s, 24);
   s.addNotes("Some defaults live in wp-config.php, above the plugin layer, because they must load before plugins do. They can't be options — so document them as manual steps in your onboarding checklist and put them in your standard wp-config template.");
 })();
 
 /* =================================================================== */
-/* 24. THE PLUGIN ARCHITECTURE                                         */
+/* 25. THE PLUGIN ARCHITECTURE                                         */
 /* =================================================================== */
 (() => {
   const s = p.addSlide();
@@ -588,7 +620,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
 })();
 
 /* =================================================================== */
-/* 25. LIVE DEMO / HANDS-ON                                            */
+/* 26. LIVE DEMO / HANDS-ON                                            */
 /* =================================================================== */
 (() => {
   const s = p.addSlide();
@@ -616,12 +648,12 @@ codeSlide(22, "PERFORMANCE · opt-in",
     { text: "prefer the terminal?   ", options: { color: WHEAT, bold: true } },
     { text: "wp plugin install ./sane-defaults.zip --activate", options: { color: CGOLD } },
   ], { x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 13, valign: "middle", margin: 0 });
-  footer(s, 25);
+  footer(s, 26);
   s.addNotes("Do this live if there's a sandbox. The /wp-json/wp/v2/users check is the crowd-pleaser — before/after is instantly visible. For the terminal crowd, the WP-CLI one-liner installs and activates from the zip in one shot; swap the local path for a URL if the zip is hosted.");
 })();
 
 /* =================================================================== */
-/* 26. EXERCISE                                                        */
+/* 27. EXERCISE                                                        */
 /* =================================================================== */
 (() => {
   const s = p.addSlide();
@@ -648,32 +680,20 @@ codeSlide(22, "PERFORMANCE · opt-in",
   s.addNotes("A great confidence-builder: it proves the data-driven pattern. Touch two spots and a real feature toggles. If time is short, walk it through verbally instead of live.");
 })();
 
-/* =================================================================== */
-/* 27. CHEAT SHEET / RECAP                                             */
-/* =================================================================== */
-(() => {
+/* ---------- CANONICAL SCHEMA MAP helper ---------- */
+function schemaMapSlide(num, title, subtitle, rows, notes) {
   const s = p.addSlide();
   s.background = { color: CLOUD };
-  s.addText("The cheat sheet — defaults that ship ON", {
+  s.addText(title, {
     x: 0.6, y: 0.45, w: 12, h: 0.7, fontFace: HEAD, fontSize: 30, bold: true, color: INK, margin: 0,
   });
-  s.addText("Everything on-by-default in one view, mapped to the core hook.", {
+  s.addText(subtitle, {
     x: 0.6, y: 1.2, w: 12, h: 0.4, fontFace: BODY, fontSize: 14, color: STEEL2, bold: true, margin: 0,
   });
-  const rows = [
-    ["Restrict REST user discovery", "rest_endpoints", "Security"],
-    ["Lock down XML-RPC by category", "xmlrpc_methods / wp_xmlrpc_server_class", "Security"],
-    ["Require strong passwords (15+ / breach-screened)", "user_profile_update_errors", "Security"],
-    ["Send baseline security headers", "wp_headers", "Security"],
-    ["Disable comments & pingbacks", "comments_open / pings_open", "Content"],
-    ["Redirect author + attachment pages", "template_redirect", "Content / SEO"],
-    ["Disable emoji script", "init (remove_action)", "Performance"],
-    ["Auto-update core security/maintenance releases", "allow_minor_auto_core_updates", "Updates"],
-  ];
   const tblRows = [[
-    { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
-    { text: "Core hook", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: MONO, fontSize: 12, align: "left", margin: 4 } },
-    { text: "Category", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
+    { text: "Setting key or owner", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
+    { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: MONO, fontSize: 12, align: "left", margin: 4 } },
+    { text: "Core hook / authority", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
   ]];
   rows.forEach((r, i) => {
     const bg = i % 2 ? "EAF1F5" : WHITE;
@@ -684,15 +704,78 @@ codeSlide(22, "PERFORMANCE · opt-in",
     ]);
   });
   s.addTable(tblRows, {
-    x: 0.6, y: 1.65, w: 12.1, colW: [5.0, 4.9, 2.2],
+    x: 0.6, y: 1.65, w: 12.1, colW: [4.75, 1.75, 5.6],
     border: { type: "solid", color: "DCE6EB", pt: 1 }, valign: "middle", rowH: 0.44,
   });
-  footer(s, 27);
-  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. The plugin installs maintenance/security core releases automatically while major core releases wait for testing. Translation files retain WordPress's existing automatic-update behavior, and plugin/theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate non-defaults worth calling out: Application Passwords stay AVAILABLE, the login logo is LEFT ALONE, and removing the version fingerprint is OFF because it is obscurity rather than hardening.");
-})();
+  footer(s, num);
+  s.addNotes(notes);
+}
 
 /* =================================================================== */
-/* 28. CLOSING                                                         */
+/* 28–31. CANONICAL SCHEMA MAP                                         */
+/* =================================================================== */
+schemaMapSlide(28, "Schema map — security surfaces and credentials",
+  "Exact keys and defaults from wpyeg_defaults_schema().",
+  [
+    ["restrict_rest_user_discovery", "yes", "rest_endpoints"],
+    ["disable_rest", "no", "rest_authentication_errors"],
+    ["xmlrpc_allow_pingbacks", "no", "xmlrpc_methods / headers"],
+    ["xmlrpc_allow_remote_publishing", "no", "xmlrpc_methods / discovery"],
+    ["xmlrpc_allow_multicall", "no", "wp_xmlrpc_server_class"],
+    ["block_xmlrpc_endpoint", "no", "template_redirect"],
+    ["disable_application_passwords", "no", "wp_is_application_passwords_available"],
+    ["require_strong_passwords", "yes", "server-side password validation"],
+  ],
+  "These are the exact unprefixed keys stored inside the single wpyeg_better_by_default option. An allow-setting at no can still mean a protective behavior is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active."
+);
+
+schemaMapSlide(29, "Schema map — security policy and updates",
+  "Plugin defaults and the policies intentionally left to other layers.",
+  [
+    ["remove_version", "no", "wp_head / the_generator"],
+    ["security_headers", "yes", "wp_headers"],
+    ["frame_options", "SAMEORIGIN", "wp_headers"],
+    ["disable_ai_connectors", "yes", "wp_supports_ai / Connectors screen"],
+    ["core_update_policy", "minor", "automatic core-update filters"],
+    ["Translation files", "inherit", "WordPress / host / fleet tooling"],
+    ["Plugin and theme code", "per-item", "WordPress per-item choices"],
+    ["WP_AUTO_UPDATE_CORE", "operator", "wp-config.php wins"],
+  ],
+  "AI connectors are disabled through the WordPress 7.0 core gate and the Connectors screen is closed. Baseline headers and SAMEORIGIN ship separately because framing can break legitimate embeds. BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling."
+);
+
+schemaMapSlide(30, "Schema map — content and everyday UX",
+  "The schema group is authoritative; emoji removal is a Content setting.",
+  [
+    ["disable_comments", "yes", "comments, UI, post-type support"],
+    ["disable_pingbacks", "yes", "default ping options"],
+    ["disable_self_pingbacks", "yes", "pre_ping"],
+    ["disable_author_archives", "yes", "template_redirect"],
+    ["redirect_attachment_pages", "yes", "template_redirect"],
+    ["disable_emojis", "yes", "init removes emoji assets"],
+    ["title_only_admin_search", "no", "post_search_columns"],
+    ["frontend_admin_bar_behavior", "''", "show_admin_bar"],
+  ],
+  "The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Title-only search and front-end admin-bar changes remain opt-in."
+);
+
+schemaMapSlide(31, "Schema map — login, branding, and performance",
+  "Schema keys live in one option array; constants remain above plugins.",
+  [
+    ["disable_remember_me", "no", "login UI / cookie expiration"],
+    ["remember_me_days", "5", "auth_cookie_expiration"],
+    ["session_regular_hours", "0", "auth_cookie_expiration"],
+    ["login_logo_behavior", "keep_default", "login header presentation"],
+    ["throttle_heartbeat", "no", "Heartbeat settings / enqueue"],
+    ["wpyeg_better_by_default", "array", "the only wp_options row"],
+    ["DISALLOW_FILE_EDIT", "manual", "wp-config.php"],
+    ["revisions / autosave", "manual", "wp-config.php constants"],
+  ],
+  "The visible names on earlier slides are schema keys, not separate WordPress options. Remembered sessions are capped at five days by default; regular sessions inherit core because zero means unchanged. The login logo and Heartbeat remain opt-in, and the three configuration constants stay above the plugin layer."
+);
+
+/* =================================================================== */
+/* 32. CLOSING                                                         */
 /* =================================================================== */
 (() => {
   const s = p.addSlide();

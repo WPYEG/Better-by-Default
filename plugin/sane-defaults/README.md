@@ -31,11 +31,22 @@ defines a key, its default, its type (`toggle` / `select` / `number`), and its g
 bootstrap function then wires each *enabled* policy to its WordPress hook. The `wpyeg_`
 option prefix is kept deliberately as the WPYEG org convention.
 
+Settings-screen convention: toggle rows place the descriptive schema label immediately after
+the checkbox inside one clickable label; they never use a generic `Enabled` label. Select and
+number fields retain descriptive row labels. Every control connects its help text with
+`aria-describedby`. Labels and descriptions inherit WordPress's classic `form-table` styles;
+do not add custom typography. Help text may contain attribute-free `<code>` only, sanitized
+through `wp_kses()`, for machine-facing identifiers. It may also contain an `<a>` with only an
+`href` when an external claim benefits from a direct authoritative reference. Name the specific
+publication or directive and section when one exists; do not use vague attributions such as
+"per NIST." Keep that pattern when adding settings.
+
 Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by category
 (incoming pingbacks off, remote publishing off, system.multicall refused), require strong
-passwords (15+ chars, breach-screened, no forced composition), send security headers, disable
-comments/pingbacks/self-pingbacks, disable author archives, redirect attachment pages, disable
-emojis, install core maintenance/security releases automatically while holding major releases
+passwords (15+ chars, breach-screened, no forced composition), send baseline security headers,
+set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments/pingbacks/self-pingbacks,
+disable author archives, redirect attachment pages, disable emojis, cap remembered sessions at
+5 days, and install core maintenance/security releases automatically while holding major releases
 for testing. Translation files retain WordPress's existing automatic-update behavior.
 
 Off by default (opt-in, because they change behavior): require-auth-for-all-REST, prohibit

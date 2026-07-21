@@ -48,6 +48,21 @@ WordPress is built to be interrupted at labeled moments (hooks) so you never edi
 
 ---
 
+## What wins when settings overlap?
+
+	1. **`wp-config.php` constants** — Load first. When core treats one as authoritative, plugin settings cannot override it.
+	2. **Must-use plugins** — Load before normal plugins, so their callbacks register first.
+	3. **Normal plugins** — Load in `active_plugins` order — PMP before BBD on this demo site.
+	4. **Hook priority** — Lower runs earlier; higher runs later. Ties keep registration order.
+
+`effective behavior = hard constants + every callback, in execution order`
+
+This is a debugging model, not a universal “last plugin wins” rule. Constants cannot be redefined; filters pass a value through every callback; actions may accumulate effects. Load order establishes registration order, while hook priority establishes execution order. At equal priority, the callback registered later runs later — which is why the demo site's PMP-before-BBD plugin order can matter.
+
+[Sources: WordPress Advanced Administration Handbook, [Must Use Plugins — Features](https://developer.wordpress.org/advanced-administration/plugins/mu-plugins/); WordPress Plugin Handbook, [Actions — Priority](https://developer.wordpress.org/plugins/hooks/actions/#priority); WordPress Code Reference, [`wp_get_active_and_valid_plugins()` — Source](https://developer.wordpress.org/reference/functions/wp_get_active_and_valid_plugins/); WordPress Advanced Administration Handbook, [Editing `wp-config.php`](https://developer.wordpress.org/advanced-administration/wordpress/wp-config/).]
+
+---
+
 ## Six categories of defaults
 
 	1. **Security** — shrink the attack surface
@@ -69,7 +84,7 @@ Every item in this section removes something an attacker can poke — usually in
 
 ## Restrict REST API user discovery
 
-	`wpyeg_restrict_rest_user_discovery` · default **yes**
+	`restrict_rest_user_discovery` · default **yes**
 
 ```php
 add_filter( 'rest_endpoints', function ( $ep ) {
@@ -87,7 +102,7 @@ The `/wp/v2/users` endpoint hands out every author's login name to anyone — ha
 
 ## Lock REST to logged-in users (opt-in)
 
-	`wpyeg_disable_rest` · default **no**
+	`disable_rest` · default **no**
 
 ```php
 add_filter( 'rest_authentication_errors',
@@ -108,7 +123,7 @@ The sledgehammer version of the slide before. Requiring auth for ALL REST calls 
 
 ## Lock XML-RPC down by category
 
-	`wpyeg_xmlrpc_allow_pingbacks` / `_remote_publishing` / `_multicall` · default **no** each · (+ `_block_xmlrpc_endpoint`)
+	`xmlrpc_allow_pingbacks` / `xmlrpc_allow_remote_publishing` / `xmlrpc_allow_multicall` · default **no** each · `block_xmlrpc_endpoint` **no**
 
 ```php
 // each category off → remove its methods
@@ -140,7 +155,7 @@ The first three are surgical and leave third-party registrations such as Jetpack
 
 ## Keep Application Passwords available
 
-	`wpyeg_disable_application_passwords` · default **no** (available)
+	`disable_application_passwords` · default **no** (available)
 
 ```php
 // available by default — prohibit only if opted in
@@ -157,9 +172,9 @@ This is an existing default we *don't* lock down. An Application Password is lik
 
 ---
 
-## Require strong passwords
+## Screen breaches without sending the password
 
-	`wpyeg_require_strong_passwords` · default **yes**
+	`require_strong_passwords` · default **yes**
 
 ```php
 // hooked on user_profile_update_errors
@@ -167,20 +182,26 @@ if ( strlen( $pw ) < 15 ) {
     $errors->add( 'short', 'Use 15+ characters.' );
 }
 
-// screen against known breaches (HIBP) —
-// length + screening, not composition rules
-if ( wpyeg_password_is_pwned( $pw ) ) {
-    $errors->add( 'pwned', 'Seen in a breach.' );
-}
+$hash   = strtoupper( sha1( $pw ) );
+$prefix = substr( $hash, 0, 5 );
+$suffix = substr( $hash, 5 );
+
+// HIBP receives $prefix and returns matching suffixes.
+// BBD compares $suffix locally; a match is rejected.
+// Invalid or 128 KiB responses fail open.
 ```
 
-The rules changed recently, and most people didn't notice: NIST 800-63B and OWASP now say **length plus breach screening beats composition rules**. Forcing upper/lower/number/symbol just herds everyone to `Password1!` — predictable, not strong. So we require 15+ characters and screen every new password against Have I Been Pwned — by **k-anonymity**, meaning only the first five characters of the SHA-1 hash ever leave the site; HIBP returns every hash sharing that prefix and the match happens locally, so the password itself is never transmitted. If HIBP is unreachable the check **fails open** rather than locking someone out of a password change. All enforced server-side on save and reset: the JS meter is UX; the server rule is the wall.
+[NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers](https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver) calls for at least 15 characters for single-factor passwords, no composition rules, and a blocklist of commonly used, expected, or compromised passwords. BBD first applies its length rule, a small local blocklist, and checks for the username or email name. It then screens the candidate against the [Have I Been Pwned Pwned Passwords range API](https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange).
+
+The privacy trick is **k-anonymity**. BBD computes the candidate's SHA-1 hash locally, sends HIBP only the first five hexadecimal characters, and receives roughly 800–1,000 suffixes that share that prefix. BBD compares the remaining 35 characters locally. The password and its full hash never leave WordPress. SHA-1 is only HIBP's lookup format here; WordPress still owns password storage and uses its normal password hashing.
+
+BBD also sends `Add-Padding: true`, so response size does not disclose how many real matches exist; synthetic rows have a count of zero and are ignored. WordPress caps the response at 128 KiB with `limit_response_size`. Because a response reaching that cap may be truncated, capped, empty, malformed, failed, and non-200 responses are treated as unavailable and **fail open**. Only structurally valid prefix responses are cached for 12 hours. The local length, blocklist, and personal-context checks still apply. The same server-side validator covers profile changes, password resets, and REST user-password requests.
 
 ---
 
 ## Remove fingerprints, add headers
 
-	`wpyeg_remove_version` **no** · `wpyeg_security_headers` **yes** · `wpyeg_frame_options` **SAMEORIGIN**
+	`remove_version` **no** · `security_headers` **yes** · `frame_options` **SAMEORIGIN**
 
 ```php
 remove_action( 'wp_head', 'wp_generator' );
@@ -217,7 +238,7 @@ These reduce channels for spam and clean up the thin, duplicate URLs that bots a
 
 ## Disable comments, trackbacks & pingbacks
 
-	`wpyeg_disable_comments` · default **yes**
+	`disable_comments` / `disable_pingbacks` / `disable_self_pingbacks` · default **yes** each
 
 ```php
 add_filter( 'comments_open', '__return_false', 20 );
@@ -235,7 +256,7 @@ For many sites, comments are a spam magnet with little upside. Here we close the
 
 ## Redirect author & attachment pages
 
-	`wpyeg_disable_author_archives` / `wpyeg_redirect_attachment_pages` · **yes / yes**
+	`disable_author_archives` / `redirect_attachment_pages` · **yes / yes**
 
 ```php
 add_action( 'template_redirect', function () {
@@ -259,7 +280,7 @@ Worth knowing core moved here too: WordPress 6.4 added `wp_attachment_pages_enab
 
 ## Disable the emoji script
 
-	`wpyeg_disable_emojis` · default **yes**
+	`disable_emojis` · default **yes**
 
 ```php
 add_action( 'init', function () {
@@ -284,7 +305,7 @@ Now the quality-of-life defaults. These are more about your daily user experienc
 
 ## Faster search, quieter admin bar
 
-	`wpyeg_title_only_admin_search` / `wpyeg_frontend_admin_bar_behavior` · **no / ''**
+	`title_only_admin_search` / `frontend_admin_bar_behavior` · **no / ''**
 
 ```php
 // title-only admin search — narrow the COLUMNS
@@ -306,7 +327,7 @@ Search the admin post list on a big site and WordPress reads every word of every
 
 ## Right-size the login session
 
-	`wpyeg_remember_me_days` / `wpyeg_session_regular_hours` · default **5 / 0**
+	`disable_remember_me` / `remember_me_days` / `session_regular_hours` · default **no / 5 / 0**
 
 ```php
 add_filter( 'auth_cookie_expiration',
@@ -330,7 +351,7 @@ The last pair brands the login screen. Then we end with two performance levers t
 
 ## Own the login screen
 
-	`wpyeg_login_logo_behavior` · default **keep_default** (keep / remove / unlink / replace)
+	`login_logo_behavior` · default **keep_default** (keep / remove / unlink / replace)
 
 ```php
 // remove, unlink, or replace — a deliberate choice
@@ -342,13 +363,13 @@ add_filter( 'login_headertext', fn() =>
             get_bloginfo( 'name' ) );
 ```
 
-The login page is a WordPress site's staff entrance — the one door you and your clients actually log in through — and by default the welcome mat links to someone else's house! That little WordPress "W" on `wp-login.php` points out to wordpress.org. Changing a site's login screen out of the box is intrusive, though, so the default is to **leave it alone**. Removing, unlinking, or replacing the logo is an opt-in — and whichever you choose, the link always points home. Swap in a background-image to drop in the site's own logo. 
+The login page is a WordPress site's staff entrance, and the default WordPress "W" on `wp-login.php` links to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site. Changing a site's login screen out of the box is intrusive, though, so the default is to **leave it alone**. Any opt-in change points the link home. Swap in a background-image to use the site's own logo.
 
 ---
 
 ## Throttle Heartbeat — and a default we deleted
 
-	`wpyeg_throttle_heartbeat` · default **no** (opt-in)
+	`throttle_heartbeat` · default **no** (opt-in)
 
 ```php
 add_filter( 'heartbeat_settings', fn( $s ) => {
@@ -432,20 +453,71 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 
 ---
 
-## The cheat sheet — defaults that ship ON
+## Schema map — security surfaces and credentials
 
-| Default | Core hook | Category |
+| Setting key | Default | Core hook |
 | --- | --- | --- |
-| Restrict REST user discovery | `rest_endpoints` | Security |
-| Lock down XML-RPC by category | `xmlrpc_methods` / `wp_xmlrpc_server_class` | Security |
-| Require strong passwords (15+ / breach-screened) | `user_profile_update_errors` | Security |
-| Send baseline security headers | `wp_headers` | Security |
-| Disable comments & pingbacks | `comments_open` / `pings_open` | Content |
-| Redirect author + attachment pages | `template_redirect` | Content / SEO |
-| Disable emoji script | `init` (remove_action) | Performance |
-| Auto-update core security/maintenance releases | `allow_minor_auto_core_updates` | Updates |
+| `restrict_rest_user_discovery` | `yes` | `rest_endpoints` |
+| `disable_rest` | `no` | `rest_authentication_errors` |
+| `xmlrpc_allow_pingbacks` | `no` | `xmlrpc_methods` / headers |
+| `xmlrpc_allow_remote_publishing` | `no` | `xmlrpc_methods` / discovery |
+| `xmlrpc_allow_multicall` | `no` | `wp_xmlrpc_server_class` |
+| `block_xmlrpc_endpoint` | `no` | `template_redirect` |
+| `disable_application_passwords` | `no` | `wp_is_application_passwords_available` |
+| `require_strong_passwords` | `yes` | server-side password validation |
 
-[This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. The plugin installs maintenance/security core releases automatically while major core releases wait for testing. Translation files retain WordPress's existing automatic-update behavior, and plugin/theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate *non*-defaults worth calling out: Application Passwords stay **available** (the safer REST credential), the login logo is **left alone** unless you opt in, and removing the version fingerprint is **off**, because it is obscurity rather than hardening.]
+[These are the exact unprefixed keys stored inside the single `wpyeg_better_by_default` option. An allow-setting at `no` can still mean a protective behavior is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active.]
+
+---
+
+## Schema map — security policy and updates
+
+| Setting key or owner | Default | Core hook / authority |
+| --- | --- | --- |
+| `remove_version` | `no` | `wp_head` / `the_generator` |
+| `security_headers` | `yes` | `wp_headers` |
+| `frame_options` | `SAMEORIGIN` | `wp_headers` |
+| `disable_ai_connectors` | `yes` | `wp_supports_ai` / Connectors screen |
+| `core_update_policy` | `minor` | automatic core-update filters |
+| Translation files | inherit | WordPress / host / fleet tooling |
+| Plugin and theme code | per-item | WordPress per-item choices |
+| `WP_AUTO_UPDATE_CORE` | operator-owned | `wp-config.php` wins |
+
+[This slide completes the security and update inventory. AI connectors are disabled through the WordPress 7.0 core gate and the Connectors screen is closed. Baseline headers and `SAMEORIGIN` ship separately because framing can break legitimate embeds. Update ownership stays explicit: BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling.]
+
+---
+
+## Schema map — content and everyday UX
+
+| Setting key | Default | Core hook |
+| --- | --- | --- |
+| `disable_comments` | `yes` | comments, UI, and post-type support |
+| `disable_pingbacks` | `yes` | default ping options |
+| `disable_self_pingbacks` | `yes` | `pre_ping` |
+| `disable_author_archives` | `yes` | `template_redirect` |
+| `redirect_attachment_pages` | `yes` | `template_redirect` |
+| `disable_emojis` | `yes` | `init` removes emoji assets |
+| `title_only_admin_search` | `no` | `post_search_columns` |
+| `frontend_admin_bar_behavior` | `''` | `show_admin_bar` |
+
+[The schema group is authoritative: emoji removal lives under Content, not Performance. The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Title-only search and front-end admin-bar changes remain opt-in.]
+
+---
+
+## Schema map — login, branding, and performance
+
+| Setting key or storage | Default | Core hook / role |
+| --- | --- | --- |
+| `disable_remember_me` | `no` | login UI / cookie expiration |
+| `remember_me_days` | `5` | `auth_cookie_expiration` |
+| `session_regular_hours` | `0` | `auth_cookie_expiration` |
+| `login_logo_behavior` | `keep_default` | login header presentation |
+| `throttle_heartbeat` | `no` | Heartbeat settings / enqueue |
+| `wpyeg_better_by_default` | array | the only `wp_options` row |
+| `DISALLOW_FILE_EDIT` | manual | `wp-config.php` |
+| revisions / autosave constants | manual | `wp-config.php` |
+
+[The visible names on earlier slides are schema keys, not separate WordPress options. All values live in the `wpyeg_better_by_default` array. Remembered sessions are capped at five days by default; regular sessions inherit core because zero means unchanged. The login logo and Heartbeat remain opt-in, and the three configuration constants stay above the plugin layer.]
 
 ---
 

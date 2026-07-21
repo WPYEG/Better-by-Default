@@ -41,7 +41,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Restrict REST API user discovery',
-			'help'    => 'Hides /wp/v2/users from logged-out requests (stops username enumeration).',
+			'help'    => 'Hides <code>/wp/v2/users</code> from logged-out requests (stops username enumeration).',
 		),
 		'disable_rest' => array(
 			'default' => 'no',
@@ -55,28 +55,28 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: accept incoming pingbacks',
-			'help'    => 'OFF (default) removes pingback.ping — a spam/reflection-DDoS vector — and the X-Pingback header.',
+			'help'    => 'OFF (default) removes <code>pingback.ping</code> — a spam/reflection-DDoS vector — and the <code>X-Pingback</code> header.',
 		),
 		'xmlrpc_allow_remote_publishing' => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: allow remote publishing (blogging apps)',
-			'help'    => 'OFF (default) removes credential-authenticated wp.*/metaWeblog/MT/blogger methods and the RSD link. Leave ON while Jetpack is active unless connection and feature testing proves it unnecessary.',
+			'help'    => 'OFF (default) removes credential-authenticated <code>wp.*</code>, <code>metaWeblog.*</code>, <code>mt.*</code>, and <code>blogger.*</code> methods plus the RSD link. Leave ON while Jetpack is active unless connection and feature testing proves it unnecessary.',
 		),
 		'xmlrpc_allow_multicall' => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: allow system.multicall',
-			'help'    => 'OFF (default) refuses system.multicall, a general batching wrapper with little established modern use. WordPress 4.4 stopped it from testing thousands of passwords in one request.',
+			'help'    => 'OFF (default) refuses <code>system.multicall</code>, a general batching wrapper with little established modern use. WordPress 4.4 stopped it from testing thousands of passwords in one request.',
 		),
 		'block_xmlrpc_endpoint' => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: block the endpoint entirely',
-			'help'    => 'Strictest tier — xmlrpc.php returns 403 for every request. Do NOT enable on a Jetpack site. Prefer an edge block when possible; this plugin-level block still boots PHP.',
+			'help'    => 'Strictest tier — <code>xmlrpc.php</code> returns <code>403</code> for every request. Do NOT enable on a Jetpack site. Prefer an edge block when possible; this plugin-level block still boots PHP.',
 		),
 		'disable_application_passwords' => array(
 			'default' => 'no',
@@ -90,7 +90,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require strong passwords',
-			'help'    => 'Server-side rule: 15+ characters, screened for known breaches — length + screening, not forced composition (per NIST).',
+			'help'    => 'Server-side rule: 15+ characters, a local blocklist, personal-context screening, and no forced composition rules. For the breach check, BBD sends Have I Been Pwned only the first five characters of a locally computed SHA-1 hash, then matches returned suffixes locally; the password and full hash never leave the site. HIBP outages or invalid responses fail open. See the <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange">HIBP Pwned Passwords range API</a> and <a href="https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver">NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers</a>.',
 		),
 		'remove_version' => array(
 			'default' => 'no',
@@ -104,14 +104,14 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Send baseline security headers',
-			'help'    => 'X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
+			'help'    => '<code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code>. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
 		),
 		'frame_options' => array(
 			'default' => 'SAMEORIGIN',
 			'type'    => 'select',
 			'group'   => 'security',
 			'label'   => 'X-Frame-Options (clickjacking)',
-			'help'    => 'Controls who may embed this site in an iframe. SAMEORIGIN blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — a client intranet, a partner site, or a preview/proofing tool — usually as a silent blank frame. Leave unchanged if your host or CDN already sets this header, or if the site is meant to be embedded elsewhere.',
+			'help'    => 'Controls who may embed this site in an iframe. <code>SAMEORIGIN</code> blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — a client intranet, a partner site, or a preview/proofing tool — usually as a silent blank frame. Leave unchanged if your host or CDN already sets <code>X-Frame-Options</code>, or if the site is meant to be embedded elsewhere.',
 			'choices' => array(
 				'SAMEORIGIN' => 'SAMEORIGIN — only this site may frame it',
 				'DENY'       => 'DENY — nobody may frame it',
@@ -123,7 +123,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Disable AI connectors',
-			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the wp_supports_ai gate and closes the core Connectors screen. Also fires wpyeg_disable_ai_connectors for AI integrations core does not know about.',
+			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the <code>wp_supports_ai</code> gate and closes the core Connectors screen. Also fires <code>wpyeg_disable_ai_connectors</code> for AI integrations core does not know about.',
 		),
 
 		// --- Updates ----------------------------------------------------
@@ -132,7 +132,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'select',
 			'group'   => 'updates',
 			'label'   => 'Automatic WordPress core updates',
-			'help'    => 'Maintenance and security releases install automatically by default. Major releases should be tested and deployed within 30 days. An explicit wp-config.php policy takes precedence.',
+			'help'    => 'Maintenance and security releases install automatically by default. Major releases should be tested and deployed within 30 days. An explicit <code>wp-config.php</code> policy takes precedence.',
 			'choices' => array(
 				'minor'   => 'Maintenance/security releases only — recommended',
 				'all'     => 'All stable releases',
@@ -167,14 +167,14 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable public author archives',
-			'help'    => 'Redirects /author/{slug}/ to home (another enumeration + thin-content fix).',
+			'help'    => 'Redirects <code>/author/{slug}/</code> to home (another enumeration + thin-content fix).',
 		),
 		'redirect_attachment_pages' => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Redirect attachment pages',
-			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides attachment.php or image.php, since that theme meant to render them. Core has its own switch since 6.4 (wp_attachment_pages_enabled); this prefers the parent post over the bare file.',
+			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides <code>attachment.php</code> or <code>image.php</code>, since that theme meant to render them. Core has its own switch since 6.4 (<code>wp_attachment_pages_enabled</code>); this prefers the parent post over the bare file.',
 		),
 		'disable_emojis' => array(
 			'default' => 'yes',
@@ -234,7 +234,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'select',
 			'group'   => 'branding',
 			'label'   => 'Login logo',
-			'help'    => 'The default logo links to wordpress.org — a small trust leak. Left untouched by default, since changing the login screen out of the box is intrusive. Removing, unlinking, or replacing the logo always points the header link at your home page.',
+			'help'    => 'The default logo links to wordpress.org. Left untouched by default, since changing the login screen out of the box is intrusive. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site; those choices point the header link at your home page.',
 			'choices' => array(
 				'keep_default' => 'Keep the WordPress logo and wp.org link (WordPress default)',
 				'remove_logo'  => 'Remove the logo and the wp.org link',
@@ -264,6 +264,23 @@ function wpyeg_defaults_groups() {
 		'login'       => 'Login & Sessions',
 		'branding'    => 'Branding',
 		'performance' => 'Performance',
+	);
+}
+
+/**
+ * Safe inline markup permitted in settings help text.
+ *
+ * Keep this deliberately narrow: help copy only needs semantic code styling
+ * for machine-facing identifiers and links to authoritative references.
+ *
+ * @return array<string,array<string,bool>>
+ */
+function wpyeg_defaults_help_allowed_html() {
+	return array(
+		'code' => array(),
+		'a'    => array(
+			'href' => true,
+		),
 	);
 }
 
@@ -803,7 +820,7 @@ function wpyeg_defaults_attachment_redirect_target( $attachment_id ) {
  * @return true|WP_Error True when acceptable, WP_Error describing the failure.
  */
 function wpyeg_defaults_validate_password( $password, $user = null ) {
-	// NIST 800-63B / OWASP: favour length + screening over forced composition
+	// NIST SP 800-63B-4 § 3.1.1.2: favour length and screening over forced composition.
 	// rules (upper/lower/number/symbol), which push users toward predictable
 	// patterns like Password1! without adding entropy.
 	$minimum = (int) apply_filters( 'wpyeg_minimum_password_length', 15 );
@@ -842,7 +859,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 		);
 	}
 
-	// NIST also says to reject passwords derived from personal context.
+	// NIST SP 800-63B-4 § 3.1.1.2 includes context-specific terms in password blocklists.
 	if ( $user ) {
 		$context = array_filter(
 			array(
@@ -1086,8 +1103,10 @@ function wpyeg_defaults_rest_password_context( $request ) {
  * to pad the response so its size cannot reveal how many real matches it held;
  * padded rows carry a count of 0 and are ignored.
  *
- * Fails OPEN: if HIBP is unreachable the password is allowed, rather than
- * locking everyone out of password changes during an outage.
+ * The response is capped at 128 KiB. A response that reaches that cap may be
+ * truncated, so capped, empty, and malformed responses all fail OPEN, just as
+ * an unreachable HIBP service does. This avoids locking everyone out of
+ * password changes when the remote evidence is unavailable or invalid.
  *
  * @param string $password Plain-text password to screen.
  * @return bool True when the password appears in a known breach.
@@ -1096,16 +1115,19 @@ function wpyeg_password_is_pwned( $password ) {
 	$hash   = strtoupper( sha1( $password ) );
 	$prefix = substr( $hash, 0, 5 );
 	$suffix = substr( $hash, 5 );
+	$limit  = max( 1024, (int) apply_filters( 'wpyeg_hibp_max_response_bytes', 128 * 1024 ) );
 
 	$cache_key = 'wpyeg_hibp_' . $prefix;
 	$body      = get_transient( $cache_key );
+	$cache_hit = false !== $body;
 
 	if ( false === $body ) {
 		$response = wp_remote_get(
 			'https://api.pwnedpasswords.com/range/' . $prefix,
 			array(
-				'timeout' => 4,
-				'headers' => array( 'Add-Padding' => 'true' ),
+				'timeout'             => 4,
+				'limit_response_size' => $limit,
+				'headers'             => array( 'Add-Padding' => 'true' ),
 			)
 		);
 
@@ -1115,13 +1137,28 @@ function wpyeg_password_is_pwned( $password ) {
 		}
 
 		$body = (string) wp_remote_retrieve_body( $response );
+	}
+
+	$body = trim( (string) $body );
+
+	// A response at the transport cap may be truncated. Empty, oversized, or
+	// structurally invalid range data is unavailable data, so fail open.
+	if (
+		'' === $body ||
+		strlen( $body ) >= $limit ||
+		! preg_match( '/\A[0-9A-F]{35}:[0-9]+(?:\r?\n[0-9A-F]{35}:[0-9]+)*\z/i', $body )
+	) {
+		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+	}
+
+	if ( ! $cache_hit ) {
 		set_transient( $cache_key, $body, 12 * HOUR_IN_SECONDS );
 	}
 
 	$pwned = false;
 
-	foreach ( preg_split( '/\r\n|\n/', (string) $body ) as $line ) {
-		$parts = array_pad( explode( ':', trim( $line ), 2 ), 2, '0' );
+	foreach ( preg_split( '/\r\n|\n/', $body ) as $line ) {
+		$parts = explode( ':', $line, 2 );
 
 		// Padded rows report a count of 0 and are not real matches.
 		if ( (int) $parts[1] > 0 && 0 === strcasecmp( $parts[0], $suffix ) ) {
@@ -1236,43 +1273,73 @@ function wpyeg_defaults_render_settings_page() {
 				<table class="form-table" role="presentation">
 					<tbody>
 					<?php foreach ( $schema as $key => $field ) : ?>
-						<?php if ( $field['group'] !== $group_key ) { continue; } ?>
-						<?php $name  = WPYEG_DEFAULTS_OPTION . '[' . $key . ']'; ?>
-						<?php $value = wpyeg_defaults_get( $key ); ?>
+						<?php
+						if ( $field['group'] !== $group_key ) {
+							continue;
+						}
+						$name     = WPYEG_DEFAULTS_OPTION . '[' . $key . ']';
+						$value    = wpyeg_defaults_get( $key );
+						$field_id = 'wpyeg-defaults-' . str_replace( '_', '-', $key );
+						$help_id  = $field_id . '-description';
+						?>
 						<tr>
-							<th scope="row"><?php echo esc_html( $field['label'] ); ?></th>
-							<td>
-								<?php if ( 'toggle' === $field['type'] ) : ?>
-									<label>
+							<?php if ( 'toggle' === $field['type'] ) : ?>
+								<td colspan="2">
+									<label for="<?php echo esc_attr( $field_id ); ?>">
 										<input type="checkbox"
+											id="<?php echo esc_attr( $field_id ); ?>"
 											name="<?php echo esc_attr( $name ); ?>"
 											value="yes"
+											<?php if ( ! empty( $field['help'] ) ) : ?>
+												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
+											<?php endif; ?>
 											<?php checked( 'yes', $value ); ?> />
-										<?php esc_html_e( 'Enabled', 'sane-defaults' ); ?>
+										<?php echo esc_html( $field['label'] ); ?>
 									</label>
-								<?php elseif ( 'select' === $field['type'] ) : ?>
-									<?php $locked = 'core_update_policy' === $key && defined( 'WP_AUTO_UPDATE_CORE' ); ?>
-									<?php if ( $locked ) : ?>
-										<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" />
-									<?php endif; ?>
-									<select name="<?php echo esc_attr( $name ); ?>" <?php disabled( $locked ); ?>>
-										<?php foreach ( $field['choices'] as $ck => $cl ) : ?>
-											<option value="<?php echo esc_attr( $ck ); ?>" <?php selected( $ck, $value ); ?>>
-												<?php echo esc_html( $cl ); ?>
-											</option>
-										<?php endforeach; ?>
-									</select>
-								<?php elseif ( 'number' === $field['type'] ) : ?>
-									<input type="number" min="0" step="1"
-										name="<?php echo esc_attr( $name ); ?>"
-										value="<?php echo esc_attr( $value ); ?>"
-										class="small-text" />
-								<?php endif; ?>
 
-								<?php if ( ! empty( $field['help'] ) ) : ?>
-									<p class="description"><?php echo esc_html( $field['help'] ); ?></p>
-								<?php endif; ?>
-							</td>
+									<?php if ( ! empty( $field['help'] ) ) : ?>
+										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
+									<?php endif; ?>
+								</td>
+							<?php else : ?>
+								<th scope="row">
+									<label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
+								</th>
+								<td>
+									<?php if ( 'select' === $field['type'] ) : ?>
+										<?php $locked = 'core_update_policy' === $key && defined( 'WP_AUTO_UPDATE_CORE' ); ?>
+										<?php if ( $locked ) : ?>
+											<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" />
+										<?php endif; ?>
+										<select
+											id="<?php echo esc_attr( $field_id ); ?>"
+											name="<?php echo esc_attr( $name ); ?>"
+											<?php if ( ! empty( $field['help'] ) ) : ?>
+												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
+											<?php endif; ?>
+											<?php disabled( $locked ); ?>>
+											<?php foreach ( $field['choices'] as $ck => $cl ) : ?>
+												<option value="<?php echo esc_attr( $ck ); ?>" <?php selected( $ck, $value ); ?>>
+													<?php echo esc_html( $cl ); ?>
+												</option>
+											<?php endforeach; ?>
+										</select>
+									<?php elseif ( 'number' === $field['type'] ) : ?>
+										<input type="number" min="0" step="1"
+											id="<?php echo esc_attr( $field_id ); ?>"
+											name="<?php echo esc_attr( $name ); ?>"
+											value="<?php echo esc_attr( $value ); ?>"
+											<?php if ( ! empty( $field['help'] ) ) : ?>
+												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
+											<?php endif; ?>
+											class="small-text" />
+									<?php endif; ?>
+
+									<?php if ( ! empty( $field['help'] ) ) : ?>
+										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
+									<?php endif; ?>
+								</td>
+							<?php endif; ?>
 						</tr>
 					<?php endforeach; ?>
 					</tbody>
