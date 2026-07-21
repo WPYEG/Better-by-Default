@@ -129,7 +129,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 
   const cards = [
     { g: "!", c: CORAL, t: "Usernames leak", d: "REST + author archives list every login name to anonymous visitors." },
-    { g: "!", c: CORAL, t: "Legacy XML-RPC wide open", d: "Pingback and system.multicall amplifiers answer by default." },
+    { g: "!", c: CORAL, t: "Aging XML-RPC exposed", d: "Unwanted pingbacks and unused methods add work and attack surface." },
     { g: "~", c: WHEATD, t: "Dead weight loads", d: "Emoji scripts, version tags, and RSD links on every page." },
     { g: "~", c: WHEATD, t: "Spam surface invites", d: "Comments, pingbacks, and trackbacks open by default." },
   ];
@@ -312,7 +312,7 @@ codeSlide(8, "SECURITY · 2 of 6 · opt-in",
 
 codeSlide(9, "SECURITY · 3 of 6",
   "Lock XML-RPC down by category",
-  "XML-RPC isn't one door — it's an old switchboard, and every method is a phone line. Rather than rip the box off the wall, we unplug lines by category. Four switches, all off by default.",
+  "XML-RPC is legitimate but aging — an extra surface, not a backdoor. We unplug unused method families while preserving the endpoint for integrations that need it.",
   "wpyeg_xmlrpc_allow_* + _block_xmlrpc_endpoint", "no (all four)",
   [
     { t: "// each category off → remove its methods", k: "c" },
@@ -328,12 +328,12 @@ codeSlide(9, "SECURITY · 3 of 6",
     { t: "// → swap in a server that refuses it", k: "c" },
     { t: "add_filter( 'wp_xmlrpc_server_class', $refuse );", k: "h" },
   ], 11).addNotes(
-  "XML-RPC isn't one door — it's an old switchboard, and every method is a phone line. Rather than rip the box off the wall, we unplug lines by category. Four switches, all off by default:\n\n" +
-  "1. Pingbacks — drop pingback.ping, a spam and reflection-DDoS relay.\n" +
-  "2. Remote publishing — drop the credential-authenticated blogging methods (wp.*, metaWeblog.*, mt.*, blogger.*), the classic brute-force target. This also flips xmlrpc_enabled off and removes the RSD discovery link.\n" +
-  "3. system.multicall — the amplifier that batches thousands of login guesses into one request. You can't just unset it: IXR_Server::setCallbacks() re-adds it after the filter runs, so we swap in a replacement server that refuses it.\n" +
-  "4. Block the endpoint — the blunt hammer: xmlrpc.php returns 403 for everything.\n\n" +
-  "The first three are surgical — they leave third-party methods like Jetpack's jetpack.* connected, so the endpoint stays usable. The fourth nukes the lot, which breaks Jetpack; reach for it only if nothing on the site speaks XML-RPC.\n\n" +
+  "XML-RPC is a legitimate but aging API, not a backdoor or an emergency. It is an old switchboard where every method is a phone line. Rather than rip out a connection that Jetpack or a publishing client may need, we unplug unused lines by category. Four switches, all off by default:\n\n" +
+  "1. Pingbacks — drop pingback.ping, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second, and fetches the claimed source URL.\n" +
+  "2. Remote publishing — drop the credential-authenticated blogging methods (wp.*, metaWeblog.*, mt.*, blogger.*), another password-guessing entrance when legacy clients are not needed. This also flips xmlrpc_enabled off and removes the RSD discovery link.\n" +
+  "3. system.multicall — refuse a general batching wrapper with little established modern use. WordPress 4.4 stopped testing credentials after the first failed login in one XML-RPC request, so the old 'thousands of guesses' story is obsolete. Multicall can still batch other work, including pingbacks, but it does not enable pingback abuse.\n" +
+  "4. Block the endpoint — the blunt hammer: xmlrpc.php returns 403 for everything. Prefer doing this at the CDN, WAF, or web server so the request never consumes PHP.\n\n" +
+  "The first three are surgical and leave third-party registrations such as Jetpack's jetpack.* in place. That is not a compatibility guarantee: keep the endpoint reachable, leave Remote Publishing enabled until testing proves it unnecessary, and test the Jetpack connection and features after method changes. Block the endpoint only when nothing on the site speaks XML-RPC.\n\n" +
   "[Aside — what's \"IXR\"? The Incutio XML-RPC library. Simon Willison released it in September 2002, one of his first open-source projects, while blogging from the University of Bath; both WordPress *and* Drupal adopted it, and it then sat largely untouched for 15+ years — long enough to pick up a CVE. Willison went on to co-create Django (2003–05 at the Lawrence Journal-World), build Lanyrd (sold to Eventbrite in 2013) and Datasette (2017), and is now one of the most-read writers on LLMs.]"
 );
 
@@ -668,6 +668,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     ["Disable comments & pingbacks", "comments_open / pings_open", "Content"],
     ["Redirect author + attachment pages", "template_redirect", "Content / SEO"],
     ["Disable emoji script", "init (remove_action)", "Performance"],
+    ["Auto-update core security/maintenance + translations", "allow_minor_auto_core_updates / auto_update_translation", "Updates"],
   ];
   const tblRows = [[
     { text: "Default", options: { bold: true, color: WHITE, fill: { color: STEEL }, fontFace: BODY, fontSize: 13, align: "left", margin: 4 } },
@@ -687,7 +688,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     border: { type: "solid", color: "DCE6EB", pt: 1 }, valign: "middle", rowH: 0.44,
   });
   footer(s, 27);
-  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Three deliberate *non*-defaults worth calling out: Application Passwords stay AVAILABLE (the safer REST credential), the login logo is LEFT ALONE unless you opt in, and removing the version fingerprint is OFF, because it is obscurity rather than hardening. All three are choices, not oversights — and the last one is the honest test of the whole talk: if a default doesn't actually make the site safer, don't ship it as security.");
+  s.addNotes("This is your screenshot slide — everything on-by-default in one view, mapped to the core hook. Updates follow the same principle: maintenance/security core releases and translations install automatically; major core releases wait for testing; plugin and theme code keeps its per-item WordPress setting because version numbers do not reliably identify risk. Three deliberate non-defaults worth calling out: Application Passwords stay AVAILABLE, the login logo is LEFT ALONE, and removing the version fingerprint is OFF because it is obscurity rather than hardening.");
 })();
 
 /* =================================================================== */

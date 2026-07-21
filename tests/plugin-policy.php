@@ -324,6 +324,33 @@ function wpyeg_test_assert( $condition, $message ) {
 
 $schema = wpyeg_defaults_schema();
 wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'], 'Application Passwords remain available by default.' );
+wpyeg_test_assert( 'minor' === $schema['core_update_policy']['default'], 'Core maintenance and security releases update automatically by default.' );
+wpyeg_test_assert( 'yes' === $schema['auto_update_translations']['default'], 'Translation files update automatically by default.' );
+
+// The explicit update policy is stable across the installation-age defaults
+// WordPress stores for major core updates.
+wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( false ), 'The default policy enables maintenance/security core releases.' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( true ), 'The default policy blocks automatic major core releases.' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_dev_core_updates( true ), 'The default stable policy blocks development builds.' );
+wpyeg_test_assert( true === wpyeg_defaults_allow_translation_updates( false ), 'The default policy enables translation updates.' );
+
+$GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'all' );
+wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( false ), 'The all-stable policy enables maintenance releases.' );
+wpyeg_test_assert( true === wpyeg_defaults_allow_major_core_updates( false ), 'The all-stable policy enables major releases.' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_dev_core_updates( true ), 'All stable releases does not mean development builds.' );
+
+$GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'manual' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_minor_core_updates( true ), 'The manual policy disables maintenance releases.' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( true ), 'The manual policy disables major releases.' );
+
+$GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'inherit' );
+wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( true ), 'The inherit policy preserves an enabled core decision.' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( false ), 'The inherit policy preserves a disabled core decision.' );
+
+$GLOBALS['wpyeg_test_option'] = array( 'auto_update_translations' => 'no' );
+wpyeg_test_assert( false === wpyeg_defaults_allow_translation_updates( true ), 'Translation auto-updates can be explicitly disabled.' );
+unset( $GLOBALS['wpyeg_test_option'] );
+
 /*
  * Policy snapshot, not endorsement.
  *
@@ -602,7 +629,30 @@ wpyeg_defaults_bootstrap();
 $registered_hooks = array_column( $GLOBALS['wpyeg_test_hooks'], 'hook' );
 wpyeg_test_assert( in_array( 'xmlrpc_methods', $registered_hooks, true ), 'XML-RPC method removal is registered.' );
 wpyeg_test_assert( in_array( 'rest_pre_insert_user', $registered_hooks, true ), 'REST password validation is registered.' );
+wpyeg_test_assert( in_array( 'allow_minor_auto_core_updates', $registered_hooks, true ), 'The maintenance/security core update policy is registered.' );
+wpyeg_test_assert( in_array( 'allow_major_auto_core_updates', $registered_hooks, true ), 'The major core update policy is registered.' );
+wpyeg_test_assert( in_array( 'allow_dev_auto_core_updates', $registered_hooks, true ), 'Development core builds are kept out of stable policies.' );
+wpyeg_test_assert( in_array( 'auto_update_translation', $registered_hooks, true ), 'The translation update policy is registered.' );
+wpyeg_test_assert( ! in_array( 'auto_update_plugin', $registered_hooks, true ), 'Plugin code updates remain on WordPress per-item settings.' );
+wpyeg_test_assert( ! in_array( 'auto_update_theme', $registered_hooks, true ), 'Theme code updates remain on WordPress per-item settings.' );
 wpyeg_test_assert( ! in_array( 'script_loader_tag', $registered_hooks, true ), 'Blanket script-tag mutation is not registered.' );
+
+// XML-RPC stays granular: remove unused core families without erasing methods
+// registered by integrations such as Jetpack.
+$xmlrpc_hook    = wpyeg_test_find_hook( 'xmlrpc_methods' );
+$xmlrpc_methods = call_user_func(
+	$xmlrpc_hook['callback'],
+	array(
+		'pingback.ping'    => 'core-pingback',
+		'wp.getUsersBlogs' => 'core-publishing',
+		'demo.sayHello'    => 'core-demo',
+		'jetpack.jsonAPI'  => 'third-party',
+	)
+);
+wpyeg_test_assert( ! isset( $xmlrpc_methods['pingback.ping'] ), 'Default XML-RPC policy removes incoming pingbacks.' );
+wpyeg_test_assert( ! isset( $xmlrpc_methods['wp.getUsersBlogs'] ), 'Default XML-RPC policy removes core remote publishing.' );
+wpyeg_test_assert( ! isset( $xmlrpc_methods['demo.sayHello'] ), 'Default XML-RPC policy removes inert demo methods.' );
+wpyeg_test_assert( isset( $xmlrpc_methods['jetpack.jsonAPI'] ), 'Default XML-RPC policy preserves third-party methods.' );
 
 // Assert the callback, not the hook name: restrict_rest_user_discovery also
 // filters rest_endpoints, so a name-only check passes with the guard removed.
@@ -623,6 +673,32 @@ function wpyeg_test_find_hook( $hook ) {
 	}
 	return null;
 }
+
+/*
+ * Accuracy guard for the repository's teaching copy. WordPress 4.4 made the
+ * old "thousands of guesses per multicall" description obsolete; keep the
+ * correction synchronized across every workshop representation.
+ */
+$accuracy_files = array(
+	dirname( __DIR__ ) . '/docs/wordpress-default-settings.md',
+	dirname( __DIR__ ) . '/plugin/sane-defaults/README.md',
+	dirname( __DIR__ ) . '/plugin/sane-defaults/readme.txt',
+	dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php',
+	dirname( __DIR__ ) . '/workshop/Better-by-Default.ia.md',
+	dirname( __DIR__ ) . '/workshop/better-by-default.iapresenter/text.md',
+	dirname( __DIR__ ) . '/workshop/build_deck.js',
+);
+
+foreach ( $accuracy_files as $accuracy_file ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+	$accuracy_copy = file_get_contents( $accuracy_file );
+	wpyeg_test_assert( false === strpos( $accuracy_copy, 'amplifier that batches thousands of login guesses' ), basename( $accuracy_file ) . ' does not repeat the obsolete multicall claim.' );
+	wpyeg_test_assert( false === strpos( $accuracy_copy, 'Gate the whole endpoint off' ), basename( $accuracy_file ) . ' does not misdescribe xmlrpc_enabled.' );
+}
+
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+$xmlrpc_reference = file_get_contents( dirname( __DIR__ ) . '/docs/wordpress-default-settings.md' );
+wpyeg_test_assert( false !== strpos( $xmlrpc_reference, 'core.trac.wordpress.org/ticket/34336' ), 'The XML-RPC reference cites the WordPress 4.4 authentication fix.' );
 
 // disable_rest ships off, so stage it on to check how it registers.
 $GLOBALS['wpyeg_test_option'] = array( 'disable_rest' => 'yes' );

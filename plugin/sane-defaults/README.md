@@ -35,7 +35,8 @@ Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by c
 (incoming pingbacks off, remote publishing off, system.multicall refused), require strong
 passwords (15+ chars, breach-screened, no forced composition), send security headers, disable
 comments/pingbacks/self-pingbacks, disable author archives, redirect attachment pages, disable
-emojis.
+emojis, install core maintenance/security releases automatically while holding major releases
+for testing, and update translation files automatically.
 
 Off by default (opt-in, because they change behavior): require-auth-for-all-REST, prohibit
 Application Passwords (left available by default — the safer, revocable REST credential),
@@ -43,6 +44,18 @@ block the XML-RPC endpoint entirely, title-only admin search, remove/unlink/repl
 logo (the WordPress logo is kept by default), hide the front-end admin bar, disable Remember Me,
 throttle Heartbeat, and remove the version fingerprint — that last one because it
 is obscurity, not hardening: it trims scanner noise but does not make an out-of-date site safer.
+
+Plugin and theme code updates keep using WordPress's per-item auto-update choices. The plugin
+does not infer safety from version numbers. An explicit `WP_AUTO_UPDATE_CORE`,
+`AUTOMATIC_UPDATER_DISABLED`, or `DISALLOW_FILE_MODS` policy remains operator-owned and is
+reported on the settings screen rather than silently overridden.
+
+XML-RPC is an aging API, not a backdoor. Pingbacks are the strongest reason for the locked-down
+default; refusing `system.multicall` is modest defense-in-depth against batching, not protection
+from the obsolete pre-WordPress-4.4 “thousands of password guesses” attack. Keep the endpoint and
+Remote Publishing available when Jetpack needs them, and test connected features after changing
+method controls. Application Passwords inherit the owning user's capabilities, so integrations
+should use a least-privileged account.
 
 ## Three things this plugin can't do for you
 

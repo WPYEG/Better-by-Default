@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
- * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
+ * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
  * Version:           1.0.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
@@ -48,7 +48,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require auth for all REST requests',
-			'help'    => 'Blocks anonymous REST entirely. Leave OFF unless this is a pure brochure site — the block editor needs REST.',
+			'help'    => 'Blocks anonymous REST entirely. The logged-in block editor still works, but public blocks, embeds, search, and integrations may not.',
 		),
 		'xmlrpc_allow_pingbacks' => array(
 			'default' => 'no',
@@ -62,28 +62,28 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: allow remote publishing (blogging apps)',
-			'help'    => 'OFF (default) removes the credential-authenticated wp.*/metaWeblog/MT/blogger methods (a brute-force target) and the RSD link.',
+			'help'    => 'OFF (default) removes credential-authenticated wp.*/metaWeblog/MT/blogger methods and the RSD link. Leave ON while Jetpack is active unless connection and feature testing proves it unnecessary.',
 		),
 		'xmlrpc_allow_multicall' => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: allow system.multicall',
-			'help'    => 'OFF (default) refuses system.multicall — the amplification lever for batched brute force — via a replacement server. A filter cannot remove it.',
+			'help'    => 'OFF (default) refuses system.multicall, a general batching wrapper with little established modern use. WordPress 4.4 stopped it from testing thousands of passwords in one request.',
 		),
 		'block_xmlrpc_endpoint' => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: block the endpoint entirely',
-			'help'    => 'Strictest tier — xmlrpc.php returns 403 for every request. Do NOT enable on a Jetpack site; it breaks the WordPress.com connection.',
+			'help'    => 'Strictest tier — xmlrpc.php returns 403 for every request. Do NOT enable on a Jetpack site. Prefer an edge block when possible; this plugin-level block still boots PHP.',
 		),
 		'disable_application_passwords' => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Prohibit Application Passwords',
-			'help'    => 'OFF (default) keeps them available — they are the safer, revocable integration credential, and core accepts only them for REST Basic Auth. Turn ON only if site policy forbids non-interactive credentials.',
+			'help'    => 'OFF (default) keeps them available — separate, revocable integration credentials for REST and XML-RPC. They inherit the owning user\'s access and bypass interactive 2FA, so use a least-privileged account.',
 		),
 		'require_strong_passwords' => array(
 			'default' => 'yes',
@@ -124,6 +124,28 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'label'   => 'Disable AI connectors',
 			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the wp_supports_ai gate and closes the core Connectors screen. Also fires wpyeg_disable_ai_connectors for AI integrations core does not know about.',
+		),
+
+		// --- Updates ----------------------------------------------------
+		'core_update_policy' => array(
+			'default' => 'minor',
+			'type'    => 'select',
+			'group'   => 'updates',
+			'label'   => 'Automatic WordPress core updates',
+			'help'    => 'Maintenance and security releases install automatically by default. Major releases should be tested and deployed within 30 days. An explicit wp-config.php policy takes precedence.',
+			'choices' => array(
+				'minor'   => 'Maintenance/security releases only — recommended',
+				'all'     => 'All stable releases',
+				'manual'  => 'No automatic core releases',
+				'inherit' => 'Leave unchanged (WordPress, host, or another plugin decides)',
+			),
+		),
+		'auto_update_translations' => array(
+			'default' => 'yes',
+			'type'    => 'toggle',
+			'group'   => 'updates',
+			'label'   => 'Automatically update translations',
+			'help'    => 'Installs available WordPress, plugin, and theme language updates. Plugin and theme code updates remain controlled by WordPress\'s individual per-item choices.',
 		),
 
 		// --- Content & public surfaces ---------------------------------
@@ -244,6 +266,7 @@ function wpyeg_defaults_schema() {
 function wpyeg_defaults_groups() {
 	return array(
 		'security'    => 'Security & Attack Surface',
+		'updates'     => 'Updates',
 		'content'     => 'Content & Public Surfaces',
 		'ux'          => 'Admin & Front-End UX',
 		'login'       => 'Login & Sessions',
@@ -289,6 +312,59 @@ function wpyeg_defaults_enabled( $key ) {
 	return 'yes' === wpyeg_defaults_get( $key );
 }
 
+/**
+ * Apply Better by Default's maintenance/security core update policy.
+ *
+ * @param bool $enabled WordPress's current decision.
+ * @return bool
+ */
+function wpyeg_defaults_allow_minor_core_updates( $enabled ) {
+	$policy = wpyeg_defaults_get( 'core_update_policy' );
+
+	if ( 'inherit' === $policy ) {
+		return $enabled;
+	}
+
+	return in_array( $policy, array( 'minor', 'all' ), true );
+}
+
+/**
+ * Apply Better by Default's stable major core update policy.
+ *
+ * @param bool $enabled WordPress's current decision.
+ * @return bool
+ */
+function wpyeg_defaults_allow_major_core_updates( $enabled ) {
+	$policy = wpyeg_defaults_get( 'core_update_policy' );
+
+	if ( 'inherit' === $policy ) {
+		return $enabled;
+	}
+
+	return 'all' === $policy;
+}
+
+/**
+ * Keep development builds out of every explicit stable-release policy.
+ *
+ * @param bool $enabled WordPress's current decision.
+ * @return bool
+ */
+function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
+	return 'inherit' === wpyeg_defaults_get( 'core_update_policy' ) ? $enabled : false;
+}
+
+/**
+ * Apply the translation update toggle.
+ *
+ * @param bool $enabled WordPress's current decision.
+ * @return bool
+ */
+function wpyeg_defaults_allow_translation_updates( $enabled ) {
+	unset( $enabled );
+	return wpyeg_defaults_enabled( 'auto_update_translations' );
+}
+
 
 /* =======================================================================
  * BOOTSTRAP — wire each enabled policy to its hook.
@@ -297,6 +373,22 @@ function wpyeg_defaults_enabled( $key ) {
 add_action( 'plugins_loaded', 'wpyeg_defaults_bootstrap' );
 
 function wpyeg_defaults_bootstrap() {
+
+	/* ----- Updates ----- */
+
+	/*
+	 * wp-config.php is the operator's highest-level declaration. Do not make a
+	 * settings-screen choice silently overrule it. Without that constant, these
+	 * documented filters make the site's policy independent of its install age
+	 * and of the major-update choice previously stored by core.
+	 */
+	if ( ! defined( 'WP_AUTO_UPDATE_CORE' ) && 'inherit' !== wpyeg_defaults_get( 'core_update_policy' ) ) {
+		add_filter( 'allow_minor_auto_core_updates', 'wpyeg_defaults_allow_minor_core_updates' );
+		add_filter( 'allow_major_auto_core_updates', 'wpyeg_defaults_allow_major_core_updates' );
+		add_filter( 'allow_dev_auto_core_updates', 'wpyeg_defaults_allow_dev_core_updates' );
+	}
+
+	add_filter( 'auto_update_translation', 'wpyeg_defaults_allow_translation_updates' );
 
 	/* ----- Security ----- */
 
@@ -340,7 +432,9 @@ function wpyeg_defaults_bootstrap() {
 		return $methods;
 	}, PHP_INT_MAX );
 
-	// Gate the whole endpoint off unless remote publishing is allowed.
+	// Disable core methods that require authentication when remote publishing is
+	// off. Despite its name, xmlrpc_enabled does not disable the endpoint,
+	// pingbacks, or custom unauthenticated methods.
 	add_filter( 'xmlrpc_enabled', function ( $enabled ) {
 		return wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ? $enabled : false;
 	} );
@@ -378,6 +472,12 @@ function wpyeg_defaults_bootstrap() {
 
 		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
 			if ( ! class_exists( 'Wpyeg_Multicall_Disabled_Server' ) ) {
+				/*
+				 * WordPress 4.4 stopped testing credentials after the first failed
+				 * authentication in one XML-RPC request. Refusing multicall is now
+				 * modest defense-in-depth against general batching, not a fix for
+				 * the obsolete "thousands of password guesses" claim.
+				 */
 				class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
 					public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
 						return new IXR_Error( 405, 'system.multicall is disabled on this site.' );
@@ -1134,6 +1234,22 @@ function wpyeg_defaults_render_settings_page() {
 		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
 		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'sane-defaults' ); ?></p>
 
+		<?php if ( defined( 'AUTOMATIC_UPDATER_DISABLED' ) && AUTOMATIC_UPDATER_DISABLED ) : ?>
+			<div class="notice notice-error inline"><p>
+				<?php esc_html_e( 'Update policy overridden: AUTOMATIC_UPDATER_DISABLED disables every WordPress background update.', 'sane-defaults' ); ?>
+			</p></div>
+		<?php elseif ( defined( 'DISALLOW_FILE_MODS' ) && DISALLOW_FILE_MODS ) : ?>
+			<div class="notice notice-error inline"><p>
+				<?php esc_html_e( 'Update policy overridden: DISALLOW_FILE_MODS prevents WordPress from installing updates.', 'sane-defaults' ); ?>
+			</p></div>
+		<?php endif; ?>
+
+		<?php if ( defined( 'WP_AUTO_UPDATE_CORE' ) ) : ?>
+			<div class="notice notice-warning inline"><p>
+				<?php esc_html_e( 'Core update policy is locked by WP_AUTO_UPDATE_CORE in wp-config.php. Remove that constant to manage core releases here.', 'sane-defaults' ); ?>
+			</p></div>
+		<?php endif; ?>
+
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
 
@@ -1157,7 +1273,11 @@ function wpyeg_defaults_render_settings_page() {
 										<?php esc_html_e( 'Enabled', 'sane-defaults' ); ?>
 									</label>
 								<?php elseif ( 'select' === $field['type'] ) : ?>
-									<select name="<?php echo esc_attr( $name ); ?>">
+									<?php $locked = 'core_update_policy' === $key && defined( 'WP_AUTO_UPDATE_CORE' ); ?>
+									<?php if ( $locked ) : ?>
+										<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" />
+									<?php endif; ?>
+									<select name="<?php echo esc_attr( $name ); ?>" <?php disabled( $locked ); ?>>
 										<?php foreach ( $field['choices'] as $ck => $cl ) : ?>
 											<option value="<?php echo esc_attr( $ck ); ?>" <?php selected( $ck, $value ); ?>>
 												<?php echo esc_html( $cl ); ?>

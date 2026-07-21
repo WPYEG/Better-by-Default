@@ -71,12 +71,17 @@ add_filter( 'rest_authentication_errors', function ( $result ) {
 ### Harden XML-RPC (per-category, not all-or-nothing)
 - **Options:** `wpyeg_xmlrpc_allow_pingbacks` / `wpyeg_xmlrpc_allow_remote_publishing` / `wpyeg_xmlrpc_allow_multicall` / `wpyeg_block_xmlrpc_endpoint`
 - **Defaults:** `no` / `no` / `no` / `no`
-- **Why:** `xmlrpc.php` is a classic amplification vector for brute-force and pingback-DDoS.
-  But `add_filter( 'xmlrpc_enabled', '__return_false' )` is a blunt half-measure — it only
-  disables the *authenticated* methods and leaves `pingback.ping` and the `system.*` methods
-  reachable. The better model is to remove the WordPress methods you don't use, **by category**,
-  and keep the endpoint reachable for anything that legitimately needs it (Jetpack registers its
-  own `jetpack.*` methods, which this leaves untouched).
+- **Why:** XML-RPC is a legitimate but aging API. On a current, patched site it is not a
+  backdoor or emergency-level vulnerability; it is additional attack and resource-consumption
+  surface whose value is site-specific. Incoming pingbacks remain the clearest live risk,
+  remote-publishing methods are another credential-authentication entrance, and
+  `system.multicall` is a general batching wrapper whose security value is now modest.
+
+  `add_filter( 'xmlrpc_enabled', '__return_false' )` is a common trap: despite its name, it only
+  disables methods that require authentication. It does not block `xmlrpc.php`, pingbacks, or
+  custom unauthenticated methods. The better model is to remove unused WordPress methods **by
+  category**, keep the endpoint reachable when an integration needs it, and block or rate-limit
+  unwanted traffic at the CDN/WAF/web-server edge.
 
 Three independent categories, all off by default:
 
@@ -112,8 +117,12 @@ add_filter( 'wp_headers', function ( $headers ) {
 ```
 
 `system.multicall` **can't be removed with the `xmlrpc_methods` filter** — `IXR_Server::setCallbacks()`
-re-adds it after the filter runs — so refuse it with a replacement server. Multicall is the
-amplification lever attackers use to batch thousands of credential guesses into one request:
+re-adds it after the filter runs — so refuse it with a replacement server. This is modest
+defense-in-depth against batching, not a major password control: since WordPress 4.4, after the
+first failed authentication in one XML-RPC request, later authentication attempts fail without
+testing more credentials. Multicall can still batch other work, including pingback calls, but
+pingbacks are also directly callable and do not depend on it. See
+[WordPress Trac #34336](https://core.trac.wordpress.org/ticket/34336).
 
 ```php
 add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
@@ -127,12 +136,13 @@ add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
 } );
 ```
 
-> **Jetpack:** Jetpack still uses XML-RPC for its WordPress.com connection, so don't *block the
-> endpoint* on a Jetpack site — a blanket 403 breaks it. The pingback and remote-publishing toggles
-> only remove WordPress methods, leaving `jetpack.*` untouched. Refusing `system.multicall` didn't
-> break a Jetpack connection in testing (the replacement server overrides only `multiCall()`, so
-> `jetpack.*` still resolve) — but that's a single connected-site check, not a guarantee. The
-> endpoint block is the one setting to genuinely avoid with Jetpack.
+> **Jetpack:** Jetpack currently requires a publicly accessible XML-RPC endpoint, so never apply
+> the blanket 403 on a Jetpack site. Turning off incoming pingbacks is the low-risk change. Removing
+> core publishing methods or refusing multicall leaves `jetpack.*` registrations untouched, but
+> method registration alone is not a compatibility guarantee; test the Jetpack connection and the
+> features the site uses. Keep Remote Publishing enabled until that testing proves it unnecessary.
+> A plugin-level 403 still boots WordPress and occupies PHP; only an edge block prevents the request
+> from reaching PHP. See [Jetpack's current requirements](https://jetpack.com/support/getting-started-with-jetpack/).
 > **`demo.*`:** the inert `demo.sayHello`/`demo.addTwoNumbers` methods still confirm XML-RPC is
 > live to a scanner, so the companion plugin always drops them — no toggle:
 > `unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] )`.
@@ -142,12 +152,14 @@ add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
 - **Default:** `no` *(available)*
 - **Why:** The reflexive advice is "disable them," but that's usually the wrong call.
   Application Passwords are hashed, per-application, individually revocable credentials that
-  carry the same access as the owning account — and core accepts **only** Application Passwords
-  for REST Basic Auth, never the account's real password. Prohibiting them doesn't remove an
+  carry the same access as the owning account — and core supports them for REST and XML-RPC.
+  They normally bypass an interactive 2FA challenge, so create them on a least-privileged account.
+  Prohibiting them doesn't remove an
   integration's need; it pushes people to a third-party auth plugin or a shared login —
   credentials that are harder to isolate and revoke and that bypass 2FA the same way. Keep them
   available; offer an opt-in to prohibit them for sites whose policy forbids non-interactive
   credentials.
+  See the [WordPress Application Passwords documentation](https://developer.wordpress.org/advanced-administration/security/application-passwords/).
 
 ```php
 // Off by default — the feature stays available. Only prohibit when explicitly opted in.
@@ -500,7 +512,57 @@ if ( in_array( $behavior, array( 'remove_logo', 'unlink_logo', 'replace_logo' ),
 
 ---
 
-## 5. Additional Recommended Defaults
+## 5. Update Policy
+
+### Automatically install core maintenance/security releases
+
+*(`wpyeg_core_update_policy`, default `minor`)*
+
+The default enables in-branch maintenance and security releases (`x.y.z`) while leaving major
+core releases (`x.y`) for a tested agency rollout. The settings screen can also allow every
+stable release, make core updates manual, or leave the decision unchanged.
+
+```php
+add_filter( 'allow_minor_auto_core_updates', '__return_true' );
+add_filter( 'allow_major_auto_core_updates', '__return_false' );
+add_filter( 'allow_dev_auto_core_updates', '__return_false' );
+```
+
+Better by Default does not register those filters when `WP_AUTO_UPDATE_CORE` is defined in
+`wp-config.php`; an explicit operator-level policy wins and the settings screen reports that
+the control is locked. `AUTOMATIC_UPDATER_DISABLED` and `DISALLOW_FILE_MODS` can prevent the
+updater from running at all, so the screen warns about those overrides too.
+
+Major releases should be tested on staging and deployed within 30 days, not frozen
+indefinitely. Expedite the rollout when a security fix is unavailable on the installed branch.
+Only the latest WordPress major release is officially supported; security backports to older
+branches are a courtesy, not a guaranteed support policy.
+
+References:
+
+- [Configuring Automatic Background Updates](https://developer.wordpress.org/advanced-administration/upgrade/upgrading/)
+- [`Core_Upgrader::should_update_to_version()`](https://developer.wordpress.org/reference/classes/core_upgrader/should_update_to_version/)
+- [Supported WordPress versions](https://wordpress.org/documentation/article/supported-versions/)
+
+### Automatically update translations
+
+*(`wpyeg_auto_update_translations`, default `yes`)*
+
+WordPress, plugin, and theme language packs are low-risk and update automatically. Turning the
+setting off explicitly refuses translation auto-updates.
+
+```php
+add_filter( 'auto_update_translation', '__return_true' );
+```
+
+Plugin and theme **code** updates are intentionally left to WordPress's individual per-item
+choices. The plugin ecosystem has no enforceable semantic-versioning or security-release
+metadata, so a generic defaults plugin cannot safely infer that `2.4` is harmless while `3.0`
+is risky. Agencies can maintain a reviewed allowlist in their fleet-management tooling.
+
+---
+
+## 6. Additional Recommended Defaults
 
 Beyond your list, these are the defaults I'd reach for on nearly every build.
 
@@ -703,6 +765,8 @@ function wpyeg_strip_asset_ver( $src ) {
 | Application Passwords (leave available) | `wpyeg_disable_application_passwords` | `no` | Security |
 | Require Strong Passwords | `wpyeg_require_strong_passwords` | `yes` | Security |
 | Disable AI Connectors *(PMP-specific)* | `wpyeg_disable_ai_connectors` | `yes` | Security |
+| Core automatic updates | `wpyeg_core_update_policy` | `minor` | Updates |
+| Translation automatic updates | `wpyeg_auto_update_translations` | `yes` | Updates |
 | Disable Public Author Archives | `wpyeg_disable_author_archives` | `yes` | Content |
 | Disable Emojis | `wpyeg_disable_emojis` | `yes` | Performance |
 | Redirect Attachment Pages | `wpyeg_redirect_attachment_pages` | `yes` | SEO |
@@ -721,5 +785,8 @@ function wpyeg_strip_asset_ver( $src ) {
 - Gate every snippet behind its `get_option()` toggle so site owners keep control.
 - `wp-config.php` constants (`DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, `WP_POST_REVISIONS`)
   can't be toggled from options — surface them in your docs as recommended manual settings.
+- Explicit update constants remain operator-owned: the settings screen reports
+  `WP_AUTO_UPDATE_CORE`, `AUTOMATIC_UPDATER_DISABLED`, and `DISALLOW_FILE_MODS` rather than
+  silently fighting them.
 - Test REST and comment changes against the block editor before shipping; those two touch the
   most core functionality.
