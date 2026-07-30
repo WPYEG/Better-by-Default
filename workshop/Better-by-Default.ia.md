@@ -6,7 +6,7 @@
 
 `a hands-on workshop · build the "sane-defaults" plugin`
 
-Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates twenty sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
+Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 27 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
 
 [This running text is the speaker script — in iA Presenter it stays in your notes, not on the slide.]
 
@@ -14,8 +14,8 @@ Welcome to WPYEG. In this workshop we're building and reviewing a small plugin t
 
 ## WordPress is open by default; hosts vary in what they close.
 
-	- **Usernames leak** — REST and author archives show every login name to anyone who looks for them.
-	- **XML-RPC exposed** — WordPress has been a cryptic refugia for this venerable interop protocol, which Jetpack still uses. If you don't use Jetpack or pingbacks, XML-RPC just adds to your attack surface.
+	- **Usernames leak** — REST and author archives expose public author slugs that often resemble login names.
+	- **XML-RPC exposed** — WordPress has been a refuge for this venerable interop protocol, which Jetpack still uses. If you don't use Jetpack or pingbacks, XML-RPC just adds to your attack surface.
 	- **Dead weight loads** — Emoji scripts, version tags, and RSD links on every page. Do you need them?
 	- **Spam surface invites** — Comments, pingbacks, and trackbacks are open by default: legacy cruft or heart and soul of the open web? They are forgotten treasures to some, but if you don't use them, turn them off. If you don't know what they are, find out!
 
@@ -28,10 +28,10 @@ Welcome to WPYEG. In this workshop we're building and reviewing a small plugin t
 ```php
 if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
     add_filter( 'rest_endpoints', $hide_users_endpoint );
-}   // that's the whole pattern, repeated ~20 times
+}   // that's the whole pattern, repeated across the plugin
 ```
 
-In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have twenty of them.
+In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 27 settings built around that pattern.
 
 ---
 
@@ -41,25 +41,24 @@ In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We h
 	- **Filters** — "before you use this value, let me CHANGE it first." 
 
 ```php
-add_filter( 'xmlrpc_enabled', '__return_false' ); 
-
-// The double underscore `in __return_false` indicates a system or utility helper function built into WordPress core to quickly feed a false value to a filter hook without writing a whole custom function.
+add_filter( 'xmlrpc_enabled', '__return_false' );
 ```
 
 WordPress is built to be interrupted at labeled moments (hooks) so you never edit core code. `__return_false` is a tiny built-in helper that just hands back false — perfect for switching a feature off.
 
 ---
 
-## Six categories of defaults
+## Seven categories of defaults
 
-	1. **Security** — Make the attack surface smnaller.
-	2. **Content** — Close spam channels and potential info leaks.
-	3. **Admin UX** — A calmer, faster, prettier dashboard.
-	4. **Login** — Sessions and credentials.
-	5. **Branding** — Own your login screen: make it secure and attractive.
-	6. **Performance** — Trim the fat. 
+	1. **Security** — Make the attack surface smaller.
+	2. **Updates** — Apply a deliberate core and translation update policy.
+	3. **Content** — Close spam channels and potential info leaks.
+	4. **Admin UX** — A calmer, faster, prettier dashboard.
+	5. **Login** — Sessions and credentials.
+	6. **Branding** — Own your login screen: make it secure and attractive.
+	7. **Performance** — Trim the fat.
 
-We'll spend most of our time on security and content, then move quickly through UX, login, branding, and performance, and we'll end up with a plugin that covers them all.
+We'll spend most of our time on security and content, then move quickly through updates, UX, login, branding, and performance, and we'll end up with a plugin that covers them all.
 
 ---
 
@@ -83,7 +82,7 @@ add_filter( 'rest_endpoints', function ( $ep ) {
 } );
 ```
 
-The `/wp/v2/users` endpoint hands out every author's login name to anyone — half of a brute-force guess, for free. Author enumeration is step one of many attack scripts. By closing it for logged-out requests only, the editor and legit integrations will keep working, but you won't waste precious electrons on junk requests from the baddies. It's arguably an example of security-by-obscurity, but it also prevents a lot of junk traffic and bots that are up to no good. Why let them hammer away at you? Stopping that wasted resource burn, however small, is a plus. Help your host and feed the creeps a 404, redirect author enumeration with a 301, and if it persists, let the IP be banned. (A good host/server setup will use fail2ban or similar: CrowdSec, SSHGuard, and Defensia.)
+The `/wp/v2/users` endpoint exposes every public author's name, ID, profile link, and slug to anyone. Because an author slug often resembles a login name, that gives attack scripts a useful credential hint for free. By closing the user-list and numeric user routes for logged-out requests only, the editor and legitimate integrations keep working while anonymous enumeration attempts receive an ordinary 404. It's partly security by obscurity—not a substitute for strong passwords, MFA, or rate limiting—but it also rejects junk requests from bots that are up to no good. Why spend even a few extra electrons helping them? Author archives take the separate path we'll see later: a 301 to the homepage. If probes persist, a properly configured host can count those request patterns and ban the source IP with Fail2Ban or a similar tool such as CrowdSec, SSHGuard, or Defensia.
 
 ---
 
