@@ -464,7 +464,8 @@ add_filter( 'show_admin_bar', function ( $show ) {
 - **Setting key:** `disable_remember_me`
 - **Default:** `no`
 - **Why:** On shared or kiosk machines, a persistent "Remember Me" cookie is a risk. Removing
-  the checkbox forces short-lived sessions. Off by default because it hurts convenience.
+  the checkbox routes every login through the regular session length below. Off by default
+  because it hurts convenience.
 
 ```php
 add_action( 'login_footer', function () {
@@ -478,25 +479,26 @@ add_action( 'login_footer', function () {
     <?php
 } );
 
-// Belt-and-suspenders: never honour a "remember" flag server-side.
-add_filter( 'auth_cookie_expiration', function ( $length, $user_id, $remember ) {
-    return $remember ? 2 * DAY_IN_SECONDS : $length;
-}, 10, 3 );
+// Belt-and-suspenders: strip the flag server-side so a forged POST can't opt
+// back into a persistent session. login_init fires before wp-login.php reads it.
+add_action( 'login_init', function () {
+    unset( $_POST['rememberme'], $_REQUEST['rememberme'] );
+} );
 ```
 
-### Change Remember Me Session Length
-- **Setting key:** `remember_me_days` / `session_regular_hours`
-- **Defaults:** `5` / `0`
-- **Why:** Core's "Remember Me" is 14 days — often too long. This lets you cap the persistent
-  session (e.g. 5 days) and, optionally, shorten the regular (non-remembered) session too.
+### Change the Session Lengths
+- **Setting keys:** `session_regular_days` / `remember_me_days`
+- **Defaults:** `2` / `14` *(WordPress's real defaults, in days)*
+- **Why:** Core signs a normal login in for 2 days and a remembered one for 14 — often too long.
+  Both lengths are in days here, each with a 1-day floor, and sanitize clamps the remembered
+  length up so it can never be shorter than the regular one (ticking "Remember Me" must never
+  *shorten* a session).
 
 ```php
 add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
-    if ( $remember ) {
-        return 5 * DAY_IN_SECONDS;   // remember_me_days
-    }
+    $regular = 2 * DAY_IN_SECONDS;   // session_regular_days
 
-    return 12 * HOUR_IN_SECONDS;     // session_regular_hours
+    return $remember ? 14 * DAY_IN_SECONDS : $regular;  // remember_me_days >= regular
 }, 10, 3 );
 ```
 
@@ -809,8 +811,8 @@ function wpyeg_strip_asset_ver( $src ) {
 | Title-only admin search | `title_only_admin_search` | `no` | UX |
 | Front-end admin bar | `frontend_admin_bar_behavior` | `''` | UX |
 | Disable Remember Me | `disable_remember_me` | `no` | Login |
-| Remember Me length (days) | `remember_me_days` | `5` | Login |
-| Regular session length (hours) | `session_regular_hours` | `0` | Login |
+| Regular session length (days) | `session_regular_days` | `2` | Login |
+| Remember Me length (days) | `remember_me_days` | `14` | Login |
 | Login logo | `login_logo_behavior` | `keep_default` | Branding |
 | Throttle the Heartbeat API | `throttle_heartbeat` | `no` | Performance |
 

@@ -33,7 +33,7 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Disable comments, pingbacks & self-pingbacks
 * Redirect public author archives and attachment pages
 * Disable the emoji script
-* Cap remembered login sessions at 5 days
+* Right-size login sessions in days: a 2-day regular login, 14 days when remembered
 * Automatically install WordPress core maintenance/security releases, while holding major releases for testing
 * Leave WordPress's existing automatic translation-file updates unchanged
 
