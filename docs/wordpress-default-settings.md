@@ -443,7 +443,7 @@ add_filter( 'post_search_columns', function ( $columns, $search, WP_Query $query
 ### Disable Front-End Admin Bar
 - **Setting key:** `frontend_admin_bar_behavior`
 - **Default:** `''` (unchanged) — or `hide_for_non_admins` as a common hardening default
-- **Why:** The floating admin bar on the front end nudges layout, leaks that a user is logged
+- **Why:** The admin bar (toolbar) on the front end nudges layout, leaks that a user is logged
   in, and is rarely needed for subscribers/customers. Two common policies below.
 
 ```php
