@@ -47,8 +47,9 @@ XML-RPC by category (pingbacks / remote publishing / multicall all off), require
 passwords (length + breach screening, not forced composition), send baseline security headers,
 set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments / pingbacks /
 self-pingbacks, redirect public author archives and attachment pages, disable the emoji script,
-cap remembered sessions at 5 days, and automatically install core maintenance/security releases
-while holding major releases for testing.
+right-size login sessions in days (a 2-day regular login, 14 days when remembered, floored so
+ticking "Remember Me" can never shorten a session), and automatically install core
+maintenance/security releases while holding major releases for testing.
 
 **Deliberately *not* locked down by default** (opinionated calls, explained in the reference):
 Application Passwords stay **available** — they're the safer, revocable integration credential,

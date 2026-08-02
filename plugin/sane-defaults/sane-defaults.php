@@ -213,21 +213,23 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'login',
 			'label'   => 'Disable "Remember Me"',
-			'help'    => 'Hides the checkbox and caps sessions short. Good for shared/kiosk machines.',
+			'help'    => 'Removes the "Remember Me" checkbox from the login form, so every login uses the regular session length below. Good for shared/kiosk machines.',
+		),
+		'session_regular_days'           => array(
+			'default' => 2,
+			'type'    => 'number',
+			'group'   => 'login',
+			'label'   => 'Regular session length (days)',
+			'help'    => 'How long a normal (non-remembered) login stays signed in. WordPress\'s default is 2 days.',
+			'min'     => 1,
 		),
 		'remember_me_days'               => array(
-			'default' => 5,
+			'default' => 14,
 			'type'    => 'number',
 			'group'   => 'login',
 			'label'   => 'Remember Me length (days)',
-			'help'    => 'Caps the persistent session. Core default is 14. Set 0 to leave core alone.',
-		),
-		'session_regular_hours'          => array(
-			'default' => 0,
-			'type'    => 'number',
-			'group'   => 'login',
-			'label'   => 'Regular session length (hours)',
-			'help'    => 'Length of a non-remembered login. 0 = leave the core default (2 days).',
+			'help'    => 'How long a remembered login stays signed in. WordPress\'s default is 14 days. It cannot be shorter than the regular session length above.',
+			'min'     => 1,
 		),
 
 		// --- Branding ---------------------------------------------------
@@ -779,6 +781,15 @@ function wpyeg_defaults_bootstrap() {
 	/* ----- Login & sessions ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
+		// Strip the submitted value server-side as well as hiding the checkbox, so
+		// a forged POST cannot opt back into a persistent session. login_init fires
+		// before wp-login.php reads $_POST['rememberme'].
+		add_action(
+			'login_init',
+			function () {
+				unset( $_POST['rememberme'], $_REQUEST['rememberme'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
+			}
+		);
 		add_action(
 			'login_footer',
 			function () {
@@ -787,25 +798,25 @@ function wpyeg_defaults_bootstrap() {
 		);
 	}
 
-	// One filter handles both the remember and regular session lengths.
+	// One filter sets both the remembered and regular session lengths (both in
+	// days). Sanitize guarantees remember >= regular, so ticking Remember Me can
+	// never shorten a login. When Remember Me is disabled every login is regular.
 	add_filter(
 		'auth_cookie_expiration',
 		function ( $expiration, $user_id, $remember ) {
+			$regular_days = (int) wpyeg_defaults_get( 'session_regular_days' );
+			$regular      = $regular_days > 0 ? $regular_days * DAY_IN_SECONDS : $expiration;
+
 			if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
-				return $remember ? 2 * DAY_IN_SECONDS : $expiration;
+				return $regular;
 			}
+
 			if ( $remember ) {
-				$days = (int) wpyeg_defaults_get( 'remember_me_days' );
-				if ( $days > 0 ) {
-					return $days * DAY_IN_SECONDS;
-				}
-			} else {
-				$hours = (int) wpyeg_defaults_get( 'session_regular_hours' );
-				if ( $hours > 0 ) {
-					return $hours * HOUR_IN_SECONDS;
-				}
+				$remember_days = (int) wpyeg_defaults_get( 'remember_me_days' );
+				return $remember_days > 0 ? $remember_days * DAY_IN_SECONDS : $expiration;
 			}
-			return $expiration;
+
+			return $regular;
 		},
 		10,
 		3
@@ -1350,7 +1361,9 @@ function wpyeg_defaults_sanitize( $input ) {
 				break;
 
 			case 'number':
-				$clean[ $key ] = isset( $input[ $key ] ) ? max( 0, absint( $input[ $key ] ) ) : $field['default'];
+				$min           = isset( $field['min'] ) ? (int) $field['min'] : 0;
+				$val           = isset( $input[ $key ] ) ? absint( $input[ $key ] ) : (int) $field['default'];
+				$clean[ $key ] = max( $min, $val );
 				break;
 
 			case 'select':
@@ -1359,6 +1372,13 @@ function wpyeg_defaults_sanitize( $input ) {
 				$clean[ $key ] = in_array( $value, $choices, true ) ? $value : $field['default'];
 				break;
 		}
+	}
+
+	// A remembered login must never be shorter than a regular one — otherwise
+	// ticking "Remember Me" would *shorten* the session. Clamp it up to match.
+	if ( isset( $clean['remember_me_days'], $clean['session_regular_days'] )
+		&& $clean['remember_me_days'] < $clean['session_regular_days'] ) {
+		$clean['remember_me_days'] = $clean['session_regular_days'];
 	}
 
 	return $clean;
@@ -1453,7 +1473,7 @@ function wpyeg_defaults_render_settings_page() {
 											<?php endforeach; ?>
 										</select>
 									<?php elseif ( 'number' === $field['type'] ) : ?>
-										<input type="number" min="0" step="1"
+										<input type="number" min="<?php echo esc_attr( isset( $field['min'] ) ? (int) $field['min'] : 0 ); ?>" step="1"
 											id="<?php echo esc_attr( $field_id ); ?>"
 											name="<?php echo esc_attr( $name ); ?>"
 											value="<?php echo esc_attr( $value ); ?>"

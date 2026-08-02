@@ -507,19 +507,19 @@ codeSlide(19, "ADMIN UX",
 
 codeSlide(20, "LOGIN & SESSIONS",
   "Right-size the login session",
-  "Click “Remember Me” and you stay logged in for 14 days. Cap that extended session, optionally shorten the regular one, or hide the checkbox entirely. One filter covers all three.",
-  "disable_remember_me / remember_me_days / session_regular_hours", "no / 5 / 0",
+  "A normal login lasts 2 days; “Remember Me” extends it to 14. Both are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the checkbox entirely. One filter covers all of it.",
+  "disable_remember_me / session_regular_days / remember_me_days", "no / 2 / 14",
   [
     { t: "add_filter( 'auth_cookie_expiration',", k: "" },
     { t: "  function ( $exp, $uid, $remember ) {", k: "" },
-    { t: "    if ( $remember ) {", k: "" },
-    { t: "      return 5 * DAY_IN_SECONDS;", k: "h" },
-    { t: "    }", k: "" },
-    { t: "    return 12 * HOUR_IN_SECONDS;", k: "h" },
+    { t: "    $regular = 2 * DAY_IN_SECONDS;", k: "" },
+    { t: "    return $remember", k: "" },
+    { t: "      ? 14 * DAY_IN_SECONDS", k: "h" },
+    { t: "      : $regular;", k: "h" },
     { t: "  }, 10, 3 );", k: "" },
     { t: "", k: "" },
     { t: "// DAY_IN_SECONDS: core time constant", k: "c" },
-  ]).addNotes("If you click the \"Remember Me\" checkbox when you log in, you stay logged in for 14 days. Cap that extended session length, optionally shorten the regular session, or hide the \"Remember Me\" checkbox entirely. (Good idea for shared machines.) One filter covers all three. WordPress ships handy time constants like DAY_IN_SECONDS, so you never need to do the math.");
+  ]).addNotes("A normal login lasts 2 days; ticking \"Remember Me\" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the \"Remember Me\" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) One filter covers all of it. WordPress ships handy time constants like DAY_IN_SECONDS, so you never need to do the math.");
 
 /* =================================================================== */
 /* SECTION 4 — BRANDING + PERFORMANCE (combined divider)               */
@@ -765,8 +765,8 @@ schemaMapSlide(31, "Schema map — login, branding, and performance",
   "Schema keys live in one option array; constants remain above plugins.",
   [
     ["disable_remember_me", "no", "login UI / cookie expiration"],
-    ["remember_me_days", "5", "auth_cookie_expiration"],
-    ["session_regular_hours", "0", "auth_cookie_expiration"],
+    ["session_regular_days", "2", "auth_cookie_expiration"],
+    ["remember_me_days", "14", "auth_cookie_expiration"],
     ["login_logo_behavior", "keep_default", "login header presentation"],
     ["throttle_heartbeat", "no", "Heartbeat settings / enqueue"],
     ["wpyeg_better_by_default", "array", "the only wp_options row"],

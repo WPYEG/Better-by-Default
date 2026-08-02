@@ -328,19 +328,19 @@ Search the admin post list on a big site and WordPress reads every word of every
 
 ## Right-size the login session
 
-	`disable_remember_me` / `remember_me_days` / `session_regular_hours` · default **no / 5 / 0**
+	`disable_remember_me` / `session_regular_days` / `remember_me_days` · default **no / 2 / 14**
 
 ```php
 add_filter( 'auth_cookie_expiration',
   function ( $exp, $uid, $remember ) {
-    if ( $remember ) {
-      return 5 * DAY_IN_SECONDS;
-    }
-    return 12 * HOUR_IN_SECONDS;
+    $regular = 2 * DAY_IN_SECONDS;
+    return $remember
+      ? 14 * DAY_IN_SECONDS
+      : $regular;
   }, 10, 3 );
 ```
 
-If you click the "Remember Me" checkbox when you log in, you stay logged in for 14 days. Cap that extended session length, optionally shorten the regular session, or hide the "Remember Me" checkbox entirely. (Good idea for shared machines.) One filter covers all three. WordPress ships handy time constants like `DAY_IN_SECONDS`, so you never need to do the math.
+A normal login lasts 2 days; ticking "Remember Me" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the "Remember Me" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) One filter covers all of it. WordPress ships handy time constants like `DAY_IN_SECONDS`, so you never need to do the math.
 
 ---
 
@@ -510,8 +510,8 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | Setting key or storage | Default | Core hook / role |
 | --- | --- | --- |
 | `disable_remember_me` | `no` | login UI / cookie expiration |
-| `remember_me_days` | `5` | `auth_cookie_expiration` |
-| `session_regular_hours` | `0` | `auth_cookie_expiration` |
+| `session_regular_days` | `2` | `auth_cookie_expiration` |
+| `remember_me_days` | `14` | `auth_cookie_expiration` |
 | `login_logo_behavior` | `keep_default` | login header presentation |
 | `throttle_heartbeat` | `no` | Heartbeat settings / enqueue |
 | `wpyeg_better_by_default` | array | the only `wp_options` row |

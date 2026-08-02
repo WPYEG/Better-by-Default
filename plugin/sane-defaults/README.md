@@ -45,9 +45,10 @@ Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by c
 (incoming pingbacks off, remote publishing off, system.multicall refused), require strong
 passwords (15+ chars, breach-screened, no forced composition), send baseline security headers,
 set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments/pingbacks/self-pingbacks,
-disable author archives, redirect attachment pages, disable emojis, cap remembered sessions at
-5 days, and install core maintenance/security releases automatically while holding major releases
-for testing. Translation files retain WordPress's existing automatic-update behaviour.
+disable author archives, redirect attachment pages, disable emojis, right-size login sessions in
+days (a 2-day regular login, 14 days when remembered, floored so ticking "Remember Me" can never
+shorten a session), and install core maintenance/security releases automatically while holding
+major releases for testing. Translation files retain WordPress's existing automatic-update behaviour.
 
 Off by default (opt-in, because they change behaviour): require-auth-for-all-REST, prohibit
 Application Passwords (left available by default — the safer, revocable REST credential),

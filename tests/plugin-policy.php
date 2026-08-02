@@ -997,10 +997,91 @@ foreach ( array( 'README.md', 'plugin/sane-defaults/README.md', 'plugin/sane-def
 	$readme = file_get_contents( $repo_root . '/' . $readme_path );
 	wpyeg_test_assert( false !== stripos( $readme, 'AI connectors' ), "{$readme_path} documents the enabled AI-connector policy." );
 	wpyeg_test_assert( false !== strpos( $readme, 'SAMEORIGIN' ), "{$readme_path} documents the enabled frame policy." );
-	wpyeg_test_assert( false !== strpos( $readme, '5 days' ), "{$readme_path} documents the remembered-session cap." );
+	wpyeg_test_assert( false !== strpos( $readme, '14 days' ), "{$readme_path} documents the remembered-session length." );
 }
 
 unset( $GLOBALS['wpyeg_test_http'] );
 $GLOBALS['wpyeg_test_transients'] = array();
+
+/*
+ * Login & sessions: unit consistency (days), per-field floors, and the
+ * Remember Me >= regular guardrail. These three controls carried inherited
+ * confusions — mixed units (days vs hours), a "0 = core default" sentinel that
+ * read as a real value, and no floor, so a short Remember Me length could make
+ * ticking the box *shorten* the login. All three are fixed here.
+ */
+$login_schema = wpyeg_defaults_schema();
+
+// Both length fields are day-based numbers now; the legacy hours field is gone.
+wpyeg_test_assert( isset( $login_schema['session_regular_days'] ), 'session_regular_days field exists.' );
+wpyeg_test_assert( ! isset( $login_schema['session_regular_hours'] ), 'Legacy session_regular_hours field is gone.' );
+wpyeg_test_assert( 'number' === $login_schema['session_regular_days']['type'], 'Regular session is a number field.' );
+wpyeg_test_assert( 'number' === $login_schema['remember_me_days']['type'], 'Remember Me length is a number field.' );
+
+// Defaults are prefilled with WordPress's real values — no "0 = core default" sentinel.
+wpyeg_test_assert( 2 === $login_schema['session_regular_days']['default'], 'Regular default is WordPress\'s 2 days.' );
+wpyeg_test_assert( 14 === $login_schema['remember_me_days']['default'], 'Remember Me default is WordPress\'s 14 days.' );
+wpyeg_test_assert( 1 === (int) $login_schema['session_regular_days']['min'], 'Regular session has a 1-day floor.' );
+wpyeg_test_assert( 1 === (int) $login_schema['remember_me_days']['min'], 'Remember Me length has a 1-day floor.' );
+
+// A per-field minimum clamps a below-floor submission up to the floor.
+$floored = wpyeg_defaults_sanitize(
+	array(
+		'session_regular_days' => '0',
+		'remember_me_days'     => '0',
+	)
+);
+wpyeg_test_assert( 1 === $floored['session_regular_days'], 'Regular session clamps 0 up to its 1-day floor.' );
+
+// The guardrail: a remembered login can never be shorter than a regular one.
+$guardrail = wpyeg_defaults_sanitize(
+	array(
+		'session_regular_days' => '10',
+		'remember_me_days'     => '3',
+	)
+);
+wpyeg_test_assert( 10 === $guardrail['remember_me_days'], 'Remember Me is clamped up to the regular session length (10).' );
+
+// A coherent pair (remember >= regular) is left untouched.
+$coherent = wpyeg_defaults_sanitize(
+	array(
+		'session_regular_days' => '2',
+		'remember_me_days'     => '30',
+	)
+);
+wpyeg_test_assert( 2 === $coherent['session_regular_days'] && 30 === $coherent['remember_me_days'], 'A valid remember >= regular pair passes through unchanged.' );
+
+/**
+ * Run the registered auth_cookie_expiration filter for a given login type.
+ *
+ * @param bool $remember Whether the login ticked "Remember Me".
+ * @return int Cookie lifetime in seconds.
+ */
+function wpyeg_test_auth_cookie_expiration( $remember ) {
+	$hook = wpyeg_test_find_hook( 'auth_cookie_expiration' );
+	return (int) call_user_func( $hook['callback'], 7 * DAY_IN_SECONDS, 1, $remember );
+}
+
+// Out of the box the filter returns the day-based lengths: 2 days regular, 14
+// remembered — the visible no-op defaults, not core's untouched value.
+$GLOBALS['wpyeg_test_hooks']  = array();
+$GLOBALS['wpyeg_test_option'] = array();
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( 2 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( false ), 'A regular login lasts the regular length (2 days).' );
+wpyeg_test_assert( 14 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'A remembered login lasts the remembered length (14 days).' );
+
+// Disabling Remember Me routes every login — even a remembered one — through the
+// regular length, and strips the forged flag server-side (not just via JS/CSS).
+$GLOBALS['wpyeg_test_hooks']  = array();
+$GLOBALS['wpyeg_test_option'] = array(
+	'disable_remember_me'  => 'yes',
+	'session_regular_days' => 3,
+);
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( 3 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'Disabling Remember Me makes even a remembered login use the regular length.' );
+wpyeg_test_assert( null !== wpyeg_test_find_hook( 'login_init' ), 'Disabling Remember Me strips the rememberme POST server-side, not only via the checkbox-hiding script.' );
+
+unset( $GLOBALS['wpyeg_test_option'] );
+$GLOBALS['wpyeg_test_hooks'] = array();
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );
