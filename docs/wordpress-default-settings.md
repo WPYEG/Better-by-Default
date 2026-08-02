@@ -11,7 +11,7 @@ can drop into a plugin, an mu-plugin, or a theme's `functions.php`.
 > `sane-defaults` plugin wires every one of these behind a toggle.
 
 **How to read this:** the option key/default columns assume these are user-toggleable
-settings. The snippet under each item is the "on" behavior — the code that runs when the
+settings. The snippet under each item is the "on" behaviour — the code that runs when the
 default is active. In a real plugin you'd wrap each snippet in a
 `get_option( 'wpyeg_...' ) === 'yes'` check so site owners can flip it. Snippets are shown
 unwrapped for clarity.
@@ -118,7 +118,7 @@ add_filter( 'wp_headers', function ( $headers ) {
 
 `system.multicall` **can't be removed with the `xmlrpc_methods` filter** — `IXR_Server::setCallbacks()`
 re-adds it after the filter runs — so refuse it with a replacement server. This is modest
-defense-in-depth against batching, not a major password control: since WordPress 4.4, after the
+defence-in-depth against batching, not a major password control: since WordPress 4.4, after the
 first failed authentication in one XML-RPC request, later authentication attempts fail without
 testing more credentials. Multicall can still batch other work, including pingback calls, but
 pingbacks are also directly callable and do not depend on it. See
@@ -168,7 +168,7 @@ add_filter( 'wp_is_application_passwords_available', function ( $available ) {
 } );
 ```
 > **Note:** they authenticate REST/XML-RPC without the login form, so a 2FA companion never
-> challenges them. That's a real trade — but it's core behavior, and the alternatives are worse.
+> challenges them. That's a real trade — but it's core behaviour, and the alternatives are worse.
 > Use core's `wp_is_application_passwords_available_for_user` filter to withhold them per account
 > (e.g. from human 2FA accounts) if that gap matters.
 
@@ -176,7 +176,7 @@ add_filter( 'wp_is_application_passwords_available', function ( $available ) {
 - **Option:** `wpyeg_require_strong_passwords`
 - **Default:** `yes`
 - **Why:** Core ships a password meter but won't *enforce* strength. Enforce it server-side —
-  but follow current **OWASP/NIST** guidance: favor **length and breached-password screening**
+  but follow current **OWASP/NIST** guidance: favour **length and breached-password screening**
   over forced composition rules. NIST 800-63B explicitly *discourages* upper/lower/number/symbol
   requirements — they push users toward predictable patterns like `Password1!` without adding
   real entropy.
@@ -455,7 +455,7 @@ add_action( 'login_footer', function () {
     <?php
 } );
 
-// Belt-and-suspenders: never honor a "remember" flag server-side.
+// Belt-and-suspenders: never honour a "remember" flag server-side.
 add_filter( 'auth_cookie_expiration', function ( $length, $user_id, $remember ) {
     return $remember ? 2 * DAY_IN_SECONDS : $length;
 }, 10, 3 );
@@ -483,7 +483,7 @@ add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remembe
 - **Why:** The default WordPress "W" on `wp-login.php` links to wordpress.org — a subtle brand
   and trust leak. Removing or replacing it is worthwhile, but changing the login screen out of
   the box is intrusive, so the safe default is to **leave it alone** and let an administrator opt
-  in. Behaviors: `keep_default` (unchanged), `remove_logo` (recommended — drop the logo and the
+  in. Behaviours: `keep_default` (unchanged), `remove_logo` (recommended — drop the logo and the
   wp.org link), `unlink_logo` (keep the logo, kill the link), `replace_logo` (swap in the site
   logo/icon, linked to the site home).
 
@@ -506,9 +506,9 @@ if ( in_array( $behavior, array( 'remove_logo', 'unlink_logo', 'replace_logo' ),
     } );
 }
 ```
-> **Note:** an earlier version of this reference paired the behavior with a separate
+> **Note:** an earlier version of this reference paired the behaviour with a separate
 > `wpyeg_login_logo_link_home` toggle. That was redundant — a replacement logo should always link
-> home — so the toggle is gone and the behavior option alone covers it.
+> home — so the toggle is gone and the behaviour option alone covers it.
 
 ---
 
@@ -771,11 +771,11 @@ function wpyeg_strip_asset_ver( $src ) {
 | Disable Emojis | `wpyeg_disable_emojis` | `yes` | Performance |
 | Redirect Attachment Pages | `wpyeg_redirect_attachment_pages` | `yes` | SEO |
 | Title-Only Admin Search | `wpyeg_title_only_admin_search` | `no` | UX |
-| Front-End Admin Bar Behavior | `wpyeg_frontend_admin_bar_behavior` | `''` | UX |
+| Front-End Admin Bar Behaviour | `wpyeg_frontend_admin_bar_behavior` | `''` | UX |
 | Disable Remember Me | `wpyeg_disable_remember_me` | `no` | Login |
 | Remember Me Policy / Days | `wpyeg_remember_me_policy` / `_days` | `default` / `5` | Login |
 | Regular Session Hours | `wpyeg_session_regular_hours` | `0` | Login |
-| Login Logo Behavior | `wpyeg_login_logo_behavior` | `keep_default` | Branding |
+| Login Logo Behaviour | `wpyeg_login_logo_behavior` | `keep_default` | Branding |
 
 ---
 

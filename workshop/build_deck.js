@@ -180,7 +180,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   s.addText("Hooks & filters", {
     x: 0.6, y: 0.55, w: 12, h: 0.8, fontFace: HEAD, fontSize: 32, bold: true, color: INK, margin: 0,
   });
-  s.addText("WordPress is built to be interrupted at labeled moments (hooks) so you never edit core code.", {
+  s.addText("WordPress is built to be interrupted at labelled moments (hooks) so you never edit core code.", {
     x: 0.6, y: 1.4, w: 11.8, h: 0.7, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0,
   });
 
@@ -198,7 +198,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(r.ex, { x: 8.65, y: y + 0.5, w: 3.7, h: 0.8, fontFace: MONO, fontSize: 10.5, color: CGOLD, valign: "middle", margin: 0 });
   });
   footer(s, 4);
-  s.addNotes("WordPress is built to be interrupted at labeled moments (hooks) so you never edit core code. __return_false is a tiny built-in helper that just hands back false — perfect for switching a feature off.");
+  s.addNotes("WordPress is built to be interrupted at labelled moments (hooks) so you never edit core code. __return_false is a tiny built-in helper that just hands back false — perfect for switching a feature off.");
 })();
 
 /* =================================================================== */
@@ -601,7 +601,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     { n: "1", t: "Upload the plugin", d: "Plugins → Add New → Upload Plugin → choose sane-defaults.zip → Activate." },
     { n: "2", t: "Open the settings", d: "Settings → Better by Default; every toggle grouped by category." },
     { n: "3", t: "Verify a default", d: "Visit /wp-json/wp/v2/users logged out → 401 or empty, not a list of usernames." },
-    { n: "4", t: "Toggle & re-check", d: "Flip a switch off, reload, watch the behavior change." },
+    { n: "4", t: "Toggle & re-check", d: "Flip a switch off, reload, watch the behaviour change." },
   ];
   steps.forEach((c, i) => {
     const y = 1.5 + i * 1.14;
@@ -715,7 +715,7 @@ codeSlide(22, "PERFORMANCE · opt-in",
     { text: "Questions?  ", options: { color: WHITE, bold: true } },
     { text: "License GPL-3.0-or-later", options: { color: SKY } },
   ], { x: 0.9, y: 6.15, w: 11.5, h: 0.6, fontFace: BODY, fontSize: 16, margin: 0, valign: "middle" });
-  s.addNotes("Hand out the zip and the reference doc. Invite everyone to add their own favorite default to the schema and share it back with the group.");
+  s.addNotes("Hand out the zip and the reference doc. Invite everyone to add their own favourite default to the schema and share it back with the group.");
 })();
 
 p.writeFile({ fileName: "Better-by-Default.pptx" }).then((f) => console.log("WROTE", f));

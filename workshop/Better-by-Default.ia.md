@@ -44,7 +44,7 @@ In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We h
 add_filter( 'xmlrpc_enabled', '__return_false' );
 ```
 
-WordPress is built to be interrupted at labeled moments (hooks) so you never edit core code. `__return_false` is a tiny built-in helper that just hands back false — perfect for switching a feature off.
+WordPress is built to be interrupted at labelled moments (hooks) so you never edit core code. `__return_false` is a tiny built-in helper that just hands back false — perfect for switching a feature off.
 
 ---
 
@@ -401,7 +401,7 @@ foreach ( wpyeg_defaults_schema() as $key => $field ) { /* render + wire */ }
 	1. **Upload the plugin** — Plugins → Add New → Upload Plugin → choose `sane-defaults.zip` → Activate
 	2. **Open the settings** — Settings → Better by Default; every toggle grouped by category
 	3. **Verify a default** — visit `/wp-json/wp/v2/users` logged out → 401 or empty, not a list of usernames
-	4. **Toggle & re-check** — flip a switch off, reload, watch the behavior change
+	4. **Toggle & re-check** — flip a switch off, reload, watch the behaviour change
 
 ```bash
 # prefer the terminal?
@@ -458,4 +458,4 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 
 **Questions?** License GPL-3.0-or-later
 
-[Hand out the zip and the reference doc. Invite everyone to add their own favorite default to the schema and share it back with the group.]
+[Hand out the zip and the reference doc. Invite everyone to add their own favourite default to the schema and share it back with the group.]

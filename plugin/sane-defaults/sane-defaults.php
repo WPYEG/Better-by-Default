@@ -475,7 +475,7 @@ function wpyeg_defaults_bootstrap() {
 				/*
 				 * WordPress 4.4 stopped testing credentials after the first failed
 				 * authentication in one XML-RPC request. Refusing multicall is now
-				 * modest defense-in-depth against general batching, not a fix for
+				 * modest defence-in-depth against general batching, not a fix for
 				 * the obsolete "thousands of password guesses" claim.
 				 */
 				class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
