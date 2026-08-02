@@ -36,21 +36,21 @@ function wpyeg_defaults_schema() {
 	return array(
 
 		// --- Security ---------------------------------------------------
-		'restrict_rest_user_discovery' => array(
+		'restrict_rest_user_discovery'   => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Restrict REST API user discovery',
 			'help'    => 'Hides <code>/wp/v2/users</code> from logged-out requests (stops username enumeration).',
 		),
-		'disable_rest' => array(
+		'disable_rest'                   => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require auth for all REST requests',
 			'help'    => 'Blocks anonymous REST entirely. The logged-in block editor still works, but public blocks, embeds, search, and integrations may not.',
 		),
-		'xmlrpc_allow_pingbacks' => array(
+		'xmlrpc_allow_pingbacks'         => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
@@ -64,49 +64,49 @@ function wpyeg_defaults_schema() {
 			'label'   => 'XML-RPC: allow remote publishing (blogging apps)',
 			'help'    => 'OFF (default) removes credential-authenticated <code>wp.*</code>, <code>metaWeblog.*</code>, <code>mt.*</code>, and <code>blogger.*</code> methods plus the RSD link. Leave ON while Jetpack is active unless connection and feature testing proves it unnecessary.',
 		),
-		'xmlrpc_allow_multicall' => array(
+		'xmlrpc_allow_multicall'         => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: allow system.multicall',
 			'help'    => 'OFF (default) refuses <code>system.multicall</code>, a general batching wrapper with little established modern use. WordPress 4.4 stopped it from testing thousands of passwords in one request.',
 		),
-		'block_xmlrpc_endpoint' => array(
+		'block_xmlrpc_endpoint'          => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: block the endpoint entirely',
 			'help'    => 'Strictest tier — <code>xmlrpc.php</code> returns <code>403</code> for every request. Do NOT enable on a Jetpack site. Prefer an edge block when possible; this plugin-level block still boots PHP.',
 		),
-		'disable_application_passwords' => array(
+		'disable_application_passwords'  => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Prohibit Application Passwords',
 			'help'    => 'OFF (default) keeps them available — separate, revocable integration credentials for REST and XML-RPC. They inherit the owning user\'s access and bypass interactive 2FA, so use a least-privileged account.',
 		),
-		'require_strong_passwords' => array(
+		'require_strong_passwords'       => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require strong passwords',
 			'help'    => 'Server-side rule: 15+ characters, a local blocklist, personal-context screening, and no forced composition rules. For the breach check, BBD sends Have I Been Pwned only the first five characters of a locally computed SHA-1 hash, then matches returned suffixes locally; the password and full hash never leave the site. HIBP outages or invalid responses fail open. See the <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange">HIBP Pwned Passwords range API</a> and <a href="https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver">NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers</a>.',
 		),
-		'remove_version' => array(
+		'remove_version'                 => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Remove WordPress version fingerprint',
 			'help'    => 'Strips the generator meta tag. Obscurity, not hardening: it trims scanner noise but does not make an out-of-date site any safer, and the version still leaks from asset query strings and feeds. Off by default — patch instead. Turn on if you want the noise reduction.',
 		),
-		'security_headers' => array(
+		'security_headers'               => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Send baseline security headers',
 			'help'    => '<code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code>. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
 		),
-		'frame_options' => array(
+		'frame_options'                  => array(
 			'default' => 'SAMEORIGIN',
 			'type'    => 'select',
 			'group'   => 'security',
@@ -118,7 +118,7 @@ function wpyeg_defaults_schema() {
 				''           => 'Leave unchanged (host/CDN sets it, or the site is embedded elsewhere)',
 			),
 		),
-		'disable_ai_connectors' => array(
+		'disable_ai_connectors'          => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
@@ -127,7 +127,7 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Updates ----------------------------------------------------
-		'core_update_policy' => array(
+		'core_update_policy'             => array(
 			'default' => 'minor',
 			'type'    => 'select',
 			'group'   => 'updates',
@@ -141,42 +141,42 @@ function wpyeg_defaults_schema() {
 			),
 		),
 		// --- Content & public surfaces ---------------------------------
-		'disable_comments' => array(
+		'disable_comments'               => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable comments, trackbacks & pingbacks',
 			'help'    => 'Closes comments everywhere, hides existing threads, removes the admin menu.',
 		),
-		'disable_pingbacks' => array(
+		'disable_pingbacks'              => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Default new posts to pings closed',
 			'help'    => 'Sets the "allow pingbacks" default to off for newly created content.',
 		),
-		'disable_self_pingbacks' => array(
+		'disable_self_pingbacks'         => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable self-pingbacks',
 			'help'    => 'Stops internal links from generating pingback noise.',
 		),
-		'disable_author_archives' => array(
+		'disable_author_archives'        => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable public author archives',
 			'help'    => 'Redirects <code>/author/{slug}/</code> to home (another enumeration + thin-content fix).',
 		),
-		'redirect_attachment_pages' => array(
+		'redirect_attachment_pages'      => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Redirect attachment pages',
 			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides <code>attachment.php</code> or <code>image.php</code>, since that theme meant to render them. Core has its own switch since 6.4 (<code>wp_attachment_pages_enabled</code>); this prefers the parent post over the bare file.',
 		),
-		'disable_emojis' => array(
+		'disable_emojis'                 => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
@@ -185,42 +185,42 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Admin & front-end UX --------------------------------------
-		'title_only_admin_search' => array(
+		'title_only_admin_search'        => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'ux',
 			'label'   => 'Title-only admin search',
 			'help'    => 'Speeds up admin list-table search on big sites by matching titles only.',
 		),
-		'frontend_admin_bar_behavior' => array(
+		'frontend_admin_bar_behavior'    => array(
 			'default' => '',
 			'type'    => 'select',
 			'group'   => 'ux',
 			'label'   => 'Front-end admin bar',
 			'help'    => 'Control the floating admin bar on the front of the site.',
 			'choices' => array(
-				''               => 'Leave unchanged (WordPress default)',
+				''                => 'Leave unchanged (WordPress default)',
 				'hide_non_admins' => 'Hide for non-admins',
 				'hide_all'        => 'Hide for everyone',
 			),
 		),
 
 		// --- Login & sessions ------------------------------------------
-		'disable_remember_me' => array(
+		'disable_remember_me'            => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'login',
 			'label'   => 'Disable "Remember Me"',
 			'help'    => 'Hides the checkbox and caps sessions short. Good for shared/kiosk machines.',
 		),
-		'remember_me_days' => array(
+		'remember_me_days'               => array(
 			'default' => 5,
 			'type'    => 'number',
 			'group'   => 'login',
 			'label'   => 'Remember Me length (days)',
 			'help'    => 'Caps the persistent session. Core default is 14. Set 0 to leave core alone.',
 		),
-		'session_regular_hours' => array(
+		'session_regular_hours'          => array(
 			'default' => 0,
 			'type'    => 'number',
 			'group'   => 'login',
@@ -229,7 +229,7 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Branding ---------------------------------------------------
-		'login_logo_behavior' => array(
+		'login_logo_behavior'            => array(
 			'default' => 'keep_default',
 			'type'    => 'select',
 			'group'   => 'branding',
@@ -244,7 +244,7 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Performance ------------------------------------------------
-		'throttle_heartbeat' => array(
+		'throttle_heartbeat'             => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'performance',
@@ -363,9 +363,11 @@ function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
 	return 'inherit' === wpyeg_defaults_get( 'core_update_policy' ) ? $enabled : false;
 }
 
-/* =======================================================================
+/*
+ * =======================================================================
  * BOOTSTRAP — wire each enabled policy to its hook.
- * ===================================================================== */
+ * =====================================================================
+ */
 
 add_action( 'plugins_loaded', 'wpyeg_defaults_bootstrap' );
 
@@ -388,13 +390,16 @@ function wpyeg_defaults_bootstrap() {
 	/* ----- Security ----- */
 
 	if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
-		add_filter( 'rest_endpoints', function ( $endpoints ) {
-			if ( ! is_user_logged_in() ) {
-				unset( $endpoints['/wp/v2/users'] );
-				unset( $endpoints['/wp/v2/users/(?P<id>[\d]+)'] );
+		add_filter(
+			'rest_endpoints',
+			function ( $endpoints ) {
+				if ( ! is_user_logged_in() ) {
+					unset( $endpoints['/wp/v2/users'] );
+					unset( $endpoints['/wp/v2/users/(?P<id>[\d]+)'] );
+				}
+				return $endpoints;
 			}
-			return $endpoints;
-		} );
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_rest' ) ) {
@@ -408,39 +413,49 @@ function wpyeg_defaults_bootstrap() {
 	 * system.multicall and a full endpoint block need a server-class swap,
 	 * because IXR re-adds multicall after the filter runs.
 	 */
-	add_filter( 'xmlrpc_methods', function ( $methods ) {
-		// demo.* are inert core test methods with no legitimate use. Always drop
-		// them (no toggle) so a locked-down endpoint stops answering scanner
-		// probes like demo.sayHello with a cheerful "Hello!".
-		unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] );
+	add_filter(
+		'xmlrpc_methods',
+		function ( $methods ) {
+			// demo.* are inert core test methods with no legitimate use. Always drop
+			// them (no toggle) so a locked-down endpoint stops answering scanner
+			// probes like demo.sayHello with a cheerful "Hello!".
+			unset( $methods['demo.sayHello'], $methods['demo.addTwoNumbers'] );
 
-		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
-			unset( $methods['pingback.ping'], $methods['pingback.extensions.getPingbacks'] );
-		}
-		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ) {
-			foreach ( array_keys( $methods ) as $name ) {
-				if ( preg_match( '/^(wp|metaWeblog|mt|blogger)\./', (string) $name ) ) {
-					unset( $methods[ $name ] );
+			if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
+				unset( $methods['pingback.ping'], $methods['pingback.extensions.getPingbacks'] );
+			}
+			if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ) {
+				foreach ( array_keys( $methods ) as $name ) {
+					if ( preg_match( '/^(wp|metaWeblog|mt|blogger)\./', (string) $name ) ) {
+						unset( $methods[ $name ] );
+					}
 				}
 			}
-		}
-		return $methods;
-	}, PHP_INT_MAX );
+			return $methods;
+		},
+		PHP_INT_MAX
+	);
 
 	// Disable core methods that require authentication when remote publishing is
 	// off. Despite its name, xmlrpc_enabled does not disable the endpoint,
 	// pingbacks, or custom unauthenticated methods.
-	add_filter( 'xmlrpc_enabled', function ( $enabled ) {
-		return wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ? $enabled : false;
-	} );
+	add_filter(
+		'xmlrpc_enabled',
+		function ( $enabled ) {
+			return wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ? $enabled : false;
+		}
+	);
 
 	// Strip the pingback discovery header when pingbacks are off.
-	add_filter( 'wp_headers', function ( $headers ) {
-		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
-			unset( $headers['X-Pingback'] );
+	add_filter(
+		'wp_headers',
+		function ( $headers ) {
+			if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_pingbacks' ) ) {
+				unset( $headers['X-Pingback'] );
+			}
+			return $headers;
 		}
-		return $headers;
-	} );
+	);
 
 	// Drop the RSD link (blogging-client discovery) when remote publishing is off.
 	if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_remote_publishing' ) ) {
@@ -452,38 +467,41 @@ function wpyeg_defaults_bootstrap() {
 	 * runs from xmlrpc.php, where the parent wp_xmlrpc_server is already loaded,
 	 * so extending it at plugin-load time (on every ordinary request) is avoided.
 	 */
-	add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
-		if ( wpyeg_defaults_enabled( 'block_xmlrpc_endpoint' ) ) {
-			if ( ! class_exists( 'Wpyeg_Blocked_XMLRPC_Server' ) ) {
-				class Wpyeg_Blocked_XMLRPC_Server {
-					public function serve_request() {
-						status_header( 403 );
-						exit( 'XML-RPC services are disabled on this site.' );
+	add_filter(
+		'wp_xmlrpc_server_class',
+		function ( $class ) {
+			if ( wpyeg_defaults_enabled( 'block_xmlrpc_endpoint' ) ) {
+				if ( ! class_exists( 'Wpyeg_Blocked_XMLRPC_Server' ) ) {
+					class Wpyeg_Blocked_XMLRPC_Server {
+						public function serve_request() {
+							status_header( 403 );
+							exit( 'XML-RPC services are disabled on this site.' );
+						}
 					}
 				}
+				return 'Wpyeg_Blocked_XMLRPC_Server';
 			}
-			return 'Wpyeg_Blocked_XMLRPC_Server';
-		}
 
-		if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
-			if ( ! class_exists( 'Wpyeg_Multicall_Disabled_Server' ) ) {
-				/*
-				 * WordPress 4.4 stopped testing credentials after the first failed
-				 * authentication in one XML-RPC request. Refusing multicall is now
-				 * modest defence-in-depth against general batching, not a fix for
-				 * the obsolete "thousands of password guesses" claim.
-				 */
-				class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
-					public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
-						return new IXR_Error( 405, 'system.multicall is disabled on this site.' );
+			if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
+				if ( ! class_exists( 'Wpyeg_Multicall_Disabled_Server' ) ) {
+					/*
+					 * WordPress 4.4 stopped testing credentials after the first failed
+					 * authentication in one XML-RPC request. Refusing multicall is now
+					 * modest defence-in-depth against general batching, not a fix for
+					 * the obsolete "thousands of password guesses" claim.
+					 */
+					class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
+						public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
+							return new IXR_Error( 405, 'system.multicall is disabled on this site.' );
+						}
 					}
 				}
+				return 'Wpyeg_Multicall_Disabled_Server';
 			}
-			return 'Wpyeg_Multicall_Disabled_Server';
-		}
 
-		return $class;
-	} );
+			return $class;
+		}
+	);
 
 	if ( wpyeg_defaults_enabled( 'disable_application_passwords' ) ) {
 		add_filter( 'wp_is_application_passwords_available', '__return_false' );
@@ -502,32 +520,38 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'security_headers' ) ) {
-		add_filter( 'wp_headers', function ( $headers ) {
-			// Only fill in what nothing else has set. A managed host or CDN often
-			// owns these, and two sources setting the same header is at best
-			// redundant. Caveat worth knowing: PHP can only see headers set in
-			// PHP — one added by nginx or a CDN is invisible here, so this
-			// cannot catch every duplicate. Check the response, not just this.
-			if ( ! isset( $headers['X-Content-Type-Options'] ) ) {
-				$headers['X-Content-Type-Options'] = 'nosniff';
+		add_filter(
+			'wp_headers',
+			function ( $headers ) {
+				// Only fill in what nothing else has set. A managed host or CDN often
+				// owns these, and two sources setting the same header is at best
+				// redundant. Caveat worth knowing: PHP can only see headers set in
+				// PHP — one added by nginx or a CDN is invisible here, so this
+				// cannot catch every duplicate. Check the response, not just this.
+				if ( ! isset( $headers['X-Content-Type-Options'] ) ) {
+					$headers['X-Content-Type-Options'] = 'nosniff';
+				}
+				if ( ! isset( $headers['Referrer-Policy'] ) ) {
+					$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+				}
+				return $headers;
 			}
-			if ( ! isset( $headers['Referrer-Policy'] ) ) {
-				$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
-			}
-			return $headers;
-		} );
+		);
 	}
 
 	// Framing is its own setting: it is the only one of the three that can break
 	// a working site, so it must be switchable without also giving up nosniff.
 	$wpyeg_frame_options = wpyeg_defaults_get( 'frame_options' );
 	if ( '' !== $wpyeg_frame_options ) {
-		add_filter( 'wp_headers', function ( $headers ) use ( $wpyeg_frame_options ) {
-			if ( ! isset( $headers['X-Frame-Options'] ) ) {
-				$headers['X-Frame-Options'] = $wpyeg_frame_options;
+		add_filter(
+			'wp_headers',
+			function ( $headers ) use ( $wpyeg_frame_options ) {
+				if ( ! isset( $headers['X-Frame-Options'] ) ) {
+					$headers['X-Frame-Options'] = $wpyeg_frame_options;
+				}
+				return $headers;
 			}
-			return $headers;
-		} );
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_ai_connectors' ) ) {
@@ -574,96 +598,120 @@ function wpyeg_defaults_bootstrap() {
 		add_filter( 'pings_open', '__return_false', 20 );
 		add_filter( 'comments_array', '__return_empty_array', 20 );
 
-		add_action( 'init', function () {
-			foreach ( get_post_types() as $type ) {
-				if ( post_type_supports( $type, 'comments' ) ) {
-					remove_post_type_support( $type, 'comments' );
-					remove_post_type_support( $type, 'trackbacks' );
+		add_action(
+			'init',
+			function () {
+				foreach ( get_post_types() as $type ) {
+					if ( post_type_supports( $type, 'comments' ) ) {
+						remove_post_type_support( $type, 'comments' );
+						remove_post_type_support( $type, 'trackbacks' );
+					}
 				}
 			}
-		} );
+		);
 
-		add_action( 'admin_menu', function () {
-			remove_menu_page( 'edit-comments.php' );
-		} );
-
-		add_action( 'wp_before_admin_bar_render', function () {
-			global $wp_admin_bar;
-			if ( $wp_admin_bar ) {
-				$wp_admin_bar->remove_node( 'comments' );
+		add_action(
+			'admin_menu',
+			function () {
+				remove_menu_page( 'edit-comments.php' );
 			}
-		} );
+		);
+
+		add_action(
+			'wp_before_admin_bar_render',
+			function () {
+				global $wp_admin_bar;
+				if ( $wp_admin_bar ) {
+					$wp_admin_bar->remove_node( 'comments' );
+				}
+			}
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_pingbacks' ) ) {
 		add_filter( 'pre_option_default_pingback_flag', '__return_zero' );
-		add_filter( 'pre_option_default_ping_status', function () {
-			return 'closed';
-		} );
+		add_filter(
+			'pre_option_default_ping_status',
+			function () {
+				return 'closed';
+			}
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_self_pingbacks' ) ) {
-		add_action( 'pre_ping', function ( &$links ) {
-			$home = home_url();
-			foreach ( (array) $links as $key => $link ) {
-				if ( 0 === strpos( $link, $home ) ) {
-					unset( $links[ $key ] );
+		add_action(
+			'pre_ping',
+			function ( &$links ) {
+				$home = home_url();
+				foreach ( (array) $links as $key => $link ) {
+					if ( 0 === strpos( $link, $home ) ) {
+						unset( $links[ $key ] );
+					}
 				}
 			}
-		} );
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
-		add_action( 'template_redirect', function () {
-			if ( is_author() ) {
-				wp_safe_redirect( home_url( '/' ), 301 );
-				exit;
+		add_action(
+			'template_redirect',
+			function () {
+				if ( is_author() ) {
+					wp_safe_redirect( home_url( '/' ), 301 );
+					exit;
+				}
 			}
-		} );
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'redirect_attachment_pages' ) ) {
-		add_action( 'template_redirect', function () {
-			if ( ! is_attachment() ) {
-				return;
-			}
-
-			$target = wpyeg_defaults_attachment_redirect_target( get_queried_object_id() );
-
-			if ( '' === $target ) {
-				return; // Nothing better to offer — let WordPress render the page.
-			}
-
-			// wp_safe_redirect() bounces to wp-admin when the host is not on the
-			// allowlist, which offloaded media (S3, a CDN) would trigger. Allow
-			// this one host rather than dumping visitors on the dashboard.
-			add_filter(
-				'allowed_redirect_hosts',
-				function ( $hosts ) use ( $target ) {
-					$host = wp_parse_url( $target, PHP_URL_HOST );
-					if ( $host ) {
-						$hosts[] = $host;
-					}
-					return $hosts;
+		add_action(
+			'template_redirect',
+			function () {
+				if ( ! is_attachment() ) {
+					return;
 				}
-			);
 
-			wp_safe_redirect( $target, 301 );
-			exit;
-		} );
+				$target = wpyeg_defaults_attachment_redirect_target( get_queried_object_id() );
+
+				if ( '' === $target ) {
+					return; // Nothing better to offer — let WordPress render the page.
+				}
+
+				// wp_safe_redirect() bounces to wp-admin when the host is not on the
+				// allowlist, which offloaded media (S3, a CDN) would trigger. Allow
+				// this one host rather than dumping visitors on the dashboard.
+				add_filter(
+					'allowed_redirect_hosts',
+					function ( $hosts ) use ( $target ) {
+						$host = wp_parse_url( $target, PHP_URL_HOST );
+						if ( $host ) {
+							$hosts[] = $host;
+						}
+						return $hosts;
+					}
+				);
+
+				wp_safe_redirect( $target, 301 );
+				exit;
+			}
+		);
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_emojis' ) ) {
-		add_action( 'init', function () {
-			remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
-			remove_action( 'admin_print_scripts', 'print_emoji_detection_script' );
-			remove_action( 'wp_print_styles', 'print_emoji_styles' );
-			remove_action( 'admin_print_styles', 'print_emoji_styles' );
-			remove_filter( 'the_content_feed', 'wp_staticize_emoji' );
-			remove_filter( 'comment_text_rss', 'wp_staticize_emoji' );
-			remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
-			add_filter( 'emoji_svg_url', '__return_false' );
-		} );
+		add_action(
+			'init',
+			function () {
+				remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
+				remove_action( 'admin_print_scripts', 'print_emoji_detection_script' );
+				remove_action( 'wp_print_styles', 'print_emoji_styles' );
+				remove_action( 'admin_print_styles', 'print_emoji_styles' );
+				remove_filter( 'the_content_feed', 'wp_staticize_emoji' );
+				remove_filter( 'comment_text_rss', 'wp_staticize_emoji' );
+				remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
+				add_filter( 'emoji_svg_url', '__return_false' );
+			}
+		);
 	}
 
 	/* ----- Admin & front-end UX ----- */
@@ -673,65 +721,87 @@ function wpyeg_defaults_bootstrap() {
 		// post_search_columns filter (WP 6.2+) keeps core's term parsing,
 		// -exclusions, and the logged-out post_password guard intact — the
 		// blunt posts_search rewrite throws all of that away.
-		add_filter( 'post_search_columns', function ( $columns, $search, $query ) {
-			if ( is_admin() && $query->is_main_query() ) {
-				return array( 'post_title' );
-			}
-			return $columns;
-		}, 10, 3 );
+		add_filter(
+			'post_search_columns',
+			function ( $columns, $search, $query ) {
+				if ( is_admin() && $query->is_main_query() ) {
+					return array( 'post_title' );
+				}
+				return $columns;
+			},
+			10,
+			3
+		);
 	}
 
 	$bar = wpyeg_defaults_get( 'frontend_admin_bar_behavior' );
 	if ( 'hide_all' === $bar ) {
 		add_filter( 'show_admin_bar', '__return_false' );
 	} elseif ( 'hide_non_admins' === $bar ) {
-		add_filter( 'show_admin_bar', function ( $show ) {
-			return current_user_can( 'manage_options' ) ? $show : false;
-		} );
+		add_filter(
+			'show_admin_bar',
+			function ( $show ) {
+				return current_user_can( 'manage_options' ) ? $show : false;
+			}
+		);
 	}
 
 	/* ----- Login & sessions ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
-		add_action( 'login_footer', function () {
-			echo "<script>(function(){var c=document.getElementById('rememberme');if(c&&c.closest('p')){c.closest('p').style.display='none';}})();</script>";
-		} );
+		add_action(
+			'login_footer',
+			function () {
+				echo "<script>(function(){var c=document.getElementById('rememberme');if(c&&c.closest('p')){c.closest('p').style.display='none';}})();</script>";
+			}
+		);
 	}
 
 	// One filter handles both the remember and regular session lengths.
-	add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
-		if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
-			return $remember ? 2 * DAY_IN_SECONDS : $expiration;
-		}
-		if ( $remember ) {
-			$days = (int) wpyeg_defaults_get( 'remember_me_days' );
-			if ( $days > 0 ) {
-				return $days * DAY_IN_SECONDS;
+	add_filter(
+		'auth_cookie_expiration',
+		function ( $expiration, $user_id, $remember ) {
+			if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
+				return $remember ? 2 * DAY_IN_SECONDS : $expiration;
 			}
-		} else {
-			$hours = (int) wpyeg_defaults_get( 'session_regular_hours' );
-			if ( $hours > 0 ) {
-				return $hours * HOUR_IN_SECONDS;
+			if ( $remember ) {
+				$days = (int) wpyeg_defaults_get( 'remember_me_days' );
+				if ( $days > 0 ) {
+					return $days * DAY_IN_SECONDS;
+				}
+			} else {
+				$hours = (int) wpyeg_defaults_get( 'session_regular_hours' );
+				if ( $hours > 0 ) {
+					return $hours * HOUR_IN_SECONDS;
+				}
 			}
-		}
-		return $expiration;
-	}, 10, 3 );
+			return $expiration;
+		},
+		10,
+		3
+	);
 
 	/* ----- Branding ----- */
 
 	$login_logo = wpyeg_defaults_get( 'login_logo_behavior' );
 
 	if ( 'remove_logo' === $login_logo ) {
-		add_action( 'login_head', function () {
-			echo '<style>#login h1 a, .login h1 a { display:none; }</style>';
-		} );
-	} elseif ( 'replace_logo' === $login_logo ) {
-		add_action( 'login_head', function () {
-			$icon = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 84 ) : '';
-			if ( $icon ) {
-				echo '<style>#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }</style>';
+		add_action(
+			'login_head',
+			function () {
+				echo '<style>#login h1 a, .login h1 a { display:none; }</style>';
 			}
-		} );
+		);
+	} elseif ( 'replace_logo' === $login_logo ) {
+		add_action(
+			'login_head',
+			function () {
+				$icon = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 84 ) : '';
+				if ( $icon ) {
+					echo '<style>#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }</style>';
+				}
+			}
+		);
 	}
 
 	// Removing, unlinking, or replacing the logo all repoint the header link
@@ -739,28 +809,36 @@ function wpyeg_defaults_bootstrap() {
 	// a replacement/removed logo linking back to wp.org makes no sense.
 	if ( in_array( $login_logo, array( 'remove_logo', 'unlink_logo', 'replace_logo' ), true ) ) {
 		add_filter( 'login_headerurl', 'home_url' );
-		add_filter( 'login_headertext', function () {
-			return get_bloginfo( 'name' );
-		} );
+		add_filter(
+			'login_headertext',
+			function () {
+				return get_bloginfo( 'name' );
+			}
+		);
 	}
 
 	/* ----- Performance ----- */
 
 	if ( wpyeg_defaults_enabled( 'throttle_heartbeat' ) ) {
-		add_filter( 'heartbeat_settings', function ( $settings ) {
-			$settings['interval'] = 60;
-			return $settings;
-		} );
-		add_action( 'init', function () {
-			if ( is_admin() ) {
-				global $pagenow;
-				if ( 'index.php' === $pagenow ) {
-					wp_deregister_script( 'heartbeat' );
+		add_filter(
+			'heartbeat_settings',
+			function ( $settings ) {
+				$settings['interval'] = 60;
+				return $settings;
+			}
+		);
+		add_action(
+			'init',
+			function () {
+				if ( is_admin() ) {
+					global $pagenow;
+					if ( 'index.php' === $pagenow ) {
+						wp_deregister_script( 'heartbeat' );
+					}
 				}
 			}
-		} );
+		);
 	}
-
 }
 
 /**
@@ -1190,31 +1268,39 @@ function wpyeg_password_is_pwned( $password ) {
 }
 
 
-/* =======================================================================
+/*
+ * =======================================================================
  * SETTINGS SCREEN — Settings → Better by Default
- * ===================================================================== */
+ * =====================================================================
+ */
 
-add_action( 'admin_menu', function () {
-	add_options_page(
-		__( 'Better by Default', 'sane-defaults' ),
-		__( 'Better by Default', 'sane-defaults' ),
-		'manage_options',
-		'sane-defaults',
-		'wpyeg_defaults_render_settings_page'
-	);
-} );
+add_action(
+	'admin_menu',
+	function () {
+		add_options_page(
+			__( 'Better by Default', 'sane-defaults' ),
+			__( 'Better by Default', 'sane-defaults' ),
+			'manage_options',
+			'sane-defaults',
+			'wpyeg_defaults_render_settings_page'
+		);
+	}
+);
 
-add_action( 'admin_init', function () {
-	register_setting(
-		'wpyeg_better_by_default_group',
-		WPYEG_DEFAULTS_OPTION,
-		array(
-			'type'              => 'array',
-			'sanitize_callback' => 'wpyeg_defaults_sanitize',
-			'default'           => array(),
-		)
-	);
-} );
+add_action(
+	'admin_init',
+	function () {
+		register_setting(
+			'wpyeg_better_by_default_group',
+			WPYEG_DEFAULTS_OPTION,
+			array(
+				'type'              => 'array',
+				'sanitize_callback' => 'wpyeg_defaults_sanitize',
+				'default'           => array(),
+			)
+		);
+	}
+);
 
 /**
  * Sanitize the whole settings array against the schema.
@@ -1238,9 +1324,9 @@ function wpyeg_defaults_sanitize( $input ) {
 				break;
 
 			case 'select':
-				$choices        = isset( $field['choices'] ) ? array_keys( $field['choices'] ) : array();
-				$value          = isset( $input[ $key ] ) ? (string) $input[ $key ] : $field['default'];
-				$clean[ $key ]  = in_array( $value, $choices, true ) ? $value : $field['default'];
+				$choices       = isset( $field['choices'] ) ? array_keys( $field['choices'] ) : array();
+				$value         = isset( $input[ $key ] ) ? (string) $input[ $key ] : $field['default'];
+				$clean[ $key ] = in_array( $value, $choices, true ) ? $value : $field['default'];
 				break;
 		}
 	}
@@ -1374,13 +1460,16 @@ define( 'WP_POST_REVISIONS', 10 );</pre>
  * On activation, seed the option with schema defaults so a fresh install
  * behaves as documented out of the box.
  */
-register_activation_hook( __FILE__, function () {
-	if ( false === get_option( WPYEG_DEFAULTS_OPTION, false ) ) {
-		$schema   = wpyeg_defaults_schema();
-		$defaults = array();
-		foreach ( $schema as $key => $field ) {
-			$defaults[ $key ] = $field['default'];
+register_activation_hook(
+	__FILE__,
+	function () {
+		if ( false === get_option( WPYEG_DEFAULTS_OPTION, false ) ) {
+			$schema   = wpyeg_defaults_schema();
+			$defaults = array();
+			foreach ( $schema as $key => $field ) {
+				$defaults[ $key ] = $field['default'];
+			}
+			add_option( WPYEG_DEFAULTS_OPTION, $defaults );
 		}
-		add_option( WPYEG_DEFAULTS_OPTION, $defaults );
 	}
-} );
+);
