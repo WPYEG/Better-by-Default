@@ -208,6 +208,20 @@ function set_transient( $key, $value, $ttl = 0 ) {
 }
 
 /**
+ * Transient deleter test double.
+ *
+ * The breach check clears a cached range response that no longer validates, so
+ * the next call refetches instead of reusing bad data for the rest of its TTL.
+ *
+ * @param string $key Transient key.
+ * @return bool
+ */
+function delete_transient( $key ) {
+	unset( $GLOBALS['wpyeg_test_transients'][ $key ] );
+	return true;
+}
+
+/**
  * HTTP test double.
  *
  * Tests stage $GLOBALS['wpyeg_test_http'] to control what the Have I Been Pwned
@@ -877,6 +891,40 @@ $GLOBALS['wpyeg_test_http']       = array(
 );
 wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A response reaching the 128 KiB transport cap fails open.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A capped response is never cached.' );
+
+/*
+ * The cap guard has to hold for *well-formed* data too. The check above is
+ * satisfied by the format regex alone — 128 KiB of "A" has no colon — so it
+ * cannot tell whether the length check works. This body is structurally valid
+ * and reaches the cap on a row boundary, which is the case that only the length
+ * check can catch: measured after trim() it slips under the cap, validates, and
+ * would then be cached for 12 hours with its tail silently missing.
+ */
+$hibp_cap = 39 * 27; // 35 hex + ":" + 1 digit + CRLF, times a whole number of rows.
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] = $hibp_cap;
+$hibp_rows = array();
+for ( $i = 0; $i < 26; $i++ ) {
+	$hibp_rows[] = strtoupper( substr( sha1( 'row' . $i ), 5 ) ) . ':' . ( $i % 7 );
+}
+// The real suffix rides in this truncated body: if the cap guard misses, the
+// call returns true instead of failing open, so the assertion below is real.
+$hibp_rows[] = $hibp_suffix . ':4';
+$hibp_capped_body                 = implode( "\r\n", $hibp_rows ) . "\r\n";
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http']       = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => $hibp_capped_body,
+);
+wpyeg_test_assert( $hibp_cap === strlen( $hibp_capped_body ), 'The truncation fixture reaches the cap exactly.' );
+wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A well-formed response reaching the cap fails open rather than trusting a truncated range.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A well-formed capped response is never cached.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] );
+
+// A cached response that no longer validates is cleared, not reused for 12h.
+$GLOBALS['wpyeg_test_transients'] = array( 'wpyeg_hibp_' . substr( $hibp_hash, 0, 5 ) => 'CORRUPTED CACHE ENTRY' );
+$GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'network down' );
+wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'An invalid cached range response fails open.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'An invalid cached range response is deleted so the next call refetches.' );
 
 // One invalid row invalidates the response, even if another row looks like a match.
 $GLOBALS['wpyeg_test_transients'] = array();
