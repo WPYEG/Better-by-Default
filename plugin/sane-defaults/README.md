@@ -47,7 +47,7 @@ passwords (15+ chars, breach-screened, no forced composition), send baseline sec
 set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments/pingbacks/self-pingbacks,
 disable author archives, redirect attachment pages, disable emojis, cap remembered sessions at
 5 days, and install core maintenance/security releases automatically while holding major releases
-for testing. Translation files retain WordPress's existing automatic-update behavior.
+for testing. Translation files retain WordPress's existing automatic-update behaviour.
 
 Off by default (opt-in, because they change behaviour): require-auth-for-all-REST, prohibit
 Application Passwords (left available by default — the safer, revocable REST credential),

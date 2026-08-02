@@ -68,7 +68,7 @@ Three more live in `wp-config.php`, above the plugin layer, and are documented a
 Plugin and theme code updates keep using WordPress's individual per-item choices. Better by
 Default does not guess release risk from version numbers, and it reports rather than overrides
 an explicit `WP_AUTO_UPDATE_CORE`, `AUTOMATIC_UPDATER_DISABLED`, or `DISALLOW_FILE_MODS` policy.
-Translation files retain WordPress's existing automatic-update behavior.
+Translation files retain WordPress's existing automatic-update behaviour.
 
 See [`docs/wordpress-default-settings.md`](docs/wordpress-default-settings.md) for the full
 reference — every default, the reasoning, and the snippet.

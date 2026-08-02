@@ -467,7 +467,7 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `disable_application_passwords` | `no` | `wp_is_application_passwords_available` |
 | `require_strong_passwords` | `yes` | server-side password validation |
 
-[These are the exact unprefixed keys stored inside the single `wpyeg_better_by_default` option. An allow-setting at `no` can still mean a protective behavior is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active.]
+[These are the exact unprefixed keys stored inside the single `wpyeg_better_by_default` option. An allow-setting at `no` can still mean a protective behaviour is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active.]
 
 ---
 

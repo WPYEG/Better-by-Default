@@ -225,7 +225,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(c.d, { x: 5.2, y: y + 0.08, w: 7.3, h: 0.85, fontFace: BODY, fontSize: 14, color: SLATE, margin: 0, valign: "middle" });
   });
   s.addShape(p.ShapeType.roundRect, { x: 0.6, y: 6.1, w: 12.1, h: 0.72, rectRadius: 0.07, fill: { color: CODEBG }, line: { color: STEEL, width: 1 } });
-  s.addText("effective behavior = hard constants + every callback, in execution order", {
+  s.addText("effective behaviour = hard constants + every callback, in execution order", {
     x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 13, bold: true, color: CGOLD, valign: "middle", margin: 0,
   });
   footer(s, 5);
@@ -728,7 +728,7 @@ schemaMapSlide(28, "Schema map — security surfaces and credentials",
     ["disable_application_passwords", "no", "wp_is_application_passwords_available"],
     ["require_strong_passwords", "yes", "server-side password validation"],
   ],
-  "These are the exact unprefixed keys stored inside the single wpyeg_better_by_default option. An allow-setting at no can still mean a protective behavior is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active."
+  "These are the exact unprefixed keys stored inside the single wpyeg_better_by_default option. An allow-setting at no can still mean a protective behaviour is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active."
 );
 
 schemaMapSlide(29, "Schema map — security policy and updates",
