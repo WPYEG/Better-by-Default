@@ -558,6 +558,16 @@ Better by Default does not register those filters when `WP_AUTO_UPDATE_CORE` is 
 the control is locked. `AUTOMATIC_UPDATER_DISABLED` and `DISALLOW_FILE_MODS` can prevent the
 updater from running at all, so the screen warns about those overrides too.
 
+**A note on honest settings UI — this is the part worth studying.** A setting that keeps
+rendering as a live control while an external constant silently overrides it is a trap: the
+user changes the dropdown, nothing happens, and there is no feedback explaining why. The fix
+is to *detect the override* (`defined( 'WP_AUTO_UPDATE_CORE' )`) and **disable the control
+with an explanation** rather than let it pretend to work — the screen should always reflect
+the state that will actually take effect, not the state the user thinks they set. The same
+applies to `AUTOMATIC_UPDATER_DISABLED` and `DISALLOW_FILE_MODS`. Making a control tell the
+truth about who is really in charge is a few lines of code and a large amount of user trust;
+a plugin that skips it looks fine in a demo and quietly misleads on a real site.
+
 Major releases should be tested on staging and deployed within 30 days, not frozen
 indefinitely. Expedite the rollout when a security fix is unavailable on the installed branch.
 Only the latest WordPress major release is officially supported; security backports to older
