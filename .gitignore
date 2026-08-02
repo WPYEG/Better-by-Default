@@ -46,3 +46,10 @@ wp-config.php
 # Note: If you wish to whitelist themes,
 # uncomment the next line
 #/wp-content/themes
+
+# Dependencies
+#
+# node_modules lands in workshop/ when the deck is rebuilt
+# (pptxgenjs); vendor/ lands at the root after composer install.
+node_modules/
+/vendor/
