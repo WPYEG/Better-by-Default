@@ -6,7 +6,7 @@
 
 `a hands-on workshop · build the "sane-defaults" plugin`
 
-Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates a dozen sensible defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. 
+Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 27 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
 
 [This running text is the speaker script — in iA Presenter it stays in your notes, not on the slide.]
 
@@ -14,12 +14,12 @@ Welcome to WPYEG. In this workshop we're building and reviewing a small plugin t
 
 ## WordPress is open by default; hosts vary in what they close.
 
-	- **Usernames leak** — REST + author archives list every login name to anonymous visitors
-	- **Aging XML-RPC exposed** — unwanted pingbacks and unused methods add work and attack surface
-	- **Dead weight loads** — emoji scripts, version tags, and RSD links on every page
-	- **Spam surface invites** — comments, pingbacks, and trackbacks open by default
+	- **Usernames leak** — REST and author archives expose public author slugs that often resemble login names.
+	- **XML-RPC exposed** — WordPress has been a refuge for this venerable interop protocol, which Jetpack still uses. If you don't use Jetpack or pingbacks, XML-RPC just adds to your attack surface.
+	- **Dead weight loads** — Emoji scripts, version tags, and RSD links on every page. Do you need them?
+	- **Spam surface invites** — Comments, pingbacks, and trackbacks are open by default: legacy cruft or heart and soul of the open web? They are forgotten treasures to some, but if you don't use them, turn them off. If you don't know what they are, find out!
 
-None of these are bugs. They are defaults chosen for maximum compatibility on a 20+ year-old web application. You probably don't need them and can tighten up your own WordPress sites. This is also a good way to learn some important fundamentals about how WordPress works and how to keep it secure, fast, and pretty. 
+**None of these are bugs or quite the security risks popular human and AI opinion allege.** They are defaults chosen for maximum compatibility on a 20+ year-old web application. You probably don't need them and can tighten up your own WordPress sites unless you're into the IndieWeb and radical open source anarchism, which I highly recommend. Probing the oldest parts of WordPress is a good way to learn some history and important fundamentals about how WordPress works — and how to keep it secure, fast, and pretty. 
 
 ---
 
@@ -28,17 +28,17 @@ None of these are bugs. They are defaults chosen for maximum compatibility on a 
 ```php
 if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
     add_filter( 'rest_endpoints', $hide_users_endpoint );
-}   // that's the whole pattern, repeated ~20 times
+}   // that's the whole pattern, repeated across the plugin
 ```
 
-In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have twenty of them.
+In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 27 settings built around that pattern.
 
 ---
 
-## Hooks & filters
+## Hooks
 
-	- **Action** — "when you reach this moment, also DO this." 
-	- **Filter** — "before you use this value, let me CHANGE it first." 
+	- **Actions** — "when you reach this moment, also DO this." 
+	- **Filters** — "before you use this value, let me CHANGE it first." 
 
 ```php
 add_filter( 'xmlrpc_enabled', '__return_false' );
@@ -48,16 +48,17 @@ WordPress is built to be interrupted at labelled moments (hooks) so you never ed
 
 ---
 
-## Six categories of defaults
+## Seven categories of defaults
 
-	1. **Security** — shrink the attack surface
-	2. **Content** — close spam channels & info leaks
-	3. **Admin UX** — a calmer, faster dashboard
-	4. **Login** — sessions & credentials
-	5. **Branding** — own the login screen
-	6. **Performance** — trim the page weight
+	1. **Security** — Make the attack surface smaller.
+	2. **Updates** — Apply a deliberate core and translation update policy.
+	3. **Content** — Close spam channels and potential info leaks.
+	4. **Admin UX** — A calmer, faster, prettier dashboard.
+	5. **Login** — Sessions and credentials.
+	6. **Branding** — Own your login screen: make it secure and attractive.
+	7. **Performance** — Trim the fat.
 
-We'll spend most of our time on security and content, then move quickly through UX, login, branding, and performance, and end up with a plugin that covers them all.
+We'll spend most of our time on security and content, then move quickly through updates, UX, login, branding, and performance, and we'll end up with a plugin that covers them all.
 
 ---
 
@@ -81,7 +82,7 @@ add_filter( 'rest_endpoints', function ( $ep ) {
 } );
 ```
 
-The `/wp/v2/users` endpoint hands out every author's login name to anyone — half of a brute-force guess, for free. Author enumeration is step one of many attack scripts. By closing it for logged-out requests only, the editor and legit integrations will keep working. It's arguably an example of security-by-obscurity, but it also prevents a lot of junk traffic and bots that are up to no good.
+The `/wp/v2/users` endpoint exposes every public author's name, ID, profile link, and slug to anyone. Because an author slug often resembles a login name, that gives attack scripts a useful credential hint for free. By closing the user-list and numeric user routes for logged-out requests only, the editor and legitimate integrations keep working while anonymous enumeration attempts receive an ordinary 404. It's partly security by obscurity—not a substitute for strong passwords, MFA, or rate limiting—but it also rejects junk requests from bots that are up to no good. Why spend even a few extra electrons helping them? Author archives take the separate path we'll see later: a 301 to the homepage. If probes persist, a properly configured host can count those request patterns and ban the source IP with Fail2Ban or a similar tool such as CrowdSec, SSHGuard, or Defensia.
 
 ---
 
@@ -102,7 +103,7 @@ add_filter( 'rest_authentication_errors',
 } );
 ```
 
-The sledgehammer version of the slide before. Requiring auth for ALL REST calls stops anonymous scraping cold. It does *not* break the block editor, though — you're logged in there, and the editor authenticates with your cookie plus a REST nonce, so it sails through this filter. What it breaks is **anonymous** REST: front-end blocks that fetch data for logged-out visitors, embeds, search, and outside integrations. That's why it ships off. Not every default should default to on; some are opt-in because they trade functionality for safety. Usually it's a better tradeoff to restrict a few REST routes — like the users endpoint we just closed — than to lock ALL of them.
+This is the sledgehammer version of the slide before. Requiring auth for ALL REST calls stops anonymous scraping cold. It does *not* break the block editor, though — you're logged in there, and the editor authenticates with your cookie plus a REST nonce, so it sails through this filter. What it breaks is **anonymous** REST: front-end blocks that fetch data for logged-out visitors, embeds, search, and outside integrations. That's why it ships `off`. Not every default should default to `on`; some are opt-in because they trade functionality for safety. Usually it's a better tradeoff to restrict a few REST routes — like the users endpoint we just closed — than to lock ALL of them.
 
 ---
 
@@ -125,11 +126,11 @@ add_filter( 'xmlrpc_methods', function ( $m ) {
 add_filter( 'wp_xmlrpc_server_class', $refuse_multicall );
 ```
 
-XML-RPC is a legitimate but aging API, not a backdoor or an emergency. It is an old switchboard where every method is a phone line. Rather than rip out a connection that Jetpack or a publishing client may need, we unplug unused lines by category. Four switches, all off by default:
+XML-RPC is a legitimate but aging API. (Mad love to Dave Winer!) It's not a backdoor or an emergency. It is an old switchboard where every method is a phone line. Rather than rip out a connection that Jetpack or a publishing client may need, we unplug unused lines by category. Four switches, all off by default:
 
-1. **Pingbacks** — drop `pingback.ping`, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second, and fetches the claimed source URL.
+1. **Pingbacks** — drop `pingback.ping`, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second, and fetches the claimed source URL. Keep it if you're a crusty punk who loves the IndieWeb and everything before Facebook turned everything to shit, ca. 2005.
 2. **Remote publishing** — drop the credential-authenticated blogging methods (`wp.*`, `metaWeblog.*`, `mt.*`, `blogger.*`), another password-guessing entrance when legacy clients are not needed. This also flips `xmlrpc_enabled` off and removes the RSD discovery link.
-3. **`system.multicall`** — refuse a general batching wrapper with little established modern use. WordPress 4.4 stopped testing credentials after the first failed login in one XML-RPC request, so the old “thousands of guesses” story is obsolete. Multicall can still batch other work, including pingbacks, but it does not enable pingback abuse.
+3. **`system.multicall`** — refuse a general batching wrapper with little established modern use. WordPress 4.4 stopped testing credentials after the first failed login in one XML-RPC request, so the old “thousands of guesses” story is obsolete. (To this day, people say XML-RPC is some kind of open, free credential verification oracle — NOT TRUE.) Multicall can still batch other work, including pingbacks, but it does not enable pingback abuse.
 4. **Block the endpoint** — the blunt hammer: `xmlrpc.php` returns 403 for everything. Prefer doing this at the CDN, WAF, or web server so the request never consumes PHP.
 
 The first three are surgical and leave third-party registrations such as Jetpack's `jetpack.*` in place. That is not a compatibility guarantee: keep the endpoint reachable, leave Remote Publishing enabled until testing proves it unnecessary, and test the Jetpack connection and features after method changes. Block the endpoint only when nothing on the site speaks XML-RPC.

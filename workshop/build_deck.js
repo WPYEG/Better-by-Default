@@ -110,7 +110,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { x: 0.9, y: 6.25, w: 11.5, h: 0.5, fontFace: MONO, fontSize: 14, margin: 0 }
   );
   s.addNotes(
-    "Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates a dozen sensible defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it."
+    "Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 27 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop."
   );
 })();
 
@@ -123,15 +123,15 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   s.addText("WordPress is open by default; hosts vary in what they close.", {
     x: 0.6, y: 0.55, w: 12, h: 0.9, fontFace: HEAD, fontSize: 34, bold: true, color: INK, margin: 0,
   });
-  s.addText("None of these are bugs. They are defaults chosen for maximum compatibility on a 20+ year-old web application — you probably don't need them.", {
+  s.addText("None of these are bugs — or quite the security risks popular opinion alleges. They are defaults chosen for maximum compatibility on a 20+ year-old web application.", {
     x: 0.6, y: 1.5, w: 11.8, h: 0.9, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0,
   });
 
   const cards = [
-    { g: "!", c: CORAL, t: "Usernames leak", d: "REST + author archives list every login name to anonymous visitors." },
-    { g: "!", c: CORAL, t: "Aging XML-RPC exposed", d: "Unwanted pingbacks and unused methods add work and attack surface." },
-    { g: "~", c: WHEATD, t: "Dead weight loads", d: "Emoji scripts, version tags, and RSD links on every page." },
-    { g: "~", c: WHEATD, t: "Spam surface invites", d: "Comments, pingbacks, and trackbacks open by default." },
+    { g: "!", c: CORAL, t: "Usernames leak", d: "REST and author archives expose public author slugs that often resemble login names." },
+    { g: "!", c: CORAL, t: "XML-RPC exposed", d: "A venerable interop protocol Jetpack still uses. If you don't need it, it just adds attack surface." },
+    { g: "~", c: WHEATD, t: "Dead weight loads", d: "Emoji scripts, version tags, and RSD links on every page. Do you need them?" },
+    { g: "~", c: WHEATD, t: "Spam surface invites", d: "Comments, pingbacks, and trackbacks are open by default. Legacy cruft, or the heart of the open web?" },
   ];
   const cw = 5.75, ch = 1.85, gx = 0.6, gy = 2.65, gapx = 0.6, gapy = 0.45;
   cards.forEach((c, i) => {
@@ -147,7 +147,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(c.d, { x: x + 1.05, y: y + 0.82, w: cw - 1.3, h: 0.9, fontFace: BODY, fontSize: 14, color: SLATE, margin: 0, valign: "top" });
   });
   footer(s, 2);
-  s.addNotes("None of these are bugs. They are defaults chosen for maximum compatibility on a 20+ year-old web application. You probably don't need them and can tighten up your own WordPress sites. This is also a good way to learn some important fundamentals about how WordPress works and how to keep it secure, fast, and pretty.");
+  s.addNotes("NONE OF THESE ARE BUGS or quite the security risks popular human and AI opinion allege. They are defaults chosen for maximum compatibility on a 20+ year-old web application. You probably don't need them and can tighten up your own WordPress sites unless you're into the IndieWeb and radical open source anarchism, which I highly recommend. Probing the oldest parts of WordPress is a good way to learn some history and important fundamentals about how WordPress works — and how to keep it secure, fast, and pretty.");
 })();
 
 /* =================================================================== */
@@ -166,9 +166,9 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   codePanel(s, 0.8, 4.5, 11.7, 1.9, [
     { t: "if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {", k: "" },
     { t: "    add_filter( 'rest_endpoints', $hide_users_endpoint );", k: "h" },
-    { t: "}   // that's the whole pattern, repeated ~20 times", k: "c" },
+    { t: "}   // that's the whole pattern, repeated across the plugin", k: "c" },
   ], 15);
-  s.addNotes("In our demo plugin, a default is an add_filter behind an if ( option ). We have twenty of them.");
+  s.addNotes("In our demo plugin, a default is an add_filter behind an if ( option ). We have 27 settings built around that pattern.");
 })();
 
 /* =================================================================== */
@@ -177,7 +177,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 (() => {
   const s = p.addSlide();
   s.background = { color: CLOUD };
-  s.addText("Hooks & filters", {
+  s.addText("Hooks", {
     x: 0.6, y: 0.55, w: 12, h: 0.8, fontFace: HEAD, fontSize: 32, bold: true, color: INK, margin: 0,
   });
   s.addText("WordPress is built to be interrupted at labelled moments (hooks) so you never edit core code.", {
@@ -185,8 +185,8 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   });
 
   const rows = [
-    { g: "A", t: "Action", d: "“When you reach this moment, also DO this.”", ex: "add_action( 'init', fn );" },
-    { g: "F", t: "Filter", d: "“Before you use this value, let me CHANGE it first.”", ex: "add_filter( 'xmlrpc_enabled', '__return_false' );" },
+    { g: "A", t: "Actions", d: "“When you reach this moment, also DO this.”", ex: "add_action( 'init', fn );" },
+    { g: "F", t: "Filters", d: "“Before you use this value, let me CHANGE it first.”", ex: "add_filter( 'xmlrpc_enabled', '__return_false' );" },
   ];
   rows.forEach((r, i) => {
     const y = 2.35 + i * 2.05;
@@ -207,28 +207,30 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 (() => {
   const s = p.addSlide();
   s.background = { color: CLOUD };
-  s.addText("Six categories of defaults", {
+  s.addText("Seven categories of defaults", {
     x: 0.6, y: 0.55, w: 12, h: 0.8, fontFace: HEAD, fontSize: 34, bold: true, color: INK, margin: 0,
   });
   const cats = [
-    { g: "1", t: "Security", d: "Shrink the attack surface" },
-    { g: "2", t: "Content", d: "Close spam channels & info leaks" },
-    { g: "3", t: "Admin UX", d: "A calmer, faster dashboard" },
-    { g: "4", t: "Login", d: "Sessions & credentials" },
-    { g: "5", t: "Branding", d: "Own the login screen" },
-    { g: "6", t: "Performance", d: "Trim the page weight" },
+    { g: "1", t: "Security", d: "Make the attack surface smaller" },
+    { g: "2", t: "Updates", d: "A deliberate core & translation policy" },
+    { g: "3", t: "Content", d: "Close spam channels & info leaks" },
+    { g: "4", t: "Admin UX", d: "A calmer, faster, prettier dashboard" },
+    { g: "5", t: "Login", d: "Sessions & credentials" },
+    { g: "6", t: "Branding", d: "Own your login screen" },
+    { g: "7", t: "Performance", d: "Trim the fat" },
   ];
-  const cw = 3.83, ch = 2.15, gx = 0.6, gy = 1.7, gapx = 0.5, gapy = 0.5;
+  // Seven cards: 4 across, 2 down. The last slot stays empty.
+  const cw = 2.72, ch = 2.15, gx = 0.6, gy = 1.7, gapx = 0.42, gapy = 0.5;
   cats.forEach((c, i) => {
-    const col = i % 3, row = Math.floor(i / 3);
+    const col = i % 4, row = Math.floor(i / 4);
     const x = gx + col * (cw + gapx), y = gy + row * (ch + gapy);
     s.addShape(p.ShapeType.roundRect, { x, y, w: cw, h: ch, rectRadius: 0.1, fill: { color: WHITE }, line: { color: "DCE6EB", width: 1 }, shadow: { type: "outer", color: "C7D4DB", blur: 5, offset: 2, angle: 90, opacity: 0.5 } });
     dot(s, x + 0.35, y + 0.35, c.g, WHEAT, INK, 0.7);
-    s.addText(c.t, { x: x + 0.35, y: y + 1.15, w: cw - 0.7, h: 0.5, fontFace: HEAD, fontSize: 21, bold: true, color: INK, margin: 0 });
-    s.addText(c.d, { x: x + 0.35, y: y + 1.6, w: cw - 0.7, h: 0.45, fontFace: BODY, fontSize: 13.5, color: SLATE, margin: 0 });
+    s.addText(c.t, { x: x + 0.35, y: y + 1.1, w: cw - 0.55, h: 0.45, fontFace: HEAD, fontSize: 19, bold: true, color: INK, margin: 0 });
+    s.addText(c.d, { x: x + 0.35, y: y + 1.52, w: cw - 0.55, h: 0.6, fontFace: BODY, fontSize: 12.5, color: SLATE, margin: 0, valign: "top" });
   });
   footer(s, 5);
-  s.addNotes("We'll spend most of our time on security and content, then move quickly through UX, login, branding, and performance, and end up with a plugin that covers them all.");
+  s.addNotes("We'll spend most of our time on security and content, then move quickly through updates, UX, login, branding, and performance, and we'll end up with a plugin that covers them all.");
 })();
 
 /* =================================================================== */
@@ -291,7 +293,7 @@ codeSlide(7, "SECURITY · 1 of 6",
     { t: "    }", k: "" },
     { t: "    return $ep;", k: "" },
     { t: "} );", k: "" },
-  ]).addNotes("The /wp/v2/users endpoint hands out every author's login name to anyone — half of a brute-force guess, for free. Author enumeration is step one of many attack scripts. By closing it for logged-out requests only, the editor and legit integrations will keep working. It's arguably an example of security-by-obscurity, but it also prevents a lot of junk traffic and bots that are up to no good.");
+  ]).addNotes("The /wp/v2/users endpoint exposes every public author's name, ID, profile link, and slug to anyone. Because an author slug often resembles a login name, that gives attack scripts a useful credential hint for free. By closing the user-list and numeric user routes for logged-out requests only, the editor and legitimate integrations keep working while anonymous enumeration attempts receive an ordinary 404. It's partly security by obscurity — not a substitute for strong passwords, MFA, or rate limiting — but it also rejects junk requests from bots that are up to no good. Why spend even a few extra electrons helping them? Author archives take the separate path we'll see later: a 301 to the homepage. If probes persist, a properly configured host can count those request patterns and ban the source IP with Fail2Ban or a similar tool such as CrowdSec, SSHGuard, or Defensia.");
 
 codeSlide(8, "SECURITY · 2 of 6 · opt-in",
   "Lock REST to logged-in users (opt-in)",
@@ -308,7 +310,7 @@ codeSlide(8, "SECURITY · 2 of 6 · opt-in",
     { t: "    }", k: "" },
     { t: "    return $result;", k: "" },
     { t: "} );", k: "" },
-  ]).addNotes("The sledgehammer version of the slide before. Requiring auth for ALL REST calls stops anonymous scraping cold. It does *not* break the block editor, though — you're logged in there, and the editor authenticates with your cookie plus a REST nonce, so it sails through this filter. What it breaks is ANONYMOUS REST: front-end blocks that fetch data for logged-out visitors, embeds, search, and outside integrations. That's why it ships off. Not every default should default to on; some are opt-in because they trade functionality for safety. Usually it's a better tradeoff to restrict a few REST routes — like the users endpoint we just closed — than to lock ALL of them.");
+  ]).addNotes("This is the sledgehammer version of the slide before. Requiring auth for ALL REST calls stops anonymous scraping cold. It does *not* break the block editor, though — you're logged in there, and the editor authenticates with your cookie plus a REST nonce, so it sails through this filter. What it breaks is ANONYMOUS REST: front-end blocks that fetch data for logged-out visitors, embeds, search, and outside integrations. That's why it ships off. Not every default should default to on; some are opt-in because they trade functionality for safety. Usually it's a better tradeoff to restrict a few REST routes — like the users endpoint we just closed — than to lock ALL of them.");
 
 codeSlide(9, "SECURITY · 3 of 6",
   "Lock XML-RPC down by category",
@@ -328,10 +330,10 @@ codeSlide(9, "SECURITY · 3 of 6",
     { t: "// → swap in a server that refuses it", k: "c" },
     { t: "add_filter( 'wp_xmlrpc_server_class', $refuse );", k: "h" },
   ], 11).addNotes(
-  "XML-RPC is a legitimate but aging API, not a backdoor or an emergency. It is an old switchboard where every method is a phone line. Rather than rip out a connection that Jetpack or a publishing client may need, we unplug unused lines by category. Four switches, all off by default:\n\n" +
-  "1. Pingbacks — drop pingback.ping, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second, and fetches the claimed source URL.\n" +
+  "XML-RPC is a legitimate but aging API. (Mad love to Dave Winer!) It's not a backdoor or an emergency. It is an old switchboard where every method is a phone line. Rather than rip out a connection that Jetpack or a publishing client may need, we unplug unused lines by category. Four switches, all off by default:\n\n" +
+  "1. Pingbacks — drop pingback.ping, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second, and fetches the claimed source URL. Keep it if you're a crusty punk who loves the IndieWeb and everything before Facebook turned everything to shit, ca. 2005.\n" +
   "2. Remote publishing — drop the credential-authenticated blogging methods (wp.*, metaWeblog.*, mt.*, blogger.*), another password-guessing entrance when legacy clients are not needed. This also flips xmlrpc_enabled off and removes the RSD discovery link.\n" +
-  "3. system.multicall — refuse a general batching wrapper with little established modern use. WordPress 4.4 stopped testing credentials after the first failed login in one XML-RPC request, so the old 'thousands of guesses' story is obsolete. Multicall can still batch other work, including pingbacks, but it does not enable pingback abuse.\n" +
+  "3. system.multicall — refuse a general batching wrapper with little established modern use. WordPress 4.4 stopped testing credentials after the first failed login in one XML-RPC request, so the old 'thousands of guesses' story is obsolete. (To this day, people say XML-RPC is some kind of open, free credential verification oracle — NOT TRUE.) Multicall can still batch other work, including pingbacks, but it does not enable pingback abuse.\n" +
   "4. Block the endpoint — the blunt hammer: xmlrpc.php returns 403 for everything. Prefer doing this at the CDN, WAF, or web server so the request never consumes PHP.\n\n" +
   "The first three are surgical and leave third-party registrations such as Jetpack's jetpack.* in place. That is not a compatibility guarantee: keep the endpoint reachable, leave Remote Publishing enabled until testing proves it unnecessary, and test the Jetpack connection and features after method changes. Block the endpoint only when nothing on the site speaks XML-RPC.\n\n" +
   "[Aside — what's \"IXR\"? The Incutio XML-RPC library. Simon Willison released it in September 2002, one of his first open-source projects, while blogging from the University of Bath; both WordPress *and* Drupal adopted it, and it then sat largely untouched for 15+ years — long enough to pick up a CVE. Willison went on to co-create Django (2003–05 at the Lawrence Journal-World), build Lanyrd (sold to Eventbrite in 2013) and Datasette (2017), and is now one of the most-read writers on LLMs.]"
