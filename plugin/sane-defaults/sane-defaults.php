@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -1139,15 +1139,25 @@ function wpyeg_password_is_pwned( $password ) {
 		$body = (string) wp_remote_retrieve_body( $response );
 	}
 
-	$body = trim( (string) $body );
+	// Measure before trimming. A response cut at exactly the cap can end on a
+	// row boundary, and trimming that trailing CRLF would drop it back under the
+	// cap — leaving a truncated range that still parses as well-formed.
+	$raw_length = strlen( (string) $body );
+	$body       = trim( (string) $body );
 
 	// A response at the transport cap may be truncated. Empty, oversized, or
 	// structurally invalid range data is unavailable data, so fail open.
 	if (
 		'' === $body ||
-		strlen( $body ) >= $limit ||
+		$raw_length >= $limit ||
 		! preg_match( '/\A[0-9A-F]{35}:[0-9]+(?:\r?\n[0-9A-F]{35}:[0-9]+)*\z/i', $body )
 	) {
+		// A cached entry that no longer validates would otherwise keep failing
+		// open for the rest of its TTL. Drop it so the next call refetches.
+		if ( $cache_hit ) {
+			delete_transient( $cache_key );
+		}
+
 		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
 	}
 
@@ -1157,6 +1167,8 @@ function wpyeg_password_is_pwned( $password ) {
 
 	$pwned = false;
 
+	// Every line is known to be SUFFIX:COUNT because the guard above rejected
+	// anything else, which is what makes $parts[1] safe without padding.
 	foreach ( preg_split( '/\r\n|\n/', $body ) as $line ) {
 		$parts = explode( ':', $line, 2 );
 

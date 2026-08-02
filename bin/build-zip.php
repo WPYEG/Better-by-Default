@@ -21,15 +21,51 @@ $check_only = in_array( '--check', array_slice( $argv, 1 ), true );
 // Fixed mtime keeps rebuilds byte-identical. Bump only if entry order changes.
 $fixed_mtime = mktime( 0, 0, 0, 1, 1, 2020 );
 
-$files = array_values(
-	array_filter(
-		scandir( $source_dir ),
-		static function ( $file ) use ( $source_dir ) {
-			return '.' !== $file[0] && is_file( $source_dir . '/' . $file );
+/**
+ * Collect plugin files and directories as paths relative to the source root.
+ *
+ * Walks subdirectories so a plugin that grows past a single flat folder is
+ * packaged in full rather than silently losing its nested files. Dot-entries
+ * are skipped at every level.
+ *
+ * @param string $dir    Directory to walk.
+ * @param string $prefix Relative path prefix for entries in $dir.
+ * @return array{files: string[], dirs: string[]}
+ */
+function wpyeg_build_collect( $dir, $prefix = '' ) {
+	$files = array();
+	$dirs  = array();
+
+	foreach ( scandir( $dir ) as $entry ) {
+		if ( '' === $entry || '.' === $entry[0] ) {
+			continue;
 		}
-	)
-);
-sort( $files );
+
+		$path     = $dir . '/' . $entry;
+		$relative = $prefix . $entry;
+
+		if ( is_dir( $path ) ) {
+			$dirs[] = $relative . '/';
+			$nested = wpyeg_build_collect( $path, $relative . '/' );
+			$files  = array_merge( $files, $nested['files'] );
+			$dirs   = array_merge( $dirs, $nested['dirs'] );
+		} elseif ( is_file( $path ) ) {
+			$files[] = $relative;
+		}
+	}
+
+	sort( $files );
+	sort( $dirs );
+
+	return array(
+		'files' => $files,
+		'dirs'  => $dirs,
+	);
+}
+
+$collected = wpyeg_build_collect( $source_dir );
+$files     = $collected['files'];
+$dirs      = $collected['dirs'];
 
 if ( empty( $files ) ) {
 	fwrite( STDERR, "No plugin files found in {$source_dir}\n" );
@@ -42,10 +78,11 @@ if ( empty( $files ) ) {
  * @param string $zip_path   Path to the zip.
  * @param string $source_dir Plugin source directory.
  * @param string $slug       Directory prefix inside the zip.
- * @param array  $files      Expected file names.
+ * @param array  $files      Expected file names, relative to the source root.
+ * @param array  $dirs       Expected directory names, relative to the source root.
  * @return array Names that are missing, out of date, or unexpected.
  */
-function wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files ) {
+function wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files, $dirs = array() ) {
 	if ( ! file_exists( $zip_path ) ) {
 		return $files;
 	}
@@ -57,6 +94,9 @@ function wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files ) {
 
 	$stale            = array();
 	$expected_entries = array( $slug . '/' );
+	foreach ( $dirs as $dir ) {
+		$expected_entries[] = $slug . '/' . $dir;
+	}
 	foreach ( $files as $file ) {
 		$entry              = $slug . '/' . $file;
 		$expected_entries[] = $entry;
@@ -91,7 +131,7 @@ function wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files ) {
 	return $stale;
 }
 
-$stale = wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files );
+$stale = wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files, $dirs );
 
 if ( $check_only ) {
 	if ( empty( $stale ) ) {
@@ -109,6 +149,9 @@ if ( true !== $zip->open( $zip_path, ZipArchive::CREATE | ZipArchive::OVERWRITE 
 }
 
 $zip->addEmptyDir( $slug );
+foreach ( $dirs as $dir ) {
+	$zip->addEmptyDir( $slug . '/' . rtrim( $dir, '/' ) );
+}
 foreach ( $files as $file ) {
 	$zip->addFile( $source_dir . '/' . $file, $slug . '/' . $file );
 }
@@ -117,6 +160,9 @@ foreach ( $files as $file ) {
 // current timestamps.
 if ( method_exists( $zip, 'setMtimeName' ) ) {
 	$zip->setMtimeName( $slug . '/', $fixed_mtime );
+	foreach ( $dirs as $dir ) {
+		$zip->setMtimeName( $slug . '/' . $dir, $fixed_mtime );
+	}
 	foreach ( $files as $file ) {
 		$zip->setMtimeName( $slug . '/' . $file, $fixed_mtime );
 	}
@@ -124,7 +170,7 @@ if ( method_exists( $zip, 'setMtimeName' ) ) {
 
 $zip->close();
 
-$remaining = wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files );
+$remaining = wpyeg_build_stale_entries( $zip_path, $source_dir, $slug, $files, $dirs );
 if ( ! empty( $remaining ) ) {
 	fwrite( STDERR, 'Build produced a zip that does not match source: ' . implode( ', ', $remaining ) . "\n" );
 	exit( 1 );

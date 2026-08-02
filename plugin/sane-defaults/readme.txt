@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -76,6 +76,12 @@ No. It is a legitimate but aging API and an additional attack/resource surface. 
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.0.1 =
+* Removed the "Automatically update translations" setting. WordPress handles translation-file updates on its own, and the plugin no longer filters `auto_update_translation`. Note that a site which had explicitly turned this setting off will go back to WordPress's default, which installs translation updates automatically. Turn it off with your own `auto_update_translation` filter if you need that.
+* Breach screening no longer trusts a Have I Been Pwned range response that reaches the transport size cap, including one whose truncation happens to land on a row boundary.
+* A cached range response that no longer validates is now discarded instead of being reused until its 12-hour cache entry expires.
+* The release ZIP now packages plugin subdirectories rather than only top-level files.
 
 = 1.0.0 =
 * Initial release.
