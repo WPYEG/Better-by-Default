@@ -214,12 +214,13 @@ function set_transient( $key, $value, $ttl = 0 ) {
  * range endpoint returns. The suite never touches the network: unstaged calls
  * answer with an empty 200, i.e. "this prefix matched nothing".
  *
- * @param string $url  Ignored.
- * @param array  $args Ignored.
+ * @param string $url  Requested URL.
+ * @param array  $args Request arguments.
  * @return array|WP_Error
  */
 function wp_remote_get( $url, $args = array() ) {
-	unset( $url, $args );
+	$GLOBALS['wpyeg_test_last_http_url']  = $url;
+	$GLOBALS['wpyeg_test_last_http_args'] = $args;
 
 	return isset( $GLOBALS['wpyeg_test_http'] )
 		? $GLOBALS['wpyeg_test_http']
@@ -325,14 +326,50 @@ function wpyeg_test_assert( $condition, $message ) {
 $schema = wpyeg_defaults_schema();
 wpyeg_test_assert( 'no' === $schema['disable_application_passwords']['default'], 'Application Passwords remain available by default.' );
 wpyeg_test_assert( 'minor' === $schema['core_update_policy']['default'], 'Core maintenance and security releases update automatically by default.' );
-wpyeg_test_assert( 'yes' === $schema['auto_update_translations']['default'], 'Translation files update automatically by default.' );
+wpyeg_test_assert( ! isset( $schema['auto_update_translations'] ), 'WordPress retains ownership of translation-file updates.' );
+wpyeg_test_assert(
+	array(
+		'code' => array(),
+		'a'    => array( 'href' => true ),
+	) === wpyeg_defaults_help_allowed_html(),
+	'Help text permits only attribute-free code markup and href-only reference links.'
+);
+wpyeg_test_assert( false !== strpos( $schema['xmlrpc_allow_pingbacks']['help'], '<code>pingback.ping</code>' ), 'Machine-facing XML-RPC identifiers use code markup.' );
+wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'NIST SP 800-63B-4 § 3.1.1.2' ), 'External guidance names the specific publication and section.' );
+wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver' ), 'External guidance links to its authoritative source section.' );
+wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange' ), 'The breach-screening explanation links to the authoritative HIBP range API documentation.' );
+wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'first five characters' ), 'The breach-screening explanation states exactly what leaves the site.' );
+wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'password and full hash never leave the site' ), 'The breach-screening explanation states the privacy boundary.' );
+wpyeg_test_assert( false === strpos( $schema['login_logo_behavior']['help'], 'trust leak' ), 'Login-logo guidance does not overstate an external destination as a trust leak.' );
+wpyeg_test_assert( false !== strpos( $schema['login_logo_behavior']['help'], 'organizationally consistent' ), 'Login-logo guidance describes the actual branding and destination benefit.' );
+
+foreach ( $schema as $field ) {
+	$help_without_safe_markup = preg_replace(
+		'#</?code>|<a href="https://[A-Za-z0-9./_\#?&=%:+~-]+">|</a>#',
+		'',
+		isset( $field['help'] ) ? $field['help'] : ''
+	);
+	wpyeg_test_assert( false === strpos( $help_without_safe_markup, '<' ) && false === strpos( $help_without_safe_markup, '>' ), 'Schema help contains no markup outside the narrow allowlist.' );
+}
+
+// Settings controls use their descriptive schema labels, never a generic
+// checkbox label. Keep the source-level convention covered without needing a
+// WordPress admin renderer in this lightweight policy test.
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+$plugin_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
+wpyeg_test_assert( false === strpos( $plugin_source, "esc_html_e( 'Enabled'" ), 'Checkboxes do not use a generic Enabled label.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, '<table class="form-table" role="presentation">' ), 'The settings screen uses WordPress classic form-table styling.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, 'class="description"' ), 'Settings help uses WordPress classic description styling.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, 'label for="<?php echo esc_attr( $field_id ); ?>"' ), 'Schema labels are explicitly connected to settings controls.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, '<td colspan="2">' ), 'Toggle controls and their descriptive labels span the settings row.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, 'aria-describedby="<?php echo esc_attr( $help_id ); ?>"' ), 'Settings controls reference their help text.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, "wp_kses( \$field['help'], wpyeg_defaults_help_allowed_html() )" ), 'Settings help is rendered through the narrow markup allowlist.' );
 
 // The explicit update policy is stable across the installation-age defaults
 // WordPress stores for major core updates.
 wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( false ), 'The default policy enables maintenance/security core releases.' );
 wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( true ), 'The default policy blocks automatic major core releases.' );
 wpyeg_test_assert( false === wpyeg_defaults_allow_dev_core_updates( true ), 'The default stable policy blocks development builds.' );
-wpyeg_test_assert( true === wpyeg_defaults_allow_translation_updates( false ), 'The default policy enables translation updates.' );
 
 $GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'all' );
 wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( false ), 'The all-stable policy enables maintenance releases.' );
@@ -347,8 +384,6 @@ $GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'inherit' );
 wpyeg_test_assert( true === wpyeg_defaults_allow_minor_core_updates( true ), 'The inherit policy preserves an enabled core decision.' );
 wpyeg_test_assert( false === wpyeg_defaults_allow_major_core_updates( false ), 'The inherit policy preserves a disabled core decision.' );
 
-$GLOBALS['wpyeg_test_option'] = array( 'auto_update_translations' => 'no' );
-wpyeg_test_assert( false === wpyeg_defaults_allow_translation_updates( true ), 'Translation auto-updates can be explicitly disabled.' );
 unset( $GLOBALS['wpyeg_test_option'] );
 
 /*
@@ -632,7 +667,7 @@ wpyeg_test_assert( in_array( 'rest_pre_insert_user', $registered_hooks, true ), 
 wpyeg_test_assert( in_array( 'allow_minor_auto_core_updates', $registered_hooks, true ), 'The maintenance/security core update policy is registered.' );
 wpyeg_test_assert( in_array( 'allow_major_auto_core_updates', $registered_hooks, true ), 'The major core update policy is registered.' );
 wpyeg_test_assert( in_array( 'allow_dev_auto_core_updates', $registered_hooks, true ), 'Development core builds are kept out of stable policies.' );
-wpyeg_test_assert( in_array( 'auto_update_translation', $registered_hooks, true ), 'The translation update policy is registered.' );
+wpyeg_test_assert( ! in_array( 'auto_update_translation', $registered_hooks, true ), 'Translation updates remain on WordPress defaults.' );
 wpyeg_test_assert( ! in_array( 'auto_update_plugin', $registered_hooks, true ), 'Plugin code updates remain on WordPress per-item settings.' );
 wpyeg_test_assert( ! in_array( 'auto_update_theme', $registered_hooks, true ), 'Theme code updates remain on WordPress per-item settings.' );
 wpyeg_test_assert( ! in_array( 'script_loader_tag', $registered_hooks, true ), 'Blanket script-tag mutation is not registered.' );
@@ -811,6 +846,8 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'body'     => "0000000000000000000000000000000000A:3\r\n{$hibp_suffix}:42\r\n",
 );
 wpyeg_test_assert( true === wpyeg_password_is_pwned( $hibp_password ), 'A hash suffix returned with a non-zero count is treated as breached.' );
+wpyeg_test_assert( 128 * 1024 === $GLOBALS['wpyeg_test_last_http_args']['limit_response_size'], 'HIBP responses are capped at 128 KiB through the WordPress HTTP API.' );
+wpyeg_test_assert( 'true' === $GLOBALS['wpyeg_test_last_http_args']['headers']['Add-Padding'], 'HIBP range requests ask for padded responses.' );
 
 // Add-Padding rows come back with a count of 0 and must not count as a match.
 $GLOBALS['wpyeg_test_transients'] = array();
@@ -832,6 +869,24 @@ $GLOBALS['wpyeg_test_http']       = array(
 );
 wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A non-200 response fails open.' );
 
+// A body that reaches the transport limit may be truncated and is unavailable.
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http']       = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => str_repeat( 'A', 128 * 1024 ),
+);
+wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A response reaching the 128 KiB transport cap fails open.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A capped response is never cached.' );
+
+// One invalid row invalidates the response, even if another row looks like a match.
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http']       = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => "MALFORMED\r\n{$hibp_suffix}:42\r\n",
+);
+wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A malformed range response fails open instead of trusting partial data.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A malformed range response is never cached.' );
+
 // The range response is cached per prefix, so a second call makes no request.
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
@@ -841,6 +896,60 @@ $GLOBALS['wpyeg_test_http']       = array(
 wpyeg_password_is_pwned( $hibp_password );
 $GLOBALS['wpyeg_test_http'] = new WP_Error( 'http_request_failed', 'must not be called' );
 wpyeg_test_assert( true === wpyeg_password_is_pwned( $hibp_password ), 'The cached range response is reused instead of refetching.' );
+
+// The valid-response scan remains allocation-light and exits on the first match.
+wpyeg_test_assert( false !== strpos( $plugin_source, "foreach ( preg_split( '/\\r\\n|\\n/', \$body ) as \$line )" ), 'HIBP suffixes are scanned directly rather than copied into another result array.' );
+wpyeg_test_assert( false !== strpos( $plugin_source, "\t\t\tbreak;" ), 'The HIBP scan exits immediately after a matching suffix.' );
+
+/*
+ * Cross-artifact parity. The schema is the source of truth for the reference
+ * table and the workshop schema map, so a setting cannot silently drift out of
+ * learner-facing material.
+ */
+$repo_root = dirname( __DIR__ );
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
+$reference_doc = file_get_contents( $repo_root . '/docs/wordpress-default-settings.md' );
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
+$workshop_source = file_get_contents( $repo_root . '/workshop/Better-by-Default.ia.md' );
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
+$presenter_source = file_get_contents( $repo_root . '/workshop/better-by-default.iapresenter/text.md' );
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
+$deck_source = file_get_contents( $repo_root . '/workshop/build_deck.js' );
+
+$group_labels = array(
+	'security'    => 'Security',
+	'updates'     => 'Updates',
+	'content'     => 'Content',
+	'ux'          => 'UX',
+	'login'       => 'Login',
+	'branding'    => 'Branding',
+	'performance' => 'Performance',
+);
+
+foreach ( $schema as $key => $field ) {
+	$default = (string) $field['default'];
+	$display = '' === $default ? "''" : $default;
+	$doc_row = '/^\\| [^|]+ \\| `' . preg_quote( $key, '/' ) . '` \\| `' . preg_quote( $display, '/' ) . '` \\| ' . preg_quote( $group_labels[ $field['group'] ], '/' ) . ' \\|$/m';
+	$map_row = '/^\\| `' . preg_quote( $key, '/' ) . '` \\| `' . preg_quote( $display, '/' ) . '` \\|/m';
+	$js_row  = '["' . $key . '", "' . $display . '",';
+
+	wpyeg_test_assert( 1 === preg_match( $doc_row, $reference_doc ), "Reference table matches schema key {$key}." );
+	wpyeg_test_assert( 1 === preg_match( $map_row, $workshop_source ), "Workshop schema map matches schema key {$key}." );
+	wpyeg_test_assert( false !== strpos( $deck_source, $js_row ), "Deck source matches schema key {$key}." );
+}
+
+wpyeg_test_assert( $workshop_source === $presenter_source, 'The iA Presenter source is identical to the canonical workshop source.' );
+wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_source, 'remember_me_policy' ), 'Removed setting names do not survive in learner materials.' );
+wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_source, 'PMP-specific' ), 'BBD settings are not mislabeled as PMP-specific.' );
+wpyeg_test_assert( false === strpos( $deck_source, 'OPTION   ' ), 'Workshop chips identify schema keys rather than separate options.' );
+
+foreach ( array( 'README.md', 'plugin/sane-defaults/README.md', 'plugin/sane-defaults/readme.txt' ) as $readme_path ) {
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
+	$readme = file_get_contents( $repo_root . '/' . $readme_path );
+	wpyeg_test_assert( false !== stripos( $readme, 'AI connectors' ), "{$readme_path} documents the enabled AI-connector policy." );
+	wpyeg_test_assert( false !== strpos( $readme, 'SAMEORIGIN' ), "{$readme_path} documents the enabled frame policy." );
+	wpyeg_test_assert( false !== strpos( $readme, '5 days' ), "{$readme_path} documents the remembered-session cap." );
+}
 
 unset( $GLOBALS['wpyeg_test_http'] );
 $GLOBALS['wpyeg_test_transients'] = array();
