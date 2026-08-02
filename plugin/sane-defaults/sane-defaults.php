@@ -21,6 +21,8 @@
  * That single idea — "a default is just an opinionated filter behind a toggle"
  * — is the whole talk. Read the SETTINGS_SCHEMA array first; it's the map.
  * ---------------------------------------------------------------------------
+ *
+ * @package BetterByDefault
  */
 
 // Bail if called directly.
@@ -29,8 +31,8 @@ defined( 'ABSPATH' ) || exit;
 /**
  * The single source of truth: every setting, its default, type, and label.
  *
- * type:  'toggle' (yes/no), 'select', or 'number'
- * group: which fieldset it renders under on the settings screen
+ * Type is 'toggle' (yes/no), 'select', or 'number'. Group is the fieldset it
+ * renders under on the settings screen.
  */
 function wpyeg_defaults_schema() {
 	return array(
@@ -371,6 +373,15 @@ function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
 
 add_action( 'plugins_loaded', 'wpyeg_defaults_bootstrap' );
 
+/**
+ * Wire every enabled policy to its WordPress hook.
+ *
+ * Runs once on plugins_loaded. Each policy is an `if ( option )` around the
+ * add_filter or add_action that implements it, so a disabled setting costs
+ * nothing beyond the check itself.
+ *
+ * @return void
+ */
 function wpyeg_defaults_bootstrap() {
 
 	/* ----- Updates ----- */
@@ -472,7 +483,18 @@ function wpyeg_defaults_bootstrap() {
 		function ( $class ) {
 			if ( wpyeg_defaults_enabled( 'block_xmlrpc_endpoint' ) ) {
 				if ( ! class_exists( 'Wpyeg_Blocked_XMLRPC_Server' ) ) {
+					/**
+					 * Refuses every XML-RPC request with a 403.
+					 *
+					 * Deliberately does not extend wp_xmlrpc_server: nothing should be
+					 * reachable when the endpoint is blocked outright.
+					 */
 					class Wpyeg_Blocked_XMLRPC_Server {
+						/**
+						 * Answer every request with 403 and stop.
+						 *
+						 * @return void
+						 */
 						public function serve_request() {
 							status_header( 403 );
 							exit( 'XML-RPC services are disabled on this site.' );
@@ -484,13 +506,21 @@ function wpyeg_defaults_bootstrap() {
 
 			if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
 				if ( ! class_exists( 'Wpyeg_Multicall_Disabled_Server' ) ) {
-					/*
+					/**
+					 * Serves XML-RPC normally but refuses system.multicall.
+					 *
 					 * WordPress 4.4 stopped testing credentials after the first failed
 					 * authentication in one XML-RPC request. Refusing multicall is now
 					 * modest defence-in-depth against general batching, not a fix for
 					 * the obsolete "thousands of password guesses" claim.
 					 */
 					class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
+						/**
+						 * Refuse the batching wrapper.
+						 *
+						 * @param array $methodcalls Batched calls, ignored.
+						 * @return IXR_Error
+						 */
 						public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
 							return new IXR_Error( 405, 'system.multicall is disabled on this site.' );
 						}
@@ -1073,7 +1103,7 @@ function wpyeg_defaults_require_rest_auth( $result ) {
 /**
  * Enforce the password policy on the users controller's `password` argument.
  *
- * rest_pre_insert_user is the documented seam, but the controller never checks
+ * The rest_pre_insert_user hook is the documented seam, but the controller never checks
  * its return for an error: update_item() assigns ID onto the WP_Error and hands
  * it to wp_update_user(), which finds no user_pass and answers 200 OK with the
  * user unchanged; create_item() casts it to an array with no user_login and
@@ -1305,8 +1335,8 @@ add_action(
 /**
  * Sanitize the whole settings array against the schema.
  *
- * @param mixed $input
- * @return array
+ * @param mixed $input Raw submitted settings, straight from the form.
+ * @return array Values coerced to the schema; unknown keys dropped.
  */
 function wpyeg_defaults_sanitize( $input ) {
 	$schema = wpyeg_defaults_schema();
