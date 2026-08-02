@@ -20,4 +20,26 @@
 	<rule ref="WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents">
 		<exclude-pattern>bin/*</exclude-pattern>
 	</rule>
+	<!--
+		The plugin is deliberately one readable file — that is the teaching
+		point, and the README, the workshop deck, and the mu-plugin instructions
+		all rely on it. Both of these sniffs want it split up: one demands the
+		file be renamed class-wpyeg-blocked-xmlrpc-server.php after a class
+		declared lazily inside a filter callback, the other allows only a single
+		object structure per file. Neither fits a single-file plugin.
+	-->
+	<rule ref="WordPress.Files.FileName.InvalidClassFileName">
+		<exclude-pattern>plugin/sane-defaults/sane-defaults.php</exclude-pattern>
+	</rule>
+	<rule ref="Generic.Files.OneObjectStructurePerFile.MultipleFound">
+		<exclude-pattern>plugin/sane-defaults/sane-defaults.php</exclude-pattern>
+	</rule>
+	<!--
+		The $class parameter name mirrors core's wp_xmlrpc_server_class filter
+		signature. Renaming it for the sniff would make the callback harder to
+		match against the hook it implements.
+	-->
+	<rule ref="Universal.NamingConventions.NoReservedKeywordParameterNames.classFound">
+		<exclude-pattern>plugin/sane-defaults/sane-defaults.php</exclude-pattern>
+	</rule>
 </ruleset>
