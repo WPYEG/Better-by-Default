@@ -1384,6 +1384,40 @@ function wpyeg_defaults_sanitize( $input ) {
 	return $clean;
 }
 
+/**
+ * If a wp-config.php constant supersedes a setting, return a short inline note
+ * explaining it (the note may contain <code>). The control is then disabled and
+ * the note shown, so the screen never offers a switch that cannot take effect.
+ * Returns null when the setting is fully under the dashboard's control.
+ *
+ * @param string $key Schema key.
+ * @return string|null
+ */
+function wpyeg_defaults_config_lock( $key ) {
+	// Either of these means WordPress performs no background updates at all,
+	// which supersedes the core-update policy.
+	$updates_off = null;
+	if ( defined( 'AUTOMATIC_UPDATER_DISABLED' ) && AUTOMATIC_UPDATER_DISABLED ) {
+		$updates_off = 'AUTOMATIC_UPDATER_DISABLED';
+	} elseif ( defined( 'DISALLOW_FILE_MODS' ) && DISALLOW_FILE_MODS ) {
+		$updates_off = 'DISALLOW_FILE_MODS';
+	}
+
+	switch ( $key ) {
+		case 'core_update_policy':
+			if ( defined( 'WP_AUTO_UPDATE_CORE' ) ) {
+				return __( 'Locked by <code>WP_AUTO_UPDATE_CORE</code> in <code>wp-config.php</code>. Remove that constant to manage core releases here.', 'sane-defaults' );
+			}
+			if ( $updates_off ) {
+				/* translators: %s: a wp-config.php constant name. */
+				return sprintf( __( 'Overridden by <code>%s</code> in <code>wp-config.php</code>: WordPress installs no background updates.', 'sane-defaults' ), $updates_off );
+			}
+			break;
+	}
+
+	return null;
+}
+
 /** Render the settings page. */
 function wpyeg_defaults_render_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -1396,22 +1430,6 @@ function wpyeg_defaults_render_settings_page() {
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
 		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'sane-defaults' ); ?></p>
-
-		<?php if ( defined( 'AUTOMATIC_UPDATER_DISABLED' ) && AUTOMATIC_UPDATER_DISABLED ) : ?>
-			<div class="notice notice-error inline"><p>
-				<?php esc_html_e( 'Update policy overridden: AUTOMATIC_UPDATER_DISABLED disables every WordPress background update.', 'sane-defaults' ); ?>
-			</p></div>
-		<?php elseif ( defined( 'DISALLOW_FILE_MODS' ) && DISALLOW_FILE_MODS ) : ?>
-			<div class="notice notice-error inline"><p>
-				<?php esc_html_e( 'Update policy overridden: DISALLOW_FILE_MODS prevents WordPress from installing updates.', 'sane-defaults' ); ?>
-			</p></div>
-		<?php endif; ?>
-
-		<?php if ( defined( 'WP_AUTO_UPDATE_CORE' ) ) : ?>
-			<div class="notice notice-warning inline"><p>
-				<?php esc_html_e( 'Core update policy is locked by WP_AUTO_UPDATE_CORE in wp-config.php. Remove that constant to manage core releases here.', 'sane-defaults' ); ?>
-			</p></div>
-		<?php endif; ?>
 
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
@@ -1429,10 +1447,19 @@ function wpyeg_defaults_render_settings_page() {
 						$value    = wpyeg_defaults_get( $key );
 						$field_id = 'wpyeg-defaults-' . str_replace( '_', '-', $key );
 						$help_id  = $field_id . '-description';
+
+						// A wp-config.php constant may supersede this setting; if so the
+						// control is disabled and the reason shown next to it.
+						$lock   = wpyeg_defaults_config_lock( $key );
+						$locked = null !== $lock;
 						?>
 						<tr>
 							<?php if ( 'toggle' === $field['type'] ) : ?>
 								<td colspan="2">
+									<?php // A disabled checkbox is not submitted; carry a 'yes' so a save under the constant does not silently flip the stored preference to 'no'. Only 'yes' is carried, because sanitize treats any non-empty POST value as checked. ?>
+									<?php if ( $locked && 'yes' === $value ) : ?>
+										<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="yes" />
+									<?php endif; ?>
 									<label for="<?php echo esc_attr( $field_id ); ?>">
 										<input type="checkbox"
 											id="<?php echo esc_attr( $field_id ); ?>"
@@ -1441,9 +1468,14 @@ function wpyeg_defaults_render_settings_page() {
 											<?php if ( ! empty( $field['help'] ) ) : ?>
 												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
 											<?php endif; ?>
+											<?php disabled( $locked ); ?>
 											<?php checked( 'yes', $value ); ?> />
 										<?php echo esc_html( $field['label'] ); ?>
 									</label>
+
+									<?php if ( $locked ) : ?>
+										<p class="description"><?php echo wp_kses( $lock, array( 'code' => array() ) ); ?></p>
+									<?php endif; ?>
 
 									<?php if ( ! empty( $field['help'] ) ) : ?>
 										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
@@ -1455,7 +1487,7 @@ function wpyeg_defaults_render_settings_page() {
 								</th>
 								<td>
 									<?php if ( 'select' === $field['type'] ) : ?>
-										<?php $locked = 'core_update_policy' === $key && defined( 'WP_AUTO_UPDATE_CORE' ); ?>
+										<?php // A disabled select is not submitted; carry the current value so a save under the constant preserves the stored preference. ?>
 										<?php if ( $locked ) : ?>
 											<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" />
 										<?php endif; ?>
@@ -1481,6 +1513,10 @@ function wpyeg_defaults_render_settings_page() {
 												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
 											<?php endif; ?>
 											class="small-text" />
+									<?php endif; ?>
+
+									<?php if ( $locked ) : ?>
+										<p class="description"><?php echo wp_kses( $lock, array( 'code' => array() ) ); ?></p>
 									<?php endif; ?>
 
 									<?php if ( ! empty( $field['help'] ) ) : ?>
