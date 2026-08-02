@@ -909,13 +909,14 @@ for ( $i = 0; $i < 26; $i++ ) {
 // The real suffix rides in this truncated body: if the cap guard misses, the
 // call returns true instead of failing open, so the assertion below is real.
 $hibp_rows[] = $hibp_suffix . ':4';
+
 $hibp_capped_body                 = implode( "\r\n", $hibp_rows ) . "\r\n";
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => $hibp_capped_body,
 );
-wpyeg_test_assert( $hibp_cap === strlen( $hibp_capped_body ), 'The truncation fixture reaches the cap exactly.' );
+wpyeg_test_assert( strlen( $hibp_capped_body ) === $hibp_cap, 'The truncation fixture reaches the cap exactly.' );
 wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A well-formed response reaching the cap fails open rather than trusting a truncated range.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A well-formed capped response is never cached.' );
 unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] );
