@@ -109,7 +109,12 @@ The `/wp/v2/users` endpoint exposes every public author's name, ID, profile link
 ```php
 add_filter( 'rest_authentication_errors',
   function ( $result ) {
-    if ( ! empty( $result ) ) return $result;
+    // Only an ERROR short-circuits. A cookie with no
+    // nonce resolves to user 0 and returns true.
+    if ( is_wp_error( $result ) ) return $result;
+    // Leave oEmbed open, or every site embedding
+    // yours silently degrades to a bare link.
+    if ( route_is_public() ) return $result;
     if ( ! is_user_logged_in() ) {
       return new WP_Error(
         'rest_not_logged_in', 'Auth required.',

@@ -1077,6 +1077,57 @@ wpyeg_test_assert( true === wpyeg_defaults_require_rest_auth( true ), 'A success
 $prior = new WP_Error( 'rest_cookie_invalid_nonce', 'Cookie check failed' );
 wpyeg_test_assert( wpyeg_defaults_require_rest_auth( $prior ) === $prior, 'An existing authentication error is returned unchanged.' );
 
+/*
+ * The oEmbed carve-out.
+ *
+ * Closing REST closes oEmbed with it, and the damage lands somewhere the site
+ * owner never looks: every post of theirs that another site has embedded
+ * degrades to a bare link, silently. Measuring the field found four plugins that
+ * close REST outright and not one that allowlists oembed/1.0.
+ *
+ * The carve-out is only safe because the author fields are stripped whenever the
+ * gate is closed — asserted further down. Opening the route without that would
+ * hand the anonymous caller the nicenames the users-endpoint removal just
+ * refused them.
+ */
+$GLOBALS['wpyeg_test_current_user'] = 0;
+// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- $wp is the request double the gate reads its route from.
+$GLOBALS['wp'] = (object) array( 'query_vars' => array( 'rest_route' => '/oembed/1.0/embed' ) );
+
+wpyeg_test_assert( null === wpyeg_defaults_require_rest_auth( null ), 'An anonymous oEmbed request is allowed through the closed gate.' );
+
+$GLOBALS['wp']->query_vars['rest_route'] = '/oembed/1.0';
+wpyeg_test_assert( null === wpyeg_defaults_require_rest_auth( null ), 'The carve-out matches the prefix itself, not only routes beneath it.' );
+
+// A route that merely starts with the same characters is not the carve-out.
+$GLOBALS['wp']->query_vars['rest_route'] = '/oembed/1.0-internal/secrets';
+wpyeg_test_assert( is_wp_error( wpyeg_defaults_require_rest_auth( null ) ), 'A route sharing the prefix but not the path boundary is still refused.' );
+
+// Everything else stays shut.
+$GLOBALS['wp']->query_vars['rest_route'] = '/wp/v2/users';
+wpyeg_test_assert( is_wp_error( wpyeg_defaults_require_rest_auth( null ) ), 'The users route is still refused with the carve-out in place.' );
+
+$GLOBALS['wp']->query_vars['rest_route'] = '';
+wpyeg_test_assert( is_wp_error( wpyeg_defaults_require_rest_auth( null ) ), 'A request with no parsed route is refused rather than treated as public.' );
+
+// Core hands this query var a leading slash, but a route normalised without one
+// must still match — otherwise the carve-out depends on a detail of how the
+// request happened to be parsed.
+$GLOBALS['wp']->query_vars['rest_route'] = 'oembed/1.0/embed';
+wpyeg_test_assert( null === wpyeg_defaults_require_rest_auth( null ), 'A route without its leading slash still matches the carve-out.' );
+
+// The allowlist is filterable, so a site can open a route it depends on.
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_public_rest_routes'] = array( '/my-plugin/v1' );
+$GLOBALS['wp']->query_vars['rest_route']                         = '/my-plugin/v1/status';
+wpyeg_test_assert( null === wpyeg_defaults_require_rest_auth( null ), 'The public-route allowlist is filterable.' );
+
+$GLOBALS['wp']->query_vars['rest_route'] = '/oembed/1.0/embed';
+wpyeg_test_assert( is_wp_error( wpyeg_defaults_require_rest_auth( null ) ), 'Filtering the allowlist replaces the default rather than adding to it.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_public_rest_routes'] );
+
+unset( $GLOBALS['wp'] );
+$GLOBALS['wpyeg_test_current_user'] = 7;
+
 /**
  * Stand-in for the core users controller's check_user_password() sanitize callback.
  *
@@ -1322,14 +1373,38 @@ $xmlrpc_reference = file_get_contents( dirname( __DIR__ ) . '/docs/wordpress-def
 wpyeg_test_assert( false !== strpos( $xmlrpc_reference, 'core.trac.wordpress.org/ticket/34336' ), 'The XML-RPC reference cites the WordPress 4.4 authentication fix.' );
 
 // disable_rest ships off, so stage it on to check how it registers.
-$GLOBALS['wpyeg_test_option'] = array( 'disable_rest' => 'yes' );
+// disable_author_archives is switched OFF here on purpose: it registers the same
+// oEmbed filter, so leaving it on would let this block pass no matter what the
+// REST gate does.
+$GLOBALS['wpyeg_test_option'] = array(
+	'disable_rest'            => 'yes',
+	'disable_author_archives' => 'no',
+);
 $GLOBALS['wpyeg_test_hooks']  = array();
 wpyeg_defaults_bootstrap();
-$auth_gate = wpyeg_test_find_hook( 'rest_authentication_errors' );
+$auth_gate    = wpyeg_test_find_hook( 'rest_authentication_errors' );
+$oembed_strip = wpyeg_test_find_hook( 'oembed_response_data' );
 unset( $GLOBALS['wpyeg_test_option'] );
 
 wpyeg_test_assert( null !== $auth_gate, 'Enabling disable_rest registers the authentication gate.' );
 wpyeg_test_assert( PHP_INT_MAX === $auth_gate['priority'], 'The gate runs after core resolves cookie and Application Password auth.' );
+
+/*
+ * The precondition that makes the oEmbed carve-out safe, asserted where it is
+ * created rather than assumed.
+ *
+ * oembed/1.0 is allowed through the closed gate so other sites keep their
+ * embeds. Left alone, that route answers an anonymous caller with author_name
+ * and an author_url carrying the account nicename — the very enumeration the
+ * users-endpoint removal just refused them. So the gate registers the author
+ * strip itself, independently of the author-archive setting.
+ *
+ * Removing that registration was the one mutation of this feature that survived
+ * its first test pass: every assertion about the carve-out still passed while
+ * the carve-out leaked the thing it exists alongside.
+ */
+wpyeg_test_assert( null !== $oembed_strip, 'Closing REST also strips author identity from oEmbed, because the carve-out leaves that route open.' );
+wpyeg_test_assert( 'wpyeg_defaults_strip_oembed_author' === $oembed_strip['callback'], 'The oEmbed strip registered by the REST gate is the author-identity one.' );
 
 // disable_ai_connectors ships on. It used to only fire its own action, which is
 // what made it a no-op; check it now reaches core's WP 7.0 AI gate.

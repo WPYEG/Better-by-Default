@@ -1181,6 +1181,7 @@ Put them in a small plugin or an mu-plugin, not the theme, so they survive a the
 | `wpyeg_disable_hibp` | `false` | Switches off the breach lookup. Also honoured as the `WPYEG_DISABLE_HIBP` constant. |
 | `wpyeg_hibp_max_response_bytes` | `131072` | Transport cap on a range response. Floored at 1 KB, so a filter cannot make every response look truncated. |
 | `wpyeg_password_is_pwned` | the lookup's verdict | The final say on whether a password counts as breached. Return `true` from a local blocklist and no request is made. |
+| `wpyeg_public_rest_routes` | `array( '/oembed/1.0' )` | REST route prefixes that stay reachable when anonymous REST is closed. Filtering this **replaces** the default, so include `/oembed/1.0` unless you mean to close embeds too. |
 | `wpyeg_allowed_comment_types` | internal types only | Comment types that survive the teardown — Block Notes and similar, which are not public comments. |
 | `wpyeg_comment_blocks` | the core comment block list | Which editor blocks the comment teardown removes from the inserter. |
 | `wpyeg_keep_attachment_page` | `false` | Keeps a specific attachment page reachable instead of redirecting it. |
