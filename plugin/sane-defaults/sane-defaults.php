@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.1.2
+ * Version:           1.1.3
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -38,56 +38,60 @@ function wpyeg_defaults_schema() {
 	return array(
 
 		// --- Security ---------------------------------------------------
-		'restrict_rest_user_discovery'   => array(
+		'restrict_rest_user_discovery'    => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Restrict REST API user discovery',
 			'help'    => 'Hides <code>/wp/v2/users</code> from logged-out requests (stops username enumeration).',
 		),
-		'disable_rest'                   => array(
+		'disable_rest'                    => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require auth for all REST requests',
 			'help'    => 'Blocks anonymous REST entirely. The logged-in block editor still works, but public blocks, embeds, search, and integrations may not.',
 		),
-		'xmlrpc_allow_pingbacks'         => array(
+		'xmlrpc_allow_pingbacks'          => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
-			'label'   => 'XML-RPC: accept incoming pingbacks',
+			'section' => 'xmlrpc',
+			'label'   => 'Accept incoming pingbacks',
 			'help'    => 'OFF (default) removes <code>pingback.ping</code> — a spam/reflection-DDoS vector — and the <code>X-Pingback</code> header.',
 		),
-		'xmlrpc_allow_remote_publishing' => array(
+		'xmlrpc_allow_remote_publishing'  => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
-			'label'   => 'XML-RPC: allow remote publishing (blogging apps)',
+			'section' => 'xmlrpc',
+			'label'   => 'Allow remote publishing (blogging apps)',
 			'help'    => 'OFF (default) removes credential-authenticated <code>wp.*</code>, <code>metaWeblog.*</code>, <code>mt.*</code>, and <code>blogger.*</code> methods plus the RSD link. Leave ON while Jetpack is active unless connection and feature testing proves it unnecessary.',
 		),
-		'xmlrpc_allow_multicall'         => array(
+		'xmlrpc_allow_multicall'          => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
-			'label'   => 'XML-RPC: allow system.multicall',
+			'section' => 'xmlrpc',
+			'label'   => 'Allow system.multicall',
 			'help'    => 'OFF (default) refuses <code>system.multicall</code>, a general batching wrapper with little established modern use. WordPress 4.4 prevented it from being used as a password-guessing multiplier, so refusing it now is modest defence-in-depth against batching, not a password control.',
 		),
-		'block_xmlrpc_endpoint'          => array(
+		'block_xmlrpc_endpoint'           => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
-			'label'   => 'XML-RPC: block the endpoint entirely',
+			'section' => 'xmlrpc',
+			'label'   => 'Block the endpoint entirely (returns 403)',
 			'help'    => 'Strictest tier — <code>xmlrpc.php</code> returns <code>403</code> for every request. Leave XML-RPC reachable while Jetpack is active, unless connection and feature testing proves Jetpack no longer needs it. Prefer an edge block when possible; this plugin-level block still boots PHP.',
 		),
-		'disable_application_passwords'  => array(
+		'disable_application_passwords'   => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Prohibit Application Passwords',
 			'help'    => 'OFF (default) keeps them available — separate, revocable integration credentials for REST and XML-RPC. They inherit the owning user\'s access and bypass interactive 2FA, so use a least-privileged account.',
 		),
-		'require_strong_passwords'       => array(
+		'require_strong_passwords'        => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
@@ -101,21 +105,21 @@ function wpyeg_defaults_schema() {
 			'label'   => 'Limit unfiltered HTML to administrators',
 			'help'    => 'Editors hold <code>unfiltered_html</code> on single-site installs, which is enough to save a raw <code>&lt;script&gt;</code> into a post. This removes it from everyone except administrators (and Super Admins on multisite).',
 		),
-		'remove_version'                 => array(
+		'remove_version'                  => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Remove WordPress version fingerprint',
 			'help'    => 'Strips the generator meta tag. Obscurity, not hardening: it trims scanner noise but does not make an out-of-date site any safer, and the version still leaks from asset query strings and feeds. Off by default — patch instead. Turn on if you want the noise reduction.',
 		),
-		'security_headers'               => array(
+		'security_headers'                => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Send baseline security headers',
 			'help'    => '<code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code>. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
 		),
-		'frame_options'                  => array(
+		'frame_options'                   => array(
 			'default' => 'SAMEORIGIN',
 			'type'    => 'select',
 			'group'   => 'security',
@@ -127,7 +131,7 @@ function wpyeg_defaults_schema() {
 				''           => 'Leave unchanged (host/CDN sets it, or the site is embedded elsewhere)',
 			),
 		),
-		'disable_ai_connectors'          => array(
+		'disable_ai_connectors'           => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
@@ -136,7 +140,7 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Updates ----------------------------------------------------
-		'core_update_policy'             => array(
+		'core_update_policy'              => array(
 			'default' => 'minor',
 			'type'    => 'select',
 			'group'   => 'updates',
@@ -150,42 +154,42 @@ function wpyeg_defaults_schema() {
 			),
 		),
 		// --- Content and public surfaces ---------------------------------
-		'disable_comments'               => array(
+		'disable_comments'                => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable comments, trackbacks and pingbacks',
 			'help'    => 'Closes comments everywhere, hides existing threads, removes the admin menu.',
 		),
-		'disable_pingbacks'              => array(
+		'disable_pingbacks'               => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Default new posts to pings closed',
 			'help'    => 'Sets the "allow pingbacks" default to off for newly created content.',
 		),
-		'disable_self_pingbacks'         => array(
+		'disable_self_pingbacks'          => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable self-pingbacks',
 			'help'    => 'Stops internal links from generating pingback noise.',
 		),
-		'disable_author_archives'        => array(
+		'disable_author_archives'         => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Disable public author archives',
 			'help'    => 'Redirects <code>/author/{slug}/</code> to home (another enumeration + thin-content fix).',
 		),
-		'redirect_attachment_pages'      => array(
+		'redirect_attachment_pages'       => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Redirect attachment pages',
 			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides <code>attachment.php</code> or <code>image.php</code>, since that theme meant to render them. Core has its own switch since 6.4 (<code>wp_attachment_pages_enabled</code>); this prefers the parent post over the bare file.',
 		),
-		'disable_emojis'                 => array(
+		'disable_emojis'                  => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
@@ -193,14 +197,14 @@ function wpyeg_defaults_schema() {
 			'help'    => 'Removes the emoji detection script + inline CSS from every page.',
 		),
 
-		'disable_post_passwords'         => array(
+		'disable_post_passwords'          => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'label'   => 'Hide post-password protection',
 			'help'    => 'Hides the "Password protected" visibility option in the editor. Post passwords are weak and full-page caches bypass them. Cosmetic and non-destructive: it changes no data, and a post that already has a password keeps its field so it stays editable.',
 		),
-		'force_classic_editor'           => array(
+		'force_classic_editor'            => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'content',
@@ -209,14 +213,14 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Admin and front-end UX --------------------------------------
-		'title_only_admin_search'        => array(
+		'title_only_admin_search'         => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'ux',
 			'label'   => 'Title-only admin search',
 			'help'    => 'Speeds up admin list-table search on big sites by matching titles only.',
 		),
-		'frontend_admin_bar_behavior'    => array(
+		'frontend_admin_bar_behavior'     => array(
 			'default' => '',
 			'type'    => 'select',
 			'group'   => 'ux',
@@ -229,15 +233,15 @@ function wpyeg_defaults_schema() {
 			),
 		),
 
-		'lowercase_upload_filenames'     => array(
-			'default' => 'no',
+		'lowercase_upload_filenames'      => array(
+			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'ux',
 			'label'   => 'Lowercase upload filenames',
 			'help'    => 'Lowercases new upload filenames, so a case-sensitive server and a case-insensitive one agree about what a file is called. Only new uploads are affected.',
 		),
-		'media_sizes_panel'              => array(
-			'default' => 'no',
+		'media_sizes_panel'               => array(
+			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'ux',
 			'label'   => 'Show generated image sizes',
@@ -245,32 +249,34 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Login and sessions ------------------------------------------
-		'disable_remember_me'            => array(
+		'disable_remember_me'             => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'login',
 			'label'   => 'Disable "Remember Me"',
 			'help'    => 'Removes the "Remember Me" checkbox from the login form, so every login uses the regular session length below. Good for shared/kiosk machines.',
 		),
-		'session_regular_days'           => array(
+		'session_regular_days'            => array(
 			'default' => 2,
 			'type'    => 'number',
 			'group'   => 'login',
+			'section' => 'sessions',
 			'label'   => 'Regular session length (days)',
 			'help'    => 'How long a normal (non-remembered) login stays signed in. WordPress\'s default is 2 days.',
 			'min'     => 1,
 		),
-		'remember_me_days'               => array(
+		'remember_me_days'                => array(
 			'default' => 14,
 			'type'    => 'number',
 			'group'   => 'login',
+			'section' => 'sessions',
 			'label'   => 'Remember Me length (days)',
 			'help'    => 'How long a remembered login stays signed in. WordPress\'s default is 14 days. It cannot be shorter than the regular session length above.',
 			'min'     => 1,
 		),
 
 		// --- Branding ---------------------------------------------------
-		'login_logo_behavior'            => array(
+		'login_logo_behavior'             => array(
 			'default' => 'keep_default',
 			'type'    => 'select',
 			'group'   => 'branding',
@@ -285,7 +291,16 @@ function wpyeg_defaults_schema() {
 		),
 
 		// --- Performance ------------------------------------------------
-		'throttle_heartbeat'             => array(
+		// --- Email ---------------------------------------------------------
+		'mail_deliverability_notice'      => array(
+			'default' => 'yes',
+			'type'    => 'toggle',
+			'group'   => 'email',
+			'label'   => 'Warn when the site\'s From address looks undeliverable',
+			'help'    => 'WordPress sends mail from <code>wordpress@yourdomain</code> unless something changes it. On a domain that cannot actually send — a staging host, a <code>.local</code> address, a domain with no mail records — password resets and order receipts fail silently. This shows an admin notice when the address looks undeliverable. It never blocks or alters mail, and it stays quiet on local environments.',
+		),
+
+		'throttle_heartbeat'              => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'performance',
@@ -305,6 +320,7 @@ function wpyeg_defaults_groups() {
 		'login'       => 'Login and Sessions',
 		'branding'    => 'Branding',
 		'performance' => 'Performance',
+		'email'       => 'Email',
 	);
 }
 
@@ -865,6 +881,12 @@ function wpyeg_defaults_bootstrap() {
 
 	if ( wpyeg_defaults_enabled( 'media_sizes_panel' ) ) {
 		add_action( 'add_meta_boxes_attachment', 'wpyeg_defaults_media_sizes_meta_box' );
+	}
+
+	/* ----- Email ----- */
+
+	if ( wpyeg_defaults_enabled( 'mail_deliverability_notice' ) ) {
+		add_action( 'admin_notices', 'wpyeg_defaults_render_mail_config_notice' );
 	}
 
 	/* ----- Login and sessions ----- */
@@ -2122,6 +2144,124 @@ function wpyeg_defaults_config_lock( $key ) {
 	return null;
 }
 
+/**
+ * The effective "From" address WordPress will use for site mail.
+ *
+ * Mirrors core's default — wordpress@<host>, with any leading www. dropped —
+ * and then runs it through wp_mail_from, so whatever an SMTP plugin or a theme
+ * has set is what gets judged, not the theoretical default.
+ *
+ * @return string
+ */
+function wpyeg_defaults_mail_from_address() {
+	$sitename = wp_parse_url( network_home_url(), PHP_URL_HOST );
+	$sitename = $sitename ? strtolower( $sitename ) : '';
+
+	if ( 0 === strpos( $sitename, 'www.' ) ) {
+		$sitename = substr( $sitename, 4 );
+	}
+
+	$default_from = $sitename ? 'wordpress@' . $sitename : '';
+
+	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Reading core's own filter to learn the effective From address, not registering a hook.
+	return (string) apply_filters( 'wp_mail_from', $default_from );
+}
+
+/**
+ * Whether that address looks like mail sent from it will not arrive.
+ *
+ * Deliberately a shape check, not a delivery test. Proving mail works needs an
+ * SPF/DMARC lookup and a send, which is far more than a settings screen should
+ * do on page load. These are the cases where the answer is knowable for free.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_mail_is_risky() {
+	$email       = wpyeg_defaults_mail_from_address();
+	$domain_part = strrchr( $email, '@' );
+	$domain      = $domain_part ? strtolower( substr( $domain_part, 1 ) ) : '';
+
+	if ( ! is_email( $email ) ) {
+		return true;
+	}
+
+	if ( '' === $domain || in_array( $domain, array( 'example.com', 'localhost', 'local' ), true ) ) {
+		return true;
+	}
+
+	// Reserved TLDs that never resolve publicly (RFC 2606, RFC 6762).
+	return (bool) preg_match( '/\.(local|test|invalid|example)$/i', $domain );
+}
+
+/**
+ * Warn administrators when a non-local site cannot plausibly send mail.
+ *
+ * A notice, never an intervention. WordPress failing to deliver a password
+ * reset is silent by design — wp_mail() returns false and nothing surfaces it —
+ * so the entire value here is saying so out loud, once, to someone who can fix
+ * it. Local environments are exempt because there the address is meant to be
+ * undeliverable.
+ *
+ * @return void
+ */
+function wpyeg_defaults_render_mail_config_notice() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	if ( function_exists( 'wp_get_environment_type' ) && 'local' === wp_get_environment_type() ) {
+		return;
+	}
+
+	if ( ! wpyeg_defaults_mail_is_risky() ) {
+		return;
+	}
+
+	/**
+	 * The remedy suggested in the deliverability notice.
+	 *
+	 * Filterable so an agency can name the SMTP plugin it actually supports
+	 * rather than the three this plugin happens to know.
+	 *
+	 * @param string $recommendation Suggested remedy.
+	 */
+	$recommendation = apply_filters(
+		'wpyeg_smtp_plugin_recommendation',
+		__( 'Send through a transactional mail service using an SMTP plugin, or your host\'s own mail integration.', 'sane-defaults' )
+	);
+	?>
+	<div class="notice notice-warning">
+		<p>
+			<strong><?php esc_html_e( 'Site email may not be delivered.', 'sane-defaults' ); ?></strong>
+			<?php
+			printf(
+				/* translators: %s: the site's From email address. */
+				esc_html__( 'WordPress will send mail from %s, which does not look like an address that can deliver. Password resets and notifications may fail without any error.', 'sane-defaults' ),
+				'<code>' . esc_html( wpyeg_defaults_mail_from_address() ) . '</code>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped inline.
+			);
+			?>
+		</p>
+		<p><?php echo esc_html( $recommendation ); ?></p>
+	</div>
+	<?php
+}
+
+/**
+ * Titles for sections that stack several related controls under one table row.
+ *
+ * A section is presentation only: it changes how a run of settings is drawn,
+ * never what they do. Settings without one render exactly as before, which is
+ * why adding this cost nothing anywhere else in the plugin.
+ *
+ * @return array Section slug => title.
+ */
+function wpyeg_defaults_section_labels() {
+	return array(
+		'xmlrpc'   => __( 'XML-RPC', 'sane-defaults' ),
+		'sessions' => __( 'Session length', 'sane-defaults' ),
+	);
+}
+
 /** Render the settings page. */
 function wpyeg_defaults_render_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
@@ -2142,11 +2282,34 @@ function wpyeg_defaults_render_settings_page() {
 				<h2><?php echo esc_html( $group_label ); ?></h2>
 				<table class="form-table" role="presentation">
 					<tbody>
-					<?php foreach ( $schema as $key => $field ) : ?>
-						<?php
+					<?php
+					$section_open = null;
+
+					foreach ( $schema as $key => $field ) :
 						if ( $field['group'] !== $group_key ) {
 							continue;
 						}
+
+						$section = isset( $field['section'] ) ? $field['section'] : null;
+
+						// Close an open section once the run of same-section fields ends.
+						if ( null !== $section_open && $section_open !== $section ) {
+							echo '</fieldset></td></tr>';
+							$section_open = null;
+						}
+
+						// Open one on the first field of a run.
+						if ( null !== $section && null === $section_open ) {
+							$section_labels = wpyeg_defaults_section_labels();
+							$section_title  = isset( $section_labels[ $section ] ) ? $section_labels[ $section ] : $section;
+							printf(
+								'<tr><th scope="row">%1$s</th><td><fieldset><legend class="screen-reader-text"><span>%1$s</span></legend>',
+								esc_html( $section_title )
+							);
+							$section_open = $section;
+						}
+
+						$stacked  = ( null !== $section );
 						$name     = WPYEG_DEFAULTS_OPTION . '[' . $key . ']';
 						$value    = wpyeg_defaults_get( $key );
 						$field_id = 'wpyeg-defaults-' . str_replace( '_', '-', $key );
@@ -2157,9 +2320,19 @@ function wpyeg_defaults_render_settings_page() {
 						$lock   = wpyeg_defaults_config_lock( $key );
 						$locked = null !== $lock;
 						?>
-						<tr>
+						<?php
+						if ( ! $stacked ) :
+							?>
+							<tr><?php endif; ?>
 							<?php if ( 'toggle' === $field['type'] ) : ?>
-								<td colspan="2">
+								<?php
+								if ( $stacked ) :
+									?>
+									<div class="wpyeg-defaults-stacked">
+									<?php
+else :
+	?>
+									<td colspan="2"><?php endif; ?>
 									<?php // A disabled checkbox is not submitted; carry a 'yes' so a save under the constant does not silently flip the stored preference to 'no'. Only 'yes' is carried, because sanitize treats any non-empty POST value as checked. ?>
 									<?php if ( $locked && 'yes' === $value ) : ?>
 										<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="yes" />
@@ -2189,12 +2362,25 @@ function wpyeg_defaults_render_settings_page() {
 									<?php if ( ! empty( $field['help'] ) ) : ?>
 										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
 									<?php endif; ?>
-								</td>
+								<?php
+								if ( $stacked ) :
+									?>
+									</div>
+									<?php
+else :
+	?>
+									</td><?php endif; ?>
 							<?php else : ?>
-								<th scope="row">
-									<label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
-								</th>
-								<td>
+								<?php // Stacked non-toggles have no row header to name them, so they carry their own label. ?>
+								<?php if ( $stacked ) : ?>
+									<div class="wpyeg-defaults-stacked">
+										<label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
+								<?php else : ?>
+									<th scope="row">
+										<label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
+									</th>
+									<td>
+								<?php endif; ?>
 									<?php if ( 'select' === $field['type'] ) : ?>
 										<?php // A disabled select is not submitted; carry the current value so a save under the constant preserves the stored preference. ?>
 										<?php if ( $locked ) : ?>
@@ -2231,10 +2417,26 @@ function wpyeg_defaults_render_settings_page() {
 									<?php if ( ! empty( $field['help'] ) ) : ?>
 										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
 									<?php endif; ?>
-								</td>
+								<?php
+								if ( $stacked ) :
+									?>
+									</div>
+									<?php
+else :
+	?>
+									</td><?php endif; ?>
 							<?php endif; ?>
-						</tr>
+						<?php
+						if ( ! $stacked ) :
+							?>
+							</tr><?php endif; ?>
 					<?php endforeach; ?>
+					<?php
+					// A section that runs to the end of a group still needs closing.
+					if ( null !== $section_open ) {
+						echo '</fieldset></td></tr>';
+					}
+					?>
 					</tbody>
 				</table>
 			<?php endforeach; ?>

@@ -154,6 +154,54 @@ function apply_filters( $hook, $value ) {
 }
 
 /**
+ * URL-parsing test double.
+ *
+ * @param string $url       URL to parse.
+ * @param int    $component Component constant.
+ * @return mixed
+ */
+function wp_parse_url( $url, $component = -1 ) {
+	return wp_parse_url_shim( $url, $component );
+}
+
+/**
+ * Thin wrapper so the double above stays a one-liner.
+ *
+ * @param string $url       URL to parse.
+ * @param int    $component Component constant.
+ * @return mixed
+ */
+function wp_parse_url_shim( $url, $component ) {
+	$parsed = parse_url( $url ); // phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test double standing in for wp_parse_url().
+	if ( -1 === $component ) {
+		return $parsed;
+	}
+	if ( PHP_URL_HOST === $component ) {
+		return isset( $parsed['host'] ) ? $parsed['host'] : null;
+	}
+	return null;
+}
+
+/**
+ * Home-URL test double. The host is what the deliverability check reads.
+ *
+ * @return string
+ */
+function network_home_url() {
+	return isset( $GLOBALS['wpyeg_test_home_url'] ) ? $GLOBALS['wpyeg_test_home_url'] : 'https://example.org/';
+}
+
+/**
+ * Email-validation test double.
+ *
+ * @param string $email Candidate address.
+ * @return bool
+ */
+function is_email( $email ) {
+	return (bool) filter_var( (string) $email, FILTER_VALIDATE_EMAIL );
+}
+
+/**
  * Slash-stripping test double.
  *
  * @param mixed $value Input value.
@@ -1070,6 +1118,7 @@ $group_labels = array(
 	'login'       => 'Login',
 	'branding'    => 'Branding',
 	'performance' => 'Performance',
+	'email'       => 'Email',
 );
 
 foreach ( $schema as $key => $field ) {
@@ -1525,5 +1574,49 @@ unset( $GLOBALS['wpyeg_test_option'] );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_minor_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no minor-update filter.' );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_major_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no major-update filter.' );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_dev_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no dev-update filter, so the constant is genuinely obeyed.' );
+
+/*
+ * Mail deliverability warning.
+ *
+ * The value of this setting is entirely in when it stays quiet: a notice that
+ * cries wolf on every staging box teaches people to ignore notices. So the
+ * cases below are half negative on purpose.
+ */
+$GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'wordpress@realdomain.ca';
+wpyeg_test_assert( false === wpyeg_defaults_mail_is_risky(), 'A plain deliverable domain is not flagged.' );
+
+$GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'hello@agency.co.uk';
+wpyeg_test_assert( false === wpyeg_defaults_mail_is_risky(), 'A multi-part public suffix is not flagged.' );
+
+foreach ( array(
+	'wordpress@example.com'  => 'the RFC 2606 example domain',
+	'wordpress@mysite.local' => 'an mDNS .local address',
+	'wordpress@staging.test' => 'a reserved .test address',
+	'wordpress@localhost'    => 'a bare localhost address',
+	'not-an-email'           => 'a value that is not an address at all',
+) as $address => $description ) {
+	$GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = $address;
+	wpyeg_test_assert( true === wpyeg_defaults_mail_is_risky(), "The deliverability check flags {$description}." );
+}
+
+unset( $GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] );
+
+// The notice ships on, and hangs off admin_notices rather than intervening in mail.
+$GLOBALS['wpyeg_test_hooks'] = array();
+wpyeg_defaults_bootstrap();
+$mail_notice = wpyeg_test_find_hook( 'admin_notices' );
+wpyeg_test_assert( null !== $mail_notice, 'The deliverability notice registers on admin_notices.' );
+wpyeg_test_assert( 'wpyeg_defaults_render_mail_config_notice' === $mail_notice['callback'], 'It is the deliverability renderer that is hooked.' );
+
+$mail_schema = wpyeg_defaults_schema();
+wpyeg_test_assert( 'yes' === $mail_schema['mail_deliverability_notice']['default'], 'The deliverability notice ships on.' );
+wpyeg_test_assert( 'email' === $mail_schema['mail_deliverability_notice']['group'], 'It lives in its own Email group.' );
+
+// Off means silent: no hook at all, rather than a hook that returns early.
+$GLOBALS['wpyeg_test_option'] = array( 'mail_deliverability_notice' => 'no' );
+$GLOBALS['wpyeg_test_hooks']  = array();
+wpyeg_defaults_bootstrap();
+unset( $GLOBALS['wpyeg_test_option'] );
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'admin_notices' ), 'Turning the notice off unhooks it entirely.' );
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

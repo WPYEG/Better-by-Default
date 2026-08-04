@@ -6,7 +6,7 @@
 
 `a hands-on workshop · build the "sane-defaults" plugin`
 
-Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 31 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
+Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 32 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
 
 [This running text is the speaker script — in iA Presenter it stays in your notes, not on the slide.]
 
@@ -31,7 +31,7 @@ if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
 }   // that's the whole pattern, repeated across the plugin
 ```
 
-In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 31 settings built around that pattern.
+In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 32 settings built around that pattern.
 
 ---
 
@@ -63,7 +63,7 @@ This is a debugging model, not a universal “last plugin wins” rule. Constant
 
 ---
 
-## Seven categories of defaults
+## Eight categories of defaults
 
 	1. **Security** — Make the attack surface smaller.
 	2. **Updates** — Apply a deliberate core and translation update policy.
@@ -72,6 +72,7 @@ This is a debugging model, not a universal “last plugin wins” rule. Constant
 	5. **Login** — Sessions and credentials.
 	6. **Branding** — Own your login screen: make it secure and attractive.
 	7. **Performance** — Trim the fat.
+	8. **Email** — Say so when the site cannot send mail.
 
 We'll spend most of our time on security and content, then move quickly through updates, UX, login, branding, and performance, and we'll end up with a plugin that covers them all.
 
@@ -581,8 +582,8 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `limit_unfiltered_html_to_admins` | `yes` | `user_has_cap` drops the cap for non-admins |
 | `disable_post_passwords` | `no` | CSS hides the editor's password option |
 | `force_classic_editor` | `no` | four editor gates answered false |
-| `lowercase_upload_filenames` | `no` | `sanitize_file_name` at priority 20 |
-| `media_sizes_panel` | `no` | read-only meta box on attachments |
+| `lowercase_upload_filenames` | `yes` | `sanitize_file_name` at priority 20 |
+| `media_sizes_panel` | `yes` | read-only meta box on attachments |
 | `title_only_admin_search` | `no` | `post_search_columns` |
 | `frontend_admin_bar_behavior` | `''` | `show_admin_bar` |
 
@@ -598,6 +599,7 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `session_regular_days` | `2` | `auth_cookie_expiration` |
 | `remember_me_days` | `14` | `auth_cookie_expiration` |
 | `login_logo_behavior` | `keep_default` | login header presentation |
+| `mail_deliverability_notice` | `yes` | `admin_notices` when the From address looks undeliverable |
 | `throttle_heartbeat` | `no` | Heartbeat settings / enqueue |
 | `wpyeg_better_by_default` | array | the only `wp_options` row |
 | `DISALLOW_FILE_EDIT` | manual | `wp-config.php` |
