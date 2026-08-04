@@ -229,7 +229,47 @@ One default and one deliberate non-default — and the difference is the lesson.
 
 **`X-Frame-Options` is deliberately a separate setting** (`wpyeg_frame_options`, default `SAMEORIGIN`), and that split is the point worth teaching. It is the only one of the three that can break a working site: blocking cross-origin framing also blocks *legitimate* embedding — a client intranet, a partner site, a preview tool — and it fails as a silent blank frame, which is a miserable thing to debug. Bundled with the other two, a site that needs to be embeddable would have to give up `nosniff` as well. Two headers with no real downside and one with a genuine trade-off do not belong behind one checkbox.
 
-Note the `isset()` guards too: a managed host or CDN often sets these already, and we should not fight that layer. Be honest about the limit, though — PHP only sees headers set in PHP, so one added by nginx or a CDN is invisible here. Check the response, not just the code. A full Content-Security-Policy is a bigger conversation for another time!
+Note *how* they are applied, too, because this changed in 1.1.1. The original rule was "set only if unset", which sounds polite and is wrong: whatever arrived first won, so a host's permissive `X-Frame-Options` silently beat a deliberately configured `DENY`. The values are compared now, and the configured one replaces what is there only when it is strictly stronger — an unrecognised value, a deprecated `ALLOW-FROM` say, is left alone rather than guessed at. `X-Content-Type-Options` has exactly one effective value, so an existing header saying anything else is not a policy to respect, it is a header doing nothing; it gets corrected in place. And names are matched case-insensitively, because HTTP says header names are and PHP array keys say they are not — that mismatch used to make another plugin's `x-content-type-options` invisible here and add a second, conflicting line. `Referrer-Policy` still defers to whatever is already set: its tokens have no single strictness axis, so there is nothing to compare.
+
+Be honest about the limit, though — PHP only sees headers set in PHP, so one added by nginx or a CDN is invisible here. Check the response, not just the code. A full Content-Security-Policy is a bigger conversation for another time!
+
+---
+
+## The filter that calls itself
+
+	`limit_unfiltered_html_to_admins` · default **yes**
+
+```php
+add_filter( 'user_has_cap', function (
+    $allcaps, $caps, $args, $user ) {
+
+  if ( empty( $allcaps['unfiltered_html'] ) ) {
+    return $allcaps;
+  }
+
+  $roles = isset( $user->roles )
+    ? (array) $user->roles : array();
+
+  // Read what you were handed. Never ask.
+  if ( in_array( 'administrator', $roles, true )
+    || ! empty( $allcaps['manage_options'] ) ) {
+    return $allcaps;
+  }
+
+  $allcaps['unfiltered_html'] = false;
+  return $allcaps;
+}, PHP_INT_MAX - 1, 4 );
+```
+
+Editors hold `unfiltered_html` on a single-site install. That is enough to save a raw `<script>` into a post — not a vulnerability, a *capability*, and one most sites never consciously granted. This takes it back to administrators, plus Super Admins on multisite.
+
+**The lesson here is the trap, not the policy.** `user_has_cap` fires on every capability check there is. So a filter hooked to it that *asks* a capability question calls itself, and calls itself again, until the stack blows. `current_user_can( 'manage_options' )` inside this callback is infinite recursion. So is `is_super_admin()` on single site, which is the one that catches people — it calls `has_cap( 'delete_users' )`, straight back in here. On multisite it reads the network list instead and is safe, which is exactly why the real code guards it with `is_multisite()`.
+
+The fix is not cleverness, it is discipline: **decide from what you were handed.** `$user->roles` is already on the object. `$allcaps['manage_options']` is already resolved — it was computed before your filter ran. Read those. Never ask.
+
+One more detail worth stealing: the priority is `PHP_INT_MAX - 1`, so this has close to the final say over other `user_has_cap` filters — a plugin that grants the capability back later in the chain would otherwise quietly win. Not `PHP_INT_MAX` itself, which leaves a slot for something that genuinely must run last.
+
+Put this beside the comment-feed 404 and you have the pattern's two failure modes. There, a filter that looked complete and was not. Here, a filter that can destroy itself by asking an innocent question. Both of them pass every test you would think to write.
 
 ---
 
