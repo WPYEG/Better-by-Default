@@ -92,7 +92,7 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'Require strong passwords',
-			'help'    => 'Server-side rule: 15+ characters, a local blocklist, personal-context screening, and no forced composition rules. For the breach check, BBD sends Have I Been Pwned only the first five characters of a locally computed SHA-1 hash, then matches returned suffixes locally; the password and full hash never leave the site. HIBP outages or invalid responses fail open. See the <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange">HIBP Pwned Passwords range API</a> and <a href="https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver">NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers</a>.',
+			'help'    => 'Server-side rule: 15+ characters, screened against known breaches, checked against a small blocklist, and not built from your username or the name part of your email. No forced uppercase, number, or symbol rules. The readme describes exactly what the breach check sends.',
 		),
 		'limit_unfiltered_html_to_admins' => array(
 			'default' => 'yes',
