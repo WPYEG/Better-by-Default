@@ -1063,6 +1063,38 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 	wpyeg_test_assert( false === strpos( $deck_text, 'amplifier that batches thousands of login guesses' ), 'The rendered deck does not repeat the obsolete multicall claim.' );
 	wpyeg_test_assert( false === strpos( $deck_text, 'stopped testing credentials after the first failed login' ), 'The rendered deck carries the corrected multicall wording.' );
 	wpyeg_test_assert( false === strpos( $deck_text, 'Gate the whole endpoint off' ), 'The rendered deck does not misdescribe xmlrpc_enabled.' );
+
+	/*
+	 * The PDF handout, as far as it can honestly be checked. Its text lives in
+	 * subsetted font encodings that do not survive naive extraction, so this
+	 * compares structure only: one page per slide.
+	 *
+	 * Be clear about the limit. This catches a slide added or removed without
+	 * regenerating the handout, which is the common drift. It cannot catch a
+	 * wording correction, because that does not change the page count — so a
+	 * green suite is not proof the handout is current. Rebuild it whenever the
+	 * deck changes: composer build:deck, then the soffice line in README.
+	 */
+	$pdf_handout = $repo_root . '/workshop/Better-by-Default.pdf';
+	wpyeg_test_assert( is_readable( $pdf_handout ), 'The PDF handout is committed alongside the deck.' );
+
+	$slide_count = 0;
+	$zip         = new ZipArchive();
+
+	if ( true === $zip->open( $deck_artifact ) ) {
+		for ( $i = 0; $i < $zip->numFiles; $i++ ) {
+			if ( preg_match( '#^ppt/slides/slide[0-9]+\.xml$#', $zip->getNameIndex( $i ) ) ) {
+				++$slide_count;
+			}
+		}
+		$zip->close();
+	}
+
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+	$page_count = preg_match_all( '#/Type\s*/Page[^s]#', file_get_contents( $pdf_handout ) );
+
+	wpyeg_test_assert( $slide_count > 0, 'The rendered deck reports a slide count.' );
+	wpyeg_test_assert( $slide_count === $page_count, "The PDF handout has one page per slide (deck {$slide_count}, handout {$page_count})." );
 }
 
 foreach ( array( 'README.md', 'plugin/sane-defaults/README.md', 'plugin/sane-defaults/readme.txt' ) as $readme_path ) {

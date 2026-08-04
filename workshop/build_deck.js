@@ -460,7 +460,7 @@ codeSlide(15, "CONTENT · 1 of 4",
 codeSlide(16, "CONTENT · 2 of 4",
   "A clean 404 needs redirect_canonical gone",
   "Dropping the feed link stops the feed being advertised, not served. Answering it takes a 404 — and the 404 takes one more removal that no filter-level test will ever catch.",
-  "disable_comments, continued", "yes",
+  "disable_comments", "yes",
   [
     { t: "add_action( 'template_redirect',", k: "" },
     { t: "            $block_comment_feeds, 9 );", k: "" },
