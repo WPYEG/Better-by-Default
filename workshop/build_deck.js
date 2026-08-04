@@ -310,7 +310,7 @@ function codeSlide(num, kicker, title, why, optKey, def, lines, fs) {
 divider("1", "SECTION ONE", "Security &\nAttack Surface", "Every item here removes something an attacker can poke — usually in one line.")
   .addNotes("Every item in this section removes something an attacker can poke — usually in one line. The theme is simple: disable what you don't use. You can't exploit an endpoint that isn't there.");
 
-codeSlide(8, "SECURITY · 1 of 6",
+codeSlide(8, "SECURITY · 1 of 7",
   "Restrict REST API user discovery",
   "The /wp/v2/users endpoint hands out every author's login name to anyone — half of a brute-force guess, for free. Closing it for logged-out requests only keeps the editor and legit integrations working.",
   "restrict_rest_user_discovery", "yes",
@@ -326,7 +326,7 @@ codeSlide(8, "SECURITY · 1 of 6",
     { t: "} );", k: "" },
   ]).addNotes("The /wp/v2/users endpoint exposes every public author's name, ID, profile link, and slug to anyone. Because an author slug often resembles a login name, that gives attack scripts a useful credential hint for free. By closing the user-list and numeric user routes for logged-out requests only, the editor and legitimate integrations keep working while anonymous enumeration attempts receive an ordinary 404. It's partly security by obscurity — not a substitute for strong passwords, MFA, or rate limiting — but it also rejects junk requests from bots that are up to no good. Why spend even a few extra electrons helping them? Author archives take the separate path we'll see later: a 301 to the homepage. If probes persist, a properly configured host can count those request patterns and ban the source IP with Fail2Ban or a similar tool such as CrowdSec, SSHGuard, or Defensia.");
 
-codeSlide(9, "SECURITY · 2 of 6 · opt-in",
+codeSlide(9, "SECURITY · 2 of 7 · opt-in",
   "Lock REST to logged-in users (opt-in)",
   "The sledgehammer version of the slide before: requiring auth for ALL REST calls stops anonymous scraping cold. It breaks anonymous REST — front-end blocks, embeds, search, outside integrations — so it ships off.",
   "disable_rest", "no",
@@ -343,7 +343,7 @@ codeSlide(9, "SECURITY · 2 of 6 · opt-in",
     { t: "} );", k: "" },
   ]).addNotes("This is the sledgehammer version of the slide before. Requiring auth for ALL REST calls stops anonymous scraping cold. It does *not* break the block editor, though — you're logged in there, and the editor authenticates with your cookie plus a REST nonce, so it sails through this filter. What it breaks is ANONYMOUS REST: front-end blocks that fetch data for logged-out visitors, embeds, search, and outside integrations. That's why it ships off. Not every default should default to on; some are opt-in because they trade functionality for safety. Usually it's a better tradeoff to restrict a few REST routes — like the users endpoint we just closed — than to lock ALL of them.");
 
-codeSlide(10, "SECURITY · 3 of 6",
+codeSlide(10, "SECURITY · 3 of 7",
   "Lock XML-RPC down by category",
   "XML-RPC is legitimate but aging — an extra surface, not a backdoor. We unplug unused method families while preserving the endpoint for integrations that need it.",
   "xmlrpc allow keys + block_xmlrpc_endpoint", "no (all four)",
@@ -370,7 +370,7 @@ codeSlide(10, "SECURITY · 3 of 6",
   "[Aside — what's \"IXR\"? The Incutio XML-RPC library. Simon Willison released it in September 2002, one of his first open-source projects, while blogging from the University of Bath; both WordPress *and* Drupal adopted it, and it then sat largely untouched for 15+ years — long enough to pick up a CVE. Willison went on to co-create Django (2003–05 at the Lawrence Journal-World), build Lanyrd (sold to Eventbrite in 2013) and Datasette (2017), and is now one of the most-read writers on LLMs.]"
 );
 
-codeSlide(11, "SECURITY · 4 of 6",
+codeSlide(11, "SECURITY · 4 of 7",
   "Keep Application Passwords available",
   "This is an existing default we don't lock down. An Application Password is like a spare key cut for one app: hashed, per-application, revocable on its own — the safer REST credential, and the only one core accepts for REST Basic Auth.",
   "disable_application_passwords", "no (available)",
@@ -386,7 +386,7 @@ codeSlide(11, "SECURITY · 4 of 6",
     { t: "}", k: "" },
   ], 12.5).addNotes("This is an existing default we *don't* lock down. An Application Password is like a spare key cut for one app: each app gets its own hashed key, so you can revoke one without touching the others or changing the account password. That makes it the safer REST credential and the only one core accepts for REST Basic Auth. So they are good — they just don't have a toggle in WordPress core settings. You might need to prohibit application passwords on a site that forbids non-interactive credentials, but switching them off doesn't stop people connecting things, it just pushes them to worse habits, like sharing an account.");
 
-codeSlide(12, "SECURITY · 5 of 6",
+codeSlide(12, "SECURITY · 5 of 7",
   "Screen breaches without sending the password",
   "NIST SP 800-63B-4 § 3.1.1.2: use 15+ characters, a blocklist, and no composition rules. BBD hashes the candidate locally, sends HIBP only the first 5 SHA-1 characters, and matches the remaining 35 locally. The password and full hash never leave WordPress; unavailable or invalid HIBP data fails open.",
   "require_strong_passwords", "yes",
@@ -404,7 +404,7 @@ codeSlide(12, "SECURITY · 5 of 6",
     { t: "// invalid or 128 KiB => fail open", k: "c" },
   ]).addNotes("NIST SP 800-63B-4 § 3.1.1.2 calls for at least 15 characters for single-factor passwords, no composition rules, and a blocklist of commonly used, expected, or compromised passwords. BBD first applies its length rule, a small local blocklist, and checks for the username or email name. It then screens the candidate against the Have I Been Pwned Pwned Passwords range API.\n\nThe privacy trick is k-anonymity. BBD computes the candidate's SHA-1 hash locally, sends HIBP only the first five hexadecimal characters, and receives roughly 800–1,000 suffixes that share that prefix. BBD compares the remaining 35 characters locally. The password and its full hash never leave WordPress. SHA-1 is only HIBP's lookup format here; WordPress still owns password storage and uses its normal password hashing.\n\nBBD also sends Add-Padding: true, so response size does not disclose how many real matches exist; synthetic rows have a count of zero and are ignored. WordPress caps the response at 128 KiB with limit_response_size. Because a response reaching that cap may be truncated, capped, empty, malformed, failed, and non-200 responses are treated as unavailable and fail open. Only structurally valid prefix responses are cached for 12 hours; the local length, blocklist, and personal-context checks still apply. The same server-side validator covers profile changes, password resets, and REST user-password requests.\n\nAND YOU CAN SWITCH IT OFF — WPYEG_DISABLE_HIBP in wp-config.php, or the wpyeg_disable_hibp filter for a per-password decision. This is the only thing the whole plugin does that leaves your server, and everything on this slide is an argument that it is safe to do: hashed locally, five characters sent, padded response, nothing recoverable. All true, and none of it is an answer to \"may I decline.\" Someone under a data-protection regime, on an air-gapped network, or just unwilling to make an outbound call on every password change does not owe anyone a justification. Which is the whole talk, pointed back at us: a default you cannot turn off is not a default, it is a requirement wearing a default's clothes. Every other setting here has a toggle. This one is the test of whether we meant it.\n\nSources: HIBP API v3, Pwned Passwords — Searching by hash range using k-anonymity and Introducing padding: https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange ; NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers: https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver");
 
-codeSlide(13, "SECURITY · 6 of 6",
+codeSlide(13, "SECURITY · 6 of 7",
   "Remove fingerprints, add headers",
   "Two headers with no real downside ship on; framing is its own setting, because it is the only one that can break a working site. Hiding the version is obscurity, not hardening, so it ships off.",
   "security_headers / frame_options", "yes / SAMEORIGIN",
@@ -412,21 +412,54 @@ codeSlide(13, "SECURITY · 6 of 6",
     { t: "remove_action( 'wp_head', 'wp_generator' );", k: "h" },
     { t: "", k: "" },
     { t: "add_filter( 'wp_headers', function ( $h ) {", k: "" },
-    { t: "  // only fill in what nothing else set", k: "c" },
-    { t: "  if ( ! isset( $h['X-Content-Type-Options'] ) )", k: "" },
-    { t: "    $h['X-Content-Type-Options'] = 'nosniff';", k: "h" },
-    { t: "  if ( ! isset( $h['Referrer-Policy'] ) )", k: "" },
-    { t: "    $h['Referrer-Policy'] =", k: "h" },
-    { t: "      'strict-origin-when-cross-origin';", k: "h" },
+    { t: "  // compare, do not yield - see the notes", k: "c" },
+    { t: "  $key = find_key( $h, 'X-Frame-Options' );", k: "" },
+    { t: "  if ( stronger( $want, $h[ $key ] ) )", k: "h" },
+    { t: "    $h[ $key ] = $want;", k: "h" },
+    { t: "", k: "" },
+    { t: "  // one effective value, so correct it", k: "c" },
+    { t: "  $h[ ctk( $h ) ] = 'nosniff';", k: "h" },
     { t: "  return $h;", k: "" },
     { t: "} );", k: "" },
-    { t: "// framing is its own setting - see the notes", k: "c" },
   ]).addNotes(
   "One default and one deliberate non-default — and the difference is the lesson. Hiding the version is obscurity, not hardening: it does not make an out-of-date site any safer, and it does not even hide much, since the version still leaks from asset query strings and feeds. What it genuinely buys is quieter logs. That is worth opting into, not worth shipping on and calling security — so it defaults to off. The headers are the opposite: real, low-risk defaults most sites can adopt without breaking anything:\n\n" +
   "- X-Content-Type-Options: nosniff — the browser must trust the declared Content-Type instead of guessing; kills \"a .txt the browser decides to run as JavaScript\" tricks.\n" +
   "- Referrer-Policy: strict-origin-when-cross-origin — sends the full URL within your own site, only the bare domain to other sites, and nothing on an HTTPS→HTTP downgrade; keeps tokens and private paths from leaking in the Referer.\n\n" +
   "X-Frame-Options is deliberately a SEPARATE setting (wpyeg_frame_options, default SAMEORIGIN), and that split is the point worth teaching. It is the only one of the three that can break a working site: blocking cross-origin framing also blocks legitimate embedding — a client intranet, a partner site, a preview tool — and it fails as a silent blank frame, which is miserable to debug. Bundled with the other two, a site that needs to be embeddable would have to give up nosniff as well.\n\n" +
-  "Note the isset() guards: a managed host or CDN often sets these already and we should not fight that layer. Be honest about the limit though — PHP only sees headers set in PHP, so one added by nginx or a CDN is invisible here. Check the response, not just the code. A full Content-Security-Policy is a bigger conversation for another time!"
+  "Note HOW they are applied, too, because this changed in 1.1.1. The original rule was \"set only if unset\", which sounds polite and is wrong: whatever arrived first won, so a host's permissive X-Frame-Options silently beat a deliberately configured DENY. The values are compared now, and the configured one replaces what is there only when it is strictly stronger — an unrecognised value, a deprecated ALLOW-FROM say, is left alone rather than guessed at. X-Content-Type-Options has exactly one effective value, so an existing header saying anything else is not a policy to respect, it is a header doing nothing; it gets corrected in place. And names are matched case-insensitively, because HTTP says header names are and PHP array keys say they are not — that mismatch used to make another plugin's x-content-type-options invisible here and add a second, conflicting line. Referrer-Policy still defers to whatever is already set: its tokens have no single strictness axis, so there is nothing to compare.\n\n" +
+  "Be honest about the limit though — PHP only sees headers set in PHP, so one added by nginx or a CDN is invisible here. Check the response, not just the code. A full Content-Security-Policy is a bigger conversation for another time!"
+);
+
+codeSlide(14, "SECURITY · 7 of 7",
+  "The filter that calls itself",
+  "Editors hold unfiltered_html on a single-site install — enough to save a raw <script> into a post. Taking it back is easy. Doing it without blowing the stack is the lesson.",
+  "limit_unfiltered_html_to_admins", "yes",
+  [
+    { t: "add_filter( 'user_has_cap', function (", k: "" },
+    { t: "    $allcaps, $caps, $args, $user ) {", k: "" },
+    { t: "", k: "" },
+    { t: "  if ( empty( $allcaps['unfiltered_html'] ) ) {", k: "" },
+    { t: "    return $allcaps;", k: "" },
+    { t: "  }", k: "" },
+    { t: "", k: "" },
+    { t: "  $roles = isset( $user->roles )", k: "" },
+    { t: "    ? (array) $user->roles : array();", k: "" },
+    { t: "", k: "" },
+    { t: "  // Read what you were handed. Never ask.", k: "c" },
+    { t: "  if ( in_array( 'administrator', $roles, true )", k: "h" },
+    { t: "    || ! empty( $allcaps['manage_options'] ) ) {", k: "h" },
+    { t: "    return $allcaps;", k: "" },
+    { t: "  }", k: "" },
+    { t: "", k: "" },
+    { t: "  $allcaps['unfiltered_html'] = false;", k: "h" },
+    { t: "  return $allcaps;", k: "" },
+    { t: "}, PHP_INT_MAX - 1, 4 );", k: "" },
+  ], 10.5).addNotes(
+  "Editors hold unfiltered_html on a single-site install. That is enough to save a raw <script> into a post — not a vulnerability, a CAPABILITY, and one most sites never consciously granted. This takes it back to administrators, plus Super Admins on multisite.\n\n" +
+  "THE LESSON HERE IS THE TRAP, NOT THE POLICY. user_has_cap fires on every capability check there is. So a filter hooked to it that ASKS a capability question calls itself, and calls itself again, until the stack blows. current_user_can( 'manage_options' ) inside this callback is infinite recursion. So is is_super_admin() on single site, which is the one that catches people — it calls has_cap( 'delete_users' ), straight back in here. On multisite it reads the network list instead and is safe, which is exactly why the real code guards it with is_multisite().\n\n" +
+  "The fix is not cleverness, it is discipline: DECIDE FROM WHAT YOU WERE HANDED. $user->roles is already on the object. $allcaps['manage_options'] is already resolved — it was computed before your filter ran. Read those. Never ask.\n\n" +
+  "One more detail worth stealing: the priority is PHP_INT_MAX - 1, so this has close to the final say over other user_has_cap filters — a plugin that grants the capability back later in the chain would otherwise quietly win. Not PHP_INT_MAX itself, which leaves a slot for something that genuinely must run last.\n\n" +
+  "Put this beside the comment-feed 404 and you have the pattern's two failure modes. There, a filter that looked complete and was not. Here, a filter that can destroy itself by asking an innocent question. Both of them pass every test you would think to write."
 );
 
 /* =================================================================== */
@@ -435,7 +468,7 @@ codeSlide(13, "SECURITY · 6 of 6",
 divider("2", "SECTION TWO", "Content &\nPublic Surfaces", "Close the spam funnels and the thin pages Google (and bots) love to crawl.")
   .addNotes("These reduce channels for spam and clean up the thin, duplicate URLs that bots and search engines get lost in.");
 
-codeSlide(15, "CONTENT · 1 of 4",
+codeSlide(16, "CONTENT · 1 of 4",
   "Disable comments, trackbacks & pingbacks",
   "For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu.",
   "disable_comments / disable_pingbacks / disable_self_pingbacks", "yes each",
@@ -457,7 +490,7 @@ codeSlide(15, "CONTENT · 1 of 4",
   "Closing comments is four jobs, not one: the template, the data, the editor, and the page. comments_open and comments_array answer the theme's comment template. comments_pre_query answers everything else — /wp/v2/comments most of all, which otherwise serves every comment the site has ever had. allowed_block_types_all takes the comment blocks out of the inserter, but the inserter only decides what an editor can add NEXT, and a block theme has already put those blocks in its post template. That markup needs render_block to return an empty string, or every post prints a \"Comments\" heading over an empty wrapper and the site reads as broken rather than as one that deliberately has no comments. get_comments_number is the same gap one layer down: wp_count_comments() answers zero once the query filter is in place, but the theme's heading reads the post's cached comment_count and cheerfully prints \"1 Comment\" above a thread that renders nothing.\n\n" +
   "Returning an empty string rather than unregistering the block types is what keeps this reversible. The blocks stay registered, the theme's markup stays as its author wrote it, and turning the setting off brings the whole thing back with nothing to undo.");
 
-codeSlide(16, "CONTENT · 2 of 4",
+codeSlide(17, "CONTENT · 2 of 4",
   "A clean 404 needs redirect_canonical gone",
   "Dropping the feed link stops the feed being advertised, not served. Answering it takes a 404 — and the 404 takes one more removal that no filter-level test will ever catch.",
   "disable_comments", "yes",
@@ -480,7 +513,7 @@ codeSlide(16, "CONTENT · 2 of 4",
   "And redirect_canonical has to go with it — this is the part worth remembering. It does not bail on a 404. It calls redirect_guess_404_permalink(), and against the query we have just emptied it answers /post-name/feed/ with a 301 to /post-name/feed/feed/. Leaving it hooked turns a clean 404 into a redirect to a URL that has never existed, which is worse than the bug we set out to fix.\n\n" +
   "EVERY FILTER-LEVEL TEST STILL PASSES. ONLY A REAL REQUEST CATCHES IT. That is the honest limit of the pattern this whole talk is built on: a filter behind a toggle is a claim about one hook, and what a visitor actually gets is the sum of all of them. The recursion trap in limit_unfiltered_html_to_admins is the same lesson from the other direction — a user_has_cap filter that asks a capability question calls itself, so it has to decide from $user->roles and the already-resolved $allcaps and never ask. Test the request, not just the hook.");
 
-codeSlide(17, "CONTENT · 3 of 4",
+codeSlide(18, "CONTENT · 3 of 4",
   "Redirect author & attachment pages",
   "Author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. Both dilute SEO and are targets for trouble. Same hook, two conditions.",
   "disable_author_archives / redirect_attachment_pages", "yes / yes",
@@ -496,7 +529,7 @@ codeSlide(17, "CONTENT · 3 of 4",
     { t: "} );", k: "" },
   ]).addNotes("Like the REST user routes, author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. template_redirect fires before a template loads - the perfect place to bounce the unwanted requests. Same hook, two conditions.\n\nTwo details on the attachment half, because the obvious version is subtly wrong. Unattached media has no parent - and that is most of the Media Library - so a naive else-home_url() points every one of those at your homepage, which search engines read as a soft 404. Fall back to the FILE instead, which is what core does. And skip the redirect entirely when the theme ships attachment.php or image.php: that theme built those pages deliberately (the photography case), and quietly bouncing past it deletes someone's feature.\n\nCore moved here too: WordPress 6.4 added wp_attachment_pages_enabled, off for new installs. So this default is not adding the redirect so much as choosing a better destination than the bare file.");
 
-codeSlide(18, "CONTENT · 4 of 4",
+codeSlide(19, "CONTENT · 4 of 4",
   "Disable the emoji script",
   "WordPress core injects an emoji-detection script and inline CSS on every page load, plus a DNS-prefetch hint. Modern browsers render emoji natively, so this is pure dead weight.",
   "disable_emojis", "yes",
@@ -518,7 +551,7 @@ codeSlide(18, "CONTENT · 4 of 4",
 divider("3", "SECTION THREE", "Admin UX &\nLogin Sessions", "Small quality-of-life defaults: a calmer dashboard and sensible session policy.")
   .addNotes("Now the quality-of-life defaults. These are more about your daily user experience and session safety than raw hardening.");
 
-codeSlide(20, "ADMIN UX",
+codeSlide(21, "ADMIN UX",
   "Faster search, quieter admin bar",
   "Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster.",
   "title_only_admin_search / frontend_admin_bar_behavior", "no / ''",
@@ -535,7 +568,7 @@ codeSlide(20, "ADMIN UX",
     { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
   ], 11).addNotes("Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster. The craft is in the *how*: post_search_columns (WP 6.2+) narrows the columns instead of rewriting the whole SQL clause, so core's term parsing and the logged-out password guard stay intact. Scope the filter; don't bulldoze the query.");
 
-codeSlide(21, "LOGIN & SESSIONS",
+codeSlide(22, "LOGIN & SESSIONS",
   "Right-size the login session",
   "A normal login lasts 2 days; “Remember Me” extends it to 14. Both are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the checkbox entirely. One filter covers all of it.",
   "disable_remember_me / session_regular_days / remember_me_days", "no / 2 / 14",
@@ -557,7 +590,7 @@ codeSlide(21, "LOGIN & SESSIONS",
 divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, then shave the last bit of weight off every page.")
   .addNotes("The last pair brands the login screen. Then we end with two performance levers to shave some weight off every page.");
 
-codeSlide(23, "BRANDING",
+codeSlide(24, "BRANDING",
   "Own the login screen",
   "The default WordPress logo sends users to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents an unexpected external destination. BBD leaves it unchanged unless you opt in.",
   "login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
@@ -572,7 +605,7 @@ codeSlide(23, "BRANDING",
     { t: "            get_bloginfo( 'name' ) );", k: "h" },
   ], 12).addNotes("The login page is a WordPress site's staff entrance, and the default WordPress \"W\" on wp-login.php links to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site. Changing a site's login screen out of the box is intrusive, though, so the default is to LEAVE IT ALONE. Any opt-in change points the link home. Swap in a background-image to use the site's own logo.");
 
-codeSlide(24, "PERFORMANCE · opt-in",
+codeSlide(25, "PERFORMANCE · opt-in",
   "Throttle Heartbeat — and a default we deleted",
   "Throttle Heartbeat to ease up on weak shared hosting. The more interesting half is the toggle that used to be here: WordPress 6.3 gave scripts a per-script loading strategy, so our blanket defer filter had to go.",
   "throttle_heartbeat", "no (opt-in)",
