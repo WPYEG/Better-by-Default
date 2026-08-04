@@ -465,8 +465,9 @@ The login page is a WordPress site's staff entrance, and the default WordPress "
 	`throttle_heartbeat` · default **no** (opt-in)
 
 ```php
-add_filter( 'heartbeat_settings', fn( $s ) => {
-  $s['interval'] = 60; return $s;
+add_filter( 'heartbeat_settings', function ( $s ) {
+  $s['interval'] = 60;
+  return $s;
 } );
 
 // Deferring scripts is NOT a setting here. Since WP 6.3:
