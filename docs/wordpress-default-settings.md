@@ -754,12 +754,30 @@ add_action( 'login_head', function () {
   *shorten* a session).
 
 ```php
-add_filter( 'auth_cookie_expiration', function ( $expiration, $user_id, $remember ) {
+function wpyeg_auth_cookie_expiration( $expiration, $user_id, $remember ) {
     $regular = 2 * DAY_IN_SECONDS;   // session_regular_days
 
     return $remember ? 14 * DAY_IN_SECONDS : $regular;  // remember_me_days >= regular
-}, 10, 3 );
+}
+
+// Register it only when these settings say something WordPress does not already
+// do — see below for why that condition is the interesting part.
+if ( wpyeg_defaults_session_policy_is_custom() ) {
+    add_filter( 'auth_cookie_expiration', 'wpyeg_auth_cookie_expiration', 10, 3 );
+}
 ```
+
+> **Why the `if`, and why a named function.** This is a *replacing* filter: the callback returns
+> its own number and discards `$expiration`. Two plugins registering one do not compose —
+> WordPress keeps whichever ran last, the other silently does nothing, and both settings screens
+> go on displaying their own value with no error anywhere. A number filter cannot be made
+> additive, so the only thing left is to not enter a fight with nothing to win: both defaults
+> here are WordPress's own values, so on a site that has never changed them, registering would
+> assert core's answer over another plugin's deliberate one. And the callback is a named
+> function rather than a closure because `$wp_filter` can only report a callback that has a
+> name — an anonymous one shows up as `closure` in exactly the diagnostic you would run to work
+> out who won. See
+> [When two plugins set the same default](when-two-plugins-set-the-same-default.md).
 
 ### Login Logo & Link
 - **Setting key:** `login_logo_behavior`

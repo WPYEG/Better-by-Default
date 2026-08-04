@@ -116,9 +116,14 @@ On the three-plugin test install that prints:
 Three entries on a filter that only keeps one answer. More than one line, on a
 filter of the replacing kind, means somebody is losing.
 
-The `closure` is this plugin — Better by Default registers that callback as an
-anonymous function, so it has no name to print. `ReflectionFunction` will tell
-you the file, which is usually enough to identify the plugin:
+Note that the two named callbacks sit at priority 50 and the anonymous one at
+10. Priority decides the order they run in, and on a replacing filter the
+**last** one to run is the one that counts — so registering earlier does not
+help you, it guarantees you lose.
+
+If a line says only `closure`, the plugin registered an anonymous function and
+there is no name to print. `ReflectionFunction` will give you the file, which is
+usually enough to identify it:
 
 ```bash
 wp eval '
@@ -133,10 +138,26 @@ foreach ( $wp_filter["auth_cookie_expiration"]->callbacks as $prio => $cbs ) {
 }'
 ```
 
-Note also that the two named callbacks sit at priority 50 and this one at 10.
-Priority decides the order they run in, and on a replacing filter the **last**
-one to run is the one that counts — so registering earlier does not help you,
-it guarantees you lose.
+## What this plugin changed after measuring it
+
+That `closure` at priority 10 was Better by Default, and writing this page is
+what got it fixed. Two things were wrong with it, and neither was the session
+length itself.
+
+**It registered when it had nothing to say.** Both of its length defaults are
+WordPress's own values, 2 days and 14. On a site that had never changed them it
+was contesting the filter in order to assert the answer core already gives —
+losing to two plugins that meant something by it, or worse, beating one that
+did. It now registers only when those settings differ from their defaults, or
+when Remember Me is switched off, which is a policy whatever the numbers say.
+
+**It was anonymous.** The callback is a named function now, so the diagnostic
+above prints `wpyeg_defaults_auth_cookie_expiration` and nobody has to run the
+reflection version to find out whose it is.
+
+Neither change makes a replacing filter compose — nothing can. They make this
+plugin abstain from the fights it has no stake in, and identifiable in the ones
+it does.
 
 Useful hooks to try: `auth_cookie_expiration`, `login_headerurl`,
 `rest_authentication_errors`. Contrast them with `wp_headers` or

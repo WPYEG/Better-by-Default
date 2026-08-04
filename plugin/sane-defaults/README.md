@@ -11,7 +11,8 @@ thing is built around one idea worth carrying home:
 
 1. Copy the `sane-defaults` folder into `wp-content/plugins/`
    (or upload the zip via **Plugins → Add New → Upload Plugin**).
-2. Activate. On activation the documented defaults are seeded automatically.
+2. Activate. The documented defaults apply immediately — they live in the schema, not the
+   database, so nothing is written until you save the settings screen.
 3. Visit **Settings → Better by Default** to flip switches.
 
 WP-CLI:

@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.1.4
+Stable tag: 1.2.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -76,7 +76,7 @@ Plugin and theme code updates continue to use WordPress's individual per-item ch
 == Installation ==
 
 1. Upload the `sane-defaults` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload Plugin.
-2. Activate. Documented defaults are seeded automatically on activation.
+2. Activate. The documented defaults apply immediately. They live in the plugin's schema rather than the database, so nothing is written to `wp_options` until you save the settings screen — and a setting you have never saved follows the current default, including after an upgrade that improves one.
 3. Visit **Settings → Better by Default** to flip switches.
 
 WP-CLI:
@@ -106,6 +106,13 @@ Yes, and you do not have to justify it. It is the only thing this plugin does th
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.2.0 =
+* Session lengths no longer contest the `auth_cookie_expiration` filter on a site that has not changed them. That filter is a *replacing* one — a callback returns its own number and discards the value it was handed — so two plugins registering one do not compose: WordPress keeps whichever ran last, the loser does nothing, and both settings screens go on displaying a number the site is not using. Both defaults here are WordPress's own values, so on an untouched site this plugin was entering that fight only to assert the answer core already gives. It now registers the filter when a length differs from its default, or when "Remember Me" is disabled, and the callback is a named function instead of an anonymous one so `$wp_filter` can identify it. See `docs/when-two-plugins-set-the-same-default.md`.
+* Removed the activation hook. It seeded the option with every schema default, which changed nothing — settings already fall back to the schema when the stored array has no entry — while freezing a site at its activation-time defaults, so a default improved in a later release never reached it. One rule now: a setting you have saved is yours and is never touched; a setting you have never saved follows the current default.
+* The `wpyeg_disable_ai_connectors` seam fires on `init` (priority 20) instead of during `plugins_loaded`. It used to fire before any plugin that registers hooks from its own `plugins_loaded` callback had run, and before the AI providers it exists to unregister had registered at all — a seam nothing could reach.
+* Documentation corrections throughout, and guards so they stay corrected. The reference doc taught the "set only if unset" header rule that 1.1.1 replaced, a `login_footer` script for the Remember Me default that this plugin deliberately does not use, and a password snippet with the two bugs the plugin's own comments explain fixing. Both READMEs listed "Lowercase upload filenames" and "Show generated image sizes" as opt-in; both have defaulted to on since 1.1.3. The prose lists are gone in favour of one table per artifact, checked per schema key.
+* Internal: three strings that print after `init` are translated; `wpyeg_password_is_pwned()` becomes `wpyeg_defaults_password_is_pwned()` (the filter of that name is unchanged); phpcs warnings now fail the build in CI and locally, which run the same command.
 
 = 1.1.4 =
 * The two REST settings stack under a "REST API" row, matching the XML-RPC and session groupings added in 1.1.3.
@@ -149,6 +156,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+If your session lengths are still 2 and 14 days and "Remember Me" is enabled — the shipped defaults — this plugin no longer filters `auth_cookie_expiration` at all. Your sessions do not change, but another plugin that sets session length will now take effect where it was previously overruled at random. Change either length, or disable "Remember Me", and this plugin filters as before. The activation hook is also gone: existing sites keep every value already saved, and a setting you have never saved now follows the current default instead of the default that was current when you activated.
 
 = 1.1.3 =
 Two settings change their default to on: "Lowercase upload filenames" (new uploads only) and "Show generated image sizes" (a read-only panel). If you have saved the settings screen since 1.1.0 your stored choices are untouched. A site that has never saved it — including one upgraded from 1.0.x, which predates both settings — picks up the new defaults.
