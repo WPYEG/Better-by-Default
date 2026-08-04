@@ -349,6 +349,7 @@ wpyeg_test_assert(
 	'Help text permits only attribute-free code markup and href-only reference links.'
 );
 wpyeg_test_assert( false !== strpos( $schema['xmlrpc_allow_pingbacks']['help'], '<code>pingback.ping</code>' ), 'Machine-facing XML-RPC identifiers use code markup.' );
+
 /*
  * The protocol detail moved out of the field help and into the reference doc
  * and readme.txt — see "Where password copy goes" in the feature matrix. The
@@ -1436,5 +1437,92 @@ wpyeg_test_assert(
 	false !== $pwned_at && false !== $gate_at && $pwned_at < $gate_at,
 	'Breach screening runs before the role gate, so an exempt account is still screened.'
 );
+
+/*
+ * wp-config.php override notices.
+ *
+ * The settings screen claims a constant supersedes a control, disables that
+ * control, and says why. A claim like that is worth exactly what it costs to
+ * verify, and until now it cost nothing: this feature shipped in 8376e0a and
+ * 8bb0fc7 with no assertions at all. The honest-UI lesson it is meant to teach
+ * is only true while the code behind it stays true.
+ *
+ * READ THIS BEFORE ADDING TO THIS BLOCK. PHP constants cannot be undefined, so
+ * this runs last and in one direction only: every unlocked assertion happens
+ * before the first define(), and the constants are defined least-precedent
+ * first. Moving any of it earlier breaks the core-update assertions above,
+ * which require the filters to still be registered.
+ */
+$GLOBALS['wpyeg_test_hooks'] = array();
+
+// Unlocked: nothing claimed, nothing disabled.
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'core_update_policy' ), 'With no constants set, the core-update control is not reported as locked.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'limit_unfiltered_html_to_admins' ), 'With no constants set, the unfiltered-HTML control is not reported as locked.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'disable_comments' ), 'Settings no constant supersedes are never reported as locked.' );
+
+/*
+ * Why the hidden inputs in the render matter. A disabled control submits
+ * nothing, so without them a save under a constant would put the schema
+ * default into storage and silently discard the operator's stored preference.
+ * The sanitizer's fallback is real — assert it, so the reason the carry exists
+ * cannot be forgotten and deleted as dead weight.
+ */
+$absent = wpyeg_defaults_sanitize( array() );
+wpyeg_test_assert( 'minor' === $absent['core_update_policy'], 'A select absent from the POST falls back to its schema default.' );
+wpyeg_test_assert( 'no' === $absent['disable_comments'], 'A toggle absent from the POST is stored as off.' );
+
+// The carry itself. Checked in the source because rendering the page needs the
+// admin stack (disabled(), selected(), esc_attr) that this suite deliberately
+// does not stand up.
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+$render_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
+wpyeg_test_assert( 1 === preg_match( '/\$locked \)\s*:\s*\?>\s*<input type="hidden"/s', $render_source ), 'A locked select carries its current value in a hidden input.' );
+wpyeg_test_assert( 1 === preg_match( '/\$locked && \'yes\' === \$value \)\s*:\s*\?>\s*<input type="hidden"/s', $render_source ), 'A locked toggle carries "yes" so a save cannot flip it off.' );
+
+/*
+ * DISALLOW_UNFILTERED_HTML is independent of the update constants. Core strips
+ * unfiltered_html from every role when it is set, administrators included, so
+ * this setting cannot add anything on top of it and the screen has to say so.
+ */
+define( 'DISALLOW_UNFILTERED_HTML', true );
+$lock_unfiltered = wpyeg_defaults_config_lock( 'limit_unfiltered_html_to_admins' );
+wpyeg_test_assert( null !== $lock_unfiltered, 'DISALLOW_UNFILTERED_HTML is reported on the unfiltered-HTML control.' );
+wpyeg_test_assert( false !== strpos( $lock_unfiltered, 'DISALLOW_UNFILTERED_HTML' ), 'The notice names the constant that already did the job.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'core_update_policy' ), 'DISALLOW_UNFILTERED_HTML is reported on its own control and not on the core-update one.' );
+
+// Least precedent first: DISALLOW_FILE_MODS alone.
+define( 'DISALLOW_FILE_MODS', true );
+$lock_file_mods = wpyeg_defaults_config_lock( 'core_update_policy' );
+wpyeg_test_assert( null !== $lock_file_mods, 'DISALLOW_FILE_MODS is reported on the core-update control.' );
+wpyeg_test_assert( false !== strpos( $lock_file_mods, 'DISALLOW_FILE_MODS' ), 'The notice names DISALLOW_FILE_MODS as the constant responsible.' );
+
+// AUTOMATIC_UPDATER_DISABLED is checked first, so it now wins.
+define( 'AUTOMATIC_UPDATER_DISABLED', true );
+$lock_updater = wpyeg_defaults_config_lock( 'core_update_policy' );
+wpyeg_test_assert( false !== strpos( $lock_updater, 'AUTOMATIC_UPDATER_DISABLED' ), 'AUTOMATIC_UPDATER_DISABLED takes precedence over DISALLOW_FILE_MODS in the notice.' );
+
+// Neither of those stops the plugin filtering; core is what declines to update.
+$GLOBALS['wpyeg_test_hooks'] = array();
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( null !== wpyeg_test_find_hook( 'allow_minor_auto_core_updates' ), 'The update constants report core behaviour; they do not change what the plugin registers.' );
+
+/*
+ * WP_AUTO_UPDATE_CORE is different in kind, and this is the assertion that
+ * makes the notice honest rather than decorative. It says the control cannot
+ * take effect, so the plugin has to actually stand down — not merely grey the
+ * control out while its filters keep running.
+ */
+define( 'WP_AUTO_UPDATE_CORE', 'minor' );
+$lock_core = wpyeg_defaults_config_lock( 'core_update_policy' );
+wpyeg_test_assert( false !== strpos( $lock_core, 'WP_AUTO_UPDATE_CORE' ), 'WP_AUTO_UPDATE_CORE takes precedence over the updater constants in the notice.' );
+
+$GLOBALS['wpyeg_test_hooks'] = array();
+$GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'all' );
+wpyeg_defaults_bootstrap();
+unset( $GLOBALS['wpyeg_test_option'] );
+
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_minor_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no minor-update filter.' );
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_major_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no major-update filter.' );
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_dev_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no dev-update filter, so the constant is genuinely obeyed.' );
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

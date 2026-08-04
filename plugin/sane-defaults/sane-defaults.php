@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.1.1
+ * Version:           1.1.2
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -149,12 +149,12 @@ function wpyeg_defaults_schema() {
 				'inherit' => 'Leave unchanged (WordPress, host, or another plugin decides)',
 			),
 		),
-		// --- Content & public surfaces ---------------------------------
+		// --- Content and public surfaces ---------------------------------
 		'disable_comments'               => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
-			'label'   => 'Disable comments, trackbacks & pingbacks',
+			'label'   => 'Disable comments, trackbacks and pingbacks',
 			'help'    => 'Closes comments everywhere, hides existing threads, removes the admin menu.',
 		),
 		'disable_pingbacks'              => array(
@@ -208,7 +208,7 @@ function wpyeg_defaults_schema() {
 			'help'    => 'Restores the pre-block editing experience for posts, pages, and custom post types, plus the classic Widgets screen. Front-end display of existing block content is unaffected.',
 		),
 
-		// --- Admin & front-end UX --------------------------------------
+		// --- Admin and front-end UX --------------------------------------
 		'title_only_admin_search'        => array(
 			'default' => 'no',
 			'type'    => 'toggle',
@@ -244,7 +244,7 @@ function wpyeg_defaults_schema() {
 			'help'    => 'Adds a read-only panel to the attachment edit screen listing the resized files WordPress generated, with their dimensions. Useful for confirming what exists without a media-management plugin.',
 		),
 
-		// --- Login & sessions ------------------------------------------
+		// --- Login and sessions ------------------------------------------
 		'disable_remember_me'            => array(
 			'default' => 'no',
 			'type'    => 'toggle',
@@ -298,11 +298,11 @@ function wpyeg_defaults_schema() {
 /** Human-friendly group titles for the settings screen. */
 function wpyeg_defaults_groups() {
 	return array(
-		'security'    => 'Security & Attack Surface',
+		'security'    => 'Security and Attack Surface',
 		'updates'     => 'Updates',
-		'content'     => 'Content & Public Surfaces',
-		'ux'          => 'Admin & Front-End UX',
-		'login'       => 'Login & Sessions',
+		'content'     => 'Content and Public Surfaces',
+		'ux'          => 'Admin and Front-End UX',
+		'login'       => 'Login and Sessions',
 		'branding'    => 'Branding',
 		'performance' => 'Performance',
 	);
@@ -651,7 +651,7 @@ function wpyeg_defaults_bootstrap() {
 		do_action( 'wpyeg_disable_ai_connectors' );
 	}
 
-	/* ----- Content & public surfaces ----- */
+	/* ----- Content and public surfaces ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_comments' ) ) {
 		add_filter( 'comments_open', '__return_false', 20 );
@@ -819,7 +819,7 @@ function wpyeg_defaults_bootstrap() {
 		);
 	}
 
-	/* ----- Admin & front-end UX ----- */
+	/* ----- Admin and front-end UX ----- */
 
 	if ( wpyeg_defaults_enabled( 'title_only_admin_search' ) ) {
 		// Narrow the search COLUMNS, don't rewrite the whole clause. The
@@ -867,7 +867,7 @@ function wpyeg_defaults_bootstrap() {
 		add_action( 'add_meta_boxes_attachment', 'wpyeg_defaults_media_sizes_meta_box' );
 	}
 
-	/* ----- Login & sessions ----- */
+	/* ----- Login and sessions ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
 		// Strip the submitted value server-side as well as hiding the checkbox, so
@@ -2105,6 +2105,16 @@ function wpyeg_defaults_config_lock( $key ) {
 			if ( $updates_off ) {
 				/* translators: %s: a wp-config.php constant name. */
 				return sprintf( __( 'Overridden by <code>%s</code> in <code>wp-config.php</code>: WordPress installs no background updates.', 'sane-defaults' ), $updates_off );
+			}
+			break;
+
+		case 'limit_unfiltered_html_to_admins':
+			// Core's own constant strips unfiltered_html from every role,
+			// administrators included, so this setting cannot add anything on
+			// top of it. Saying so is the difference between a control that is
+			// redundant and a control that looks like it is doing something.
+			if ( defined( 'DISALLOW_UNFILTERED_HTML' ) && DISALLOW_UNFILTERED_HTML ) {
+				return __( '<code>DISALLOW_UNFILTERED_HTML</code> in <code>wp-config.php</code> already removes unfiltered HTML from every role, so this restriction has no additional effect.', 'sane-defaults' );
 			}
 			break;
 	}
