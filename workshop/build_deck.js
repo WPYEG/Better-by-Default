@@ -110,7 +110,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { x: 0.9, y: 6.25, w: 11.5, h: 0.5, fontFace: MONO, fontSize: 14, margin: 0 }
   );
   s.addNotes(
-    "Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 31 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop."
+    "Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 32 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop."
   );
 })();
 
@@ -168,7 +168,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { t: "    add_filter( 'rest_endpoints', $hide_users_endpoint );", k: "h" },
     { t: "}   // that's the whole pattern, repeated across the plugin", k: "c" },
   ], 15);
-  s.addNotes("In our demo plugin, a default is an add_filter behind an if ( option ). We have 31 settings built around that pattern.");
+  s.addNotes("In our demo plugin, a default is an add_filter behind an if ( option ). We have 32 settings built around that pattern.");
 })();
 
 /* =================================================================== */
@@ -238,7 +238,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
 (() => {
   const s = p.addSlide();
   s.background = { color: CLOUD };
-  s.addText("Seven categories of defaults", {
+  s.addText("Eight categories of defaults", {
     x: 0.6, y: 0.55, w: 12, h: 0.8, fontFace: HEAD, fontSize: 34, bold: true, color: INK, margin: 0,
   });
   const cats = [
@@ -249,6 +249,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { g: "5", t: "Login", d: "Sessions & credentials" },
     { g: "6", t: "Branding", d: "Own your login screen" },
     { g: "7", t: "Performance", d: "Trim the fat" },
+    { g: "8", t: "Email", d: "Say so when the site cannot send mail" },
   ];
   // Seven cards: 4 across, 2 down. The last slot stays empty.
   const cw = 2.72, ch = 2.15, gx = 0.6, gy = 1.7, gapx = 0.42, gapy = 0.5;
@@ -821,8 +822,8 @@ schemaMapSlide(30, "Schema map — content and everyday UX",
     ["limit_unfiltered_html_to_admins", "yes", "user_has_cap drops the cap for non-admins"],
     ["disable_post_passwords", "no", "CSS hides the editor's password option"],
     ["force_classic_editor", "no", "four editor gates answered false"],
-    ["lowercase_upload_filenames", "no", "sanitize_file_name at priority 20"],
-    ["media_sizes_panel", "no", "read-only meta box on attachments"],
+    ["lowercase_upload_filenames", "yes", "sanitize_file_name at priority 20"],
+    ["media_sizes_panel", "yes", "read-only meta box on attachments"],
     ["title_only_admin_search", "no", "post_search_columns"],
     ["frontend_admin_bar_behavior", "''", "show_admin_bar"],
   ],
@@ -836,6 +837,7 @@ schemaMapSlide(31, "Schema map — login, branding, and performance",
     ["session_regular_days", "2", "auth_cookie_expiration"],
     ["remember_me_days", "14", "auth_cookie_expiration"],
     ["login_logo_behavior", "keep_default", "login header presentation"],
+    ["mail_deliverability_notice", "yes", "admin_notices when the From address looks undeliverable"],
     ["throttle_heartbeat", "no", "Heartbeat settings / enqueue"],
     ["wpyeg_better_by_default", "array", "the only wp_options row"],
     ["DISALLOW_FILE_EDIT", "manual", "wp-config.php"],

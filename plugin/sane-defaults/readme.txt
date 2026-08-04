@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -34,6 +34,9 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Disable comments, pingbacks and self-pingbacks
 * Redirect public author archives and attachment pages
 * Disable the emoji script
+* Lowercase upload filenames (new uploads only)
+* Show generated image sizes — a read-only panel on the attachment edit screen
+* Warn when the site's From address looks undeliverable
 * Right-size login sessions in days: a 2-day regular login, 14 days when remembered
 * Automatically install WordPress core maintenance/security releases, while holding major releases for testing
 * Leave WordPress's existing automatic translation-file updates unchanged
@@ -49,8 +52,6 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Hide the front-end admin bar
 * Hide post-password protection (hides the editor's option; no data changes, and a post that already has a password keeps its field)
 * Force the classic editor for posts, pages, custom post types, and widgets
-* Lowercase upload filenames (new uploads only)
-* Show generated image sizes — a read-only panel on the attachment edit screen
 * Disable "Remember Me"
 * Throttle the Heartbeat API
 
@@ -90,6 +91,11 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= 1.1.3 =
+* New, ON by default: a warning when the site's From address looks undeliverable. WordPress sends mail from `wordpress@yourdomain` unless something changes it, and on a domain that cannot send — a staging host, a `.local` address — password resets fail silently, because `wp_mail()` returns false and nothing surfaces it. This shows an admin notice, never blocks or alters mail, and stays quiet on local environments where an undeliverable address is correct.
+* The settings screen groups related controls. The four XML-RPC settings now stack under one "XML-RPC" row instead of four, and the two session-length fields under "Session length". The XML-RPC labels drop their repeated prefix, because the row header carries it.
+* "Lowercase upload filenames" and "Show generated image sizes" now default to on. Lowercasing costs nothing and removes a whole class of bug: a case-sensitive server and a case-insensitive one disagree about whether `Photo.JPG` and `photo.jpg` are the same file, and only new uploads are affected either way. The sizes panel is read-only — it lists files WordPress already generated and changes nothing — so there is no reason to make someone go looking for it. Both shipped off here with no recorded reason for the difference.
+
 = 1.1.2 =
 * Password rules can be scoped by role with the `wpyeg_weak_roles` filter, which defaults to `array( 'subscriber' )`. A 15-character minimum is right for an account that can publish or configure and disproportionate for one that can only read. Exemption requires *every* one of a user's roles to be exempt — a Subscriber who is also an Editor is an Editor — and an unknown or empty role set enforces. Breach screening deliberately runs *before* the role gate, so an exempt account is still screened: a password already in a breach corpus costs its owner nothing to avoid, and low-privilege accounts are the ones most likely to reuse one.
 * All ten public `wpyeg_*` filters are documented in the reference doc, and a test now fails when one is added without an entry.
@@ -123,6 +129,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.1.3 =
+Two settings change their default to on: "Lowercase upload filenames" (new uploads only) and "Show generated image sizes" (a read-only panel). If you have saved the settings screen since 1.1.0 your stored choices are untouched. A site that has never saved it — including one upgraded from 1.0.x, which predates both settings — picks up the new defaults.
 
 = 1.1.2 =
 Password rules are now scoped by role, and Subscribers are exempt by default. An account whose roles are all in `wpyeg_weak_roles` (default `array( 'subscriber' )`) no longer faces the 15-character minimum, the blocklist, or the personal-context checks. Breach screening still applies to everyone. If you want the full policy for every role, filter `wpyeg_weak_roles` to an empty array.

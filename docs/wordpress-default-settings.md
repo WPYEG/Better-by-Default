@@ -491,7 +491,7 @@ add_filter( 'use_widgets_block_editor', '__return_false' );        // Classic Wi
 
 ### Lowercase Upload Filenames
 - **Setting key:** `lowercase_upload_filenames`
-- **Default:** `no`
+- **Default:** `yes`
 - **Why:** A case-sensitive server and a case-insensitive one disagree about whether
   `Photo.JPG` and `photo.jpg` are the same file. Lowercasing on upload removes the argument.
   Only new uploads are affected.
@@ -504,7 +504,7 @@ add_filter( 'sanitize_file_name', function ( $filename ) {
 
 ### Show Generated Image Sizes
 - **Setting key:** `media_sizes_panel`
-- **Default:** `no`
+- **Default:** `yes`
 - **Why:** A read-only panel on the attachment edit screen listing the resized files
   WordPress generated, with dimensions. Useful for confirming what exists without installing
   a media-management plugin.
@@ -1008,6 +1008,37 @@ function wpyeg_strip_asset_ver( $src ) {
 
 ---
 
+### Warn When the From Address Looks Undeliverable
+- **Setting key:** `mail_deliverability_notice`
+- **Default:** `yes`
+- **Why:** WordPress sends mail from `wordpress@yourdomain` unless something changes it. On a
+  domain that cannot actually send — a staging host, a `.local` address, a domain with no mail
+  records — password resets and notifications fail *silently*: `wp_mail()` returns false and
+  nothing surfaces it. This shows an admin notice when the address looks undeliverable.
+
+```php
+function wpyeg_defaults_mail_is_risky() {
+    $email  = wpyeg_defaults_mail_from_address();   // core's default, run through wp_mail_from
+    $domain = strtolower( substr( strrchr( $email, '@' ), 1 ) );
+
+    if ( ! is_email( $email ) ) {
+        return true;
+    }
+    if ( in_array( $domain, array( 'example.com', 'localhost', 'local' ), true ) ) {
+        return true;
+    }
+
+    // Reserved TLDs that never resolve publicly (RFC 2606, RFC 6762).
+    return (bool) preg_match( '/\.(local|test|invalid|example)$/i', $domain );
+}
+```
+
+> **It is a shape check, not a delivery test.** Proving mail works needs an SPF/DMARC lookup and
+> an actual send — far more than a settings screen should do on page load. These are the cases
+> where the answer is knowable for free. It never blocks or alters mail, and it stays quiet on
+> local environments, where an undeliverable address is the correct state.
+
+
 ## 7. Filters
 
 Everything above is a toggle. These are the code-level hooks — no setting, no UI. They exist
@@ -1021,6 +1052,7 @@ Put them in a small plugin or an mu-plugin, not the theme, so they survive a the
 | `wpyeg_minimum_password_length` | `15` | The length rule. Lower it and you are trading away the main defence, since there is no composition rule to fall back on. |
 | `wpyeg_weak_roles` | `array( 'subscriber' )` | Roles exempt from the length, blocklist and personal-context rules. **Never exempt from breach screening.** |
 | `wpyeg_password_blocklist` | six obvious strings | The offline fallback list, used when the breach API is unreachable. |
+| `wpyeg_smtp_plugin_recommendation` | a generic SMTP suggestion | The remedy named in the mail-deliverability notice, so an agency can point at the plugin it actually supports. |
 | `wpyeg_disable_hibp` | `false` | Switches off the breach lookup. Also honoured as the `WPYEG_DISABLE_HIBP` constant. |
 | `wpyeg_hibp_max_response_bytes` | `131072` | Transport cap on a range response. Floored at 1 KB, so a filter cannot make every response look truncated. |
 | `wpyeg_password_is_pwned` | the lookup's verdict | The final say on whether a password counts as breached. Return `true` from a local blocklist and no request is made. |
@@ -1090,8 +1122,9 @@ add_filter( 'wpyeg_weak_roles', '__return_empty_array' );
 | Limit unfiltered HTML to administrators | `limit_unfiltered_html_to_admins` | `yes` | Security |
 | Hide post-password protection | `disable_post_passwords` | `no` | Content |
 | Force the classic editor | `force_classic_editor` | `no` | Content |
-| Lowercase upload filenames | `lowercase_upload_filenames` | `no` | UX |
-| Show generated image sizes | `media_sizes_panel` | `no` | UX |
+| Lowercase upload filenames | `lowercase_upload_filenames` | `yes` | UX |
+| Show generated image sizes | `media_sizes_panel` | `yes` | UX |
+| Warn when the From address looks undeliverable | `mail_deliverability_notice` | `yes` | Email |
 | Title-only admin search | `title_only_admin_search` | `no` | UX |
 | Front-end admin bar | `frontend_admin_bar_behavior` | `''` | UX |
 | Disable Remember Me | `disable_remember_me` | `no` | Login |
