@@ -221,6 +221,36 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 > to add if you want one. Server-side validation is the enforcement layer; pair it with the core
 > JS meter for UX, but never trust the client alone.
 
+#### Switching the breach lookup off
+
+This is the one thing the plugin does that leaves your server, so it has a switch. Either of
+these turns it off:
+
+```php
+// wp-config.php — an operator declaration for the whole site.
+define( 'WPYEG_DISABLE_HIBP', true );
+```
+
+```php
+// Or per password, when the decision depends on who or what is setting it.
+add_filter( 'wpyeg_disable_hibp', function ( $disabled, $password ) {
+    return $disabled;   // Return true to skip the lookup for this candidate.
+}, 10, 2 );
+```
+
+With the lookup off, `wpyeg_password_is_pwned()` answers "not breached" without making a
+request — the same answer it gives when the API is unreachable, because the check fails open
+either way. **The rest of the policy still applies:** the length minimum, the blocklist, and
+the personal-context rules are all local and keep running.
+
+> **Why offer this at all, when the lookup is already private?** It is k-anonymous — five
+> characters of a locally computed SHA-1, a padded response, and neither the password nor its
+> full hash ever leaves the site. That is a good answer to "is this safe," and it is not an
+> answer to "may I decline." Sites under a data-protection regime, on an air-gapped network, or
+> simply run by someone who does not want an outbound call on every password change all have
+> standing to say no. A default that cannot be switched off is not a default; it is a
+> requirement wearing a default's clothes.
+
 ### Disable AI Connectors
 - **Setting key:** `disable_ai_connectors`
 - **Default:** `yes`

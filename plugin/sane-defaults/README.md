@@ -72,6 +72,22 @@ Remote Publishing available when Jetpack needs them, and test connected features
 method controls. Application Passwords inherit the owning user's capabilities, so integrations
 should use a least-privileged account.
 
+## Switching the breach lookup off
+
+Breach screening is the one thing this plugin does that leaves your server, so it has a
+switch. It is already k-anonymous — the password is hashed locally, only the first five SHA-1
+characters are sent, and neither the password nor its full hash ever leaves the site — but
+"it is safe" is not the same as "you have no choice."
+
+```php
+define( 'WPYEG_DISABLE_HIBP', true );          // wp-config.php, whole site
+add_filter( 'wpyeg_disable_hibp', '__return_true' );  // or per password
+```
+
+With it off, no request is made and the check answers "not breached", exactly as it does when
+the API is unreachable — it fails open either way. The length minimum, blocklist, and
+personal-context rules are local and keep running.
+
 ## Three things this plugin can't do for you
 
 These live in `wp-config.php`, above the plugin layer:

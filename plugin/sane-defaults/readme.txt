@@ -76,6 +76,14 @@ No — requiring authentication for all REST requests still permits the logged-i
 
 No. It is a legitimate but aging API and an additional attack/resource surface. Incoming pingbacks are the clearest live risk. WordPress 4.4 prevented system.multicall from being used as a password-guessing multiplier; refusing it today is modest defence-in-depth against general batching, not a password control. Keep the endpoint reachable and test method changes when Jetpack or another integration uses it.
 
+= Does this send passwords anywhere? =
+
+No. Breach screening asks Have I Been Pwned whether a password appears in a known breach corpus, and it does so by k-anonymity: the password is hashed locally with SHA-1, only the first five characters of that hash are sent, and the remaining 35 are compared against the returned suffixes on your server. Neither the password nor its full hash leaves the site, and the response is padded so its size does not reveal how many real matches came back. SHA-1 is only the lookup format the API uses; WordPress still owns password storage and its own hashing.
+
+= Can I turn breach screening off? =
+
+Yes, and you do not have to justify it. It is the only thing this plugin does that leaves your server, so it has a switch. Add `define( 'WPYEG_DISABLE_HIBP', true );` to `wp-config.php` for the whole site, or filter `wpyeg_disable_hibp` when the decision depends on the individual password. With it off, no request is made and the check answers "not breached" — the same thing it answers when the API is unreachable, since the check fails open either way. The length minimum, the blocklist, and the personal-context checks are all local and keep working.
+
 = Can I use it as an mu-plugin? =
 
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
