@@ -68,7 +68,11 @@ jobs:
     name: Deck generator and committed deck agree
     runs-on: ubuntu-latest
     steps:
+      # Full history: the handout check reads the deck as it was on the base
+      # branch, which a shallow clone does not have.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -93,6 +97,21 @@ jobs:
       # generator being broken.
       - name: Committed deck matches build_deck.js
         run: composer verify:deck
+
+      # And the handout was rebuilt with it. Twice in one day a pull request
+      # rebuilt the deck and left Better-by-Default.pdf behind, so the printed
+      # handout kept teaching what the deck had just stopped saying — and every
+      # check passed both times. The page-per-slide assertion in `composer test`
+      # does not move when a slide is reworded, and verify:pdf cannot run here
+      # because it converts with LibreOffice and versions disagree.
+      #
+      # This compares the two committed artifacts instead of converting either,
+      # so it needs nothing but PHP and zip. It looks at ppt/slides/*.xml only:
+      # the handout is slides-only, so a speaker-notes edit legitimately leaves
+      # the PDF alone and must not fail the build.
+      - name: Deck changes carry a rebuilt handout
+        if: github.event_name == 'pull_request'
+        run: composer verify:handout "origin/${{ github.base_ref }}"
 
 # Deliberately not run here: composer verify:pdf. It compares the committed
 # handout against a fresh LibreOffice conversion, and different LibreOffice

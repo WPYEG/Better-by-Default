@@ -18,7 +18,8 @@
     "build:deck": "cd workshop && node build_deck.js",
     "verify:dist": "php bin/build-zip.php --check",
     "verify:deck": "php bin/verify-deck.php",
-    "verify:pdf": "php bin/verify-pdf.php"
+    "verify:pdf": "php bin/verify-pdf.php",
+    "verify:handout": "php bin/verify-handout.php"
   },
   "config": {
     "allow-plugins": {
