@@ -6,7 +6,7 @@
 
 `a hands-on workshop · build the "sane-defaults" plugin`
 
-Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 27 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
+Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 31 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
 
 [This running text is the speaker script — in iA Presenter it stays in your notes, not on the slide.]
 
@@ -31,7 +31,7 @@ if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
 }   // that's the whole pattern, repeated across the plugin
 ```
 
-In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 27 settings built around that pattern.
+In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 31 settings built around that pattern.
 
 ---
 
@@ -246,12 +246,51 @@ add_filter( 'comments_open', '__return_false', 20 );
 add_filter( 'pings_open',    '__return_false', 20 );
 add_filter( 'comments_array',
             '__return_empty_array', 20 );
+add_filter( 'get_comments_number', '__return_zero', 20 );
+add_filter( 'comments_pre_query',
+            $empty_comment_queries, 10, 2 );
+add_filter( 'render_block',
+            $suppress_comment_blocks, 10, 2 );
 // + remove_post_type_support() on init
 // + remove_menu_page( 'edit-comments.php' )
 // + drop the admin-bar comments node
 ```
 
 For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu. If you want comments, leave this tuned off — but consider closing pingbacks and trackbacks, which are almost pure spam.
+
+Closing comments is four jobs, not one: the template, the data, the editor, and the page. `comments_open` and `comments_array` answer the theme's comment template. `comments_pre_query` answers everything else — `/wp/v2/comments` most of all, which otherwise serves every comment the site has ever had. `allowed_block_types_all` takes the comment blocks out of the inserter, but the inserter only decides what an editor can add *next*, and a block theme has already put those blocks in its post template. That markup needs `render_block` to return an empty string, or every post prints a "Comments" heading over an empty wrapper and the site reads as broken rather than as one that deliberately has no comments. `get_comments_number` is the same gap one layer down: `wp_count_comments()` answers zero once the query filter is in place, but the theme's heading reads the post's cached `comment_count` and cheerfully prints "1 Comment" above a thread that renders nothing.
+
+Returning an empty string rather than unregistering the block types is what keeps this reversible. The blocks stay registered, the theme's markup stays as its author wrote it, and turning the setting off brings the whole thing back with nothing to undo.
+
+---
+
+## A clean 404 needs `redirect_canonical` gone
+
+	`disable_comments`, continued · the part only a real request catches
+
+```php
+add_action( 'template_redirect',
+            $block_comment_feeds, 9 );
+
+function block_comment_feeds() {
+  if ( ! is_comment_feed() ) { return; }
+
+  $wp_query->set_404();
+  remove_action( 'template_redirect',
+                 'redirect_canonical' );
+
+  status_header( 404 );
+  nocache_headers();
+}
+```
+
+Dropping the `<link rel="alternate">` stops the feed being advertised; it does not stop it being served. `/comments/feed/` and `<post>/feed/` keep answering 200 to anyone who types the URL, and a crawler that saw one once keeps asking. With comment queries already emptied, they answer 200 with nothing — a live, crawlable endpoint whose only purpose is to say nothing. That is the worst of both.
+
+`set_404()` re-runs `init_query_flags()`, which clears `is_feed()` along with everything else, so the template loader stops routing to `do_feed()` and renders the theme's 404 instead. That is why `is_comment_feed()` has to be tested first: a moment later there is nothing left to test.
+
+And `redirect_canonical` has to go with it — this is the part worth remembering. It does not bail on a 404. It calls `redirect_guess_404_permalink()`, and against the query we have just emptied it answers `/post-name/feed/` with a 301 to `/post-name/feed/feed/`. Leaving it hooked turns a clean 404 into a redirect to a URL that has never existed, which is worse than the bug we set out to fix.
+
+**Every filter-level test still passes. Only a real request catches it.** That is the honest limit of the pattern this whole talk is built on: a filter behind a toggle is a claim about one hook, and what a visitor actually gets is the sum of all of them. The recursion trap in `limit_unfiltered_html_to_admins` is the same lesson from the other direction — a `user_has_cap` filter that asks a capability question calls itself, so it has to decide from `$user->roles` and the already-resolved `$allcaps` and never ask. Test the request, not just the hook.
 
 ---
 

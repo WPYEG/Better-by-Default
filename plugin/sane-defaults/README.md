@@ -43,7 +43,8 @@ publication or directive and section when one exists; do not use vague attributi
 
 Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by category
 (incoming pingbacks off, remote publishing off, system.multicall refused), require strong
-passwords (15+ chars, breach-screened, no forced composition), send baseline security headers,
+passwords (15+ chars, breach-screened, no forced composition), limit `unfiltered_html` to
+administrators, send baseline security headers,
 set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments/pingbacks/self-pingbacks,
 disable author archives, redirect attachment pages, disable emojis, right-size login sessions in
 days (a 2-day regular login, 14 days when remembered, floored so ticking "Remember Me" can never
@@ -53,7 +54,9 @@ major releases for testing. Translation files retain WordPress's existing automa
 Off by default (opt-in, because they change behaviour): require-auth-for-all-REST, prohibit
 Application Passwords (left available by default — the safer, revocable REST credential),
 block the XML-RPC endpoint entirely, title-only admin search, remove/unlink/replace the login
-logo (the WordPress logo is kept by default), hide the front-end admin bar, disable Remember Me,
+logo (the WordPress logo is kept by default), hide the front-end admin bar, hide the editor's
+post-password option, force the classic editor, lowercase upload filenames, show the generated
+image sizes on the attachment screen, disable Remember Me,
 throttle Heartbeat, and remove the version fingerprint — that last one because it
 is obscurity, not hardening: it trims scanner noise but does not make an out-of-date site safer.
 

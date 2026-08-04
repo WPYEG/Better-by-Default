@@ -13,14 +13,19 @@ Default settings are powerful things. Here they are opinionated filters sitting 
 
 ```
 Better-by-Default/
-├── plugin/sane-defaults/   → the installable plugin (main file, readme.txt, README)
-├── docs/                       → wordpress-default-settings.md — the full reference, every
-│                                 default with its "why" and a code snippet
-├── workshop/                   → the meetup talk: PowerPoint, iA Presenter markdown,
-│                                 a PDF handout, and the deck build script
-├── dist/                       → sane-defaults.zip — a ready-to-install build
-├── LICENSE                     → GPL-3.0
-└── README.md                   → you are here
+├── plugin/sane-defaults/  → the installable plugin (main file, readme.txt, README)
+├── docs/                  → wordpress-default-settings.md — the full reference, every
+│                            default with its "why" and a code snippet
+├── workshop/              → the meetup talk: PowerPoint, iA Presenter markdown,
+│                            a PDF handout, and the deck build script
+├── tests/                 → plugin-policy.php — the policy suite, and the guard that
+│                            keeps the docs and the deck in step with the schema
+├── bin/                   → build-zip.php — rebuilds dist/ reproducibly
+├── dist/                  → sane-defaults.zip — a ready-to-install build
+├── composer.json          → the lint/test/build scripts
+├── phpcs.xml              → WordPress Coding Standards config
+├── LICENSE                → GPL-3.0
+└── README.md              → you are here
 ```
 
 ## Quick start
@@ -44,7 +49,8 @@ On activation the documented defaults are seeded automatically. Then visit
 
 **On out of the box** (safe for nearly any site): restrict REST user discovery, lock down
 XML-RPC by category (pingbacks / remote publishing / multicall all off), require strong
-passwords (length + breach screening, not forced composition), send baseline security headers,
+passwords (length + breach screening, not forced composition), limit `unfiltered_html` to
+administrators, send baseline security headers,
 set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments / pingbacks /
 self-pingbacks, redirect public author archives and attachment pages, disable the emoji script,
 right-size login sessions in days (a 2-day regular login, 14 days when remembered, floored so
@@ -58,7 +64,9 @@ and disabling them pushes people to worse alternatives — and the login logo is
 
 **Opt-in, off by default** (they change behaviour — turn on deliberately): require auth for all
 REST, prohibit Application Passwords, remove/replace the login logo, title-only admin search,
-hide the front-end admin bar, disable Remember Me, and throttle the Heartbeat API. Removing the
+hide the front-end admin bar, hide the editor's post-password option, force the classic editor,
+lowercase upload filenames, show the generated image sizes on the attachment screen, disable
+Remember Me, and throttle the Heartbeat API. Removing the
 version fingerprint is here too, for a different reason: it is
 obscurity rather than hardening — useful for trimming scanner noise, but it does not make an
 out-of-date site safer, so it is not presented as a security default.
@@ -80,6 +88,46 @@ One array — `wpyeg_defaults_schema()` — is the single source of truth. It dr
 settings screen and the bootstrap that wires each *enabled* policy to its WordPress hook.
 Adding a new default is one array entry plus one `if`-block in bootstrap; no new settings-page
 code. (The `wpyeg_` option prefix is kept deliberately as the WPYEG org convention.)
+
+### Working on it
+
+```bash
+composer install          # lint tooling (require-dev); vendor/ is gitignored
+composer test             # tests/plugin-policy.php — no WordPress needed
+composer lint             # phpcs against phpcs.xml (composer lint:fix to autofix)
+composer build            # rewrite dist/sane-defaults.zip from plugin/
+composer verify:dist      # check the committed zip matches the source, without rewriting
+composer build:deck       # rebuild workshop/Better-by-Default.pptx (needs node)
+```
+
+`composer test` is the one that matters most, and not only for the policy assertions.
+The suite ends with a cross-artifact parity guard: every key in `wpyeg_defaults_schema()`
+must appear — with its default and group — in the reference doc, in both workshop scripts,
+and in the deck generator; the two workshop scripts must be byte-identical; and the setting
+count written out in prose must match the schema. A setting cannot quietly drift out of the
+learner-facing material, because the tests fail first.
+
+The guard reaches the **rendered deck** too. `Better-by-Default.pptx` is a zip of XML, so the
+suite reads its slide text and speaker notes back out and holds them to the same standard as
+the sources. That is what catches a generator change that was never built — and it is the
+only check that exercises the generator at all, because the sole way to satisfy it is to run
+`composer build:deck`. Before that guard existed, `node build_deck.js` sat broken through a
+commit and the shipped deck was two corrections behind, with nothing to say so.
+
+Rebuilding the deck needs `pptxgenjs`, which is not vendored:
+
+```bash
+cd workshop && npm install pptxgenjs
+```
+
+The **PDF handout is not guarded and not automated.** Regenerate it from the rebuilt deck
+whenever the handout goes out:
+
+```bash
+cd workshop && soffice --headless --convert-to pdf Better-by-Default.pptx
+```
+
+(`node_modules/` in `workshop/` is gitignored. The PDF step needs LibreOffice.)
 
 ### Spelling
 

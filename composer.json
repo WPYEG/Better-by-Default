@@ -15,6 +15,7 @@
     "lint:fix": "phpcbf --standard=phpcs.xml",
     "test": "php tests/plugin-policy.php",
     "build": "php bin/build-zip.php",
+    "build:deck": "cd workshop && node build_deck.js",
     "verify:dist": "php bin/build-zip.php --check"
   },
   "config": {

@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.1.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -27,6 +27,7 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Restrict REST API user discovery
 * Lock down XML-RPC by category — incoming pingbacks off (header stripped), remote publishing off (RSD link dropped), system.multicall refused
 * Require strong passwords (server-side: 15+ characters, breach-screened, no forced composition)
+* Limit unfiltered HTML to administrators — Editors hold `unfiltered_html` on single-site installs, which is enough to save a raw script into a post
 * Send baseline security headers
 * Set X-Frame-Options to SAMEORIGIN
 * Disable AI connectors
@@ -46,6 +47,10 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Title-only admin search
 * Remove, unlink, or replace the login logo (the WordPress logo and its wp.org link are kept by default; any change points the link home)
 * Hide the front-end admin bar
+* Hide post-password protection (hides the editor's option; no data changes, and a post that already has a password keeps its field)
+* Force the classic editor for posts, pages, custom post types, and widgets
+* Lowercase upload filenames (new uploads only)
+* Show generated image sizes — a read-only panel on the attachment edit screen
 * Disable "Remember Me"
 * Throttle the Heartbeat API
 
@@ -77,6 +82,15 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= 1.1.0 =
+* New, ON by default: "Limit unfiltered HTML to administrators." Editors hold `unfiltered_html` on single-site installs, which is enough to save a raw script into a post. Administrators, and Super Admins on multisite, keep it. **This takes a capability away from existing Editors and Authors on upgrade** — turn the setting off if your workflow depends on it.
+* New, OFF by default: hide post-password protection, force the classic editor, lowercase upload filenames, and a read-only "Generated Sizes" panel on the attachment edit screen.
+* The comment teardown now reaches the rendered page. Comment blocks a block theme already placed in its post templates render as nothing instead of printing an empty "Comments" heading; comment counts report zero rather than reading the post's cached `comment_count`; and comment feeds answer 404 instead of serving an empty but crawlable 200.
+* Login sessions are coherent. Both lengths are in days (the old hours field is gone), each has a one-day floor, and the remembered length can never be shorter than the regular one, so ticking "Remember Me" can no longer shorten a session.
+* The settings screen names a `wp-config.php` constant that overrides a control, inline on the control it affects, rather than leaving the toggle looking effective.
+* The Jetpack warning on the XML-RPC endpoint block now appears only on sites where Jetpack is actually active, and states when the rule stops applying.
+* Corrected the `system.multicall` explanation: WordPress 4.4 prevented it from being used as a password-guessing multiplier, so refusing it today is modest defence-in-depth against batching, not a password control.
+
 = 1.0.1 =
 * Removed the "Automatically update translations" setting. WordPress handles translation-file updates on its own, and the plugin no longer filters `auto_update_translation`. Note that a site which had explicitly turned this setting off will go back to WordPress's default, which installs translation updates automatically. Turn it off with your own `auto_update_translation` filter if you need that.
 * Breach screening no longer trusts a Have I Been Pwned range response that reaches the transport size cap, including one whose truncation happens to land on a row boundary.
@@ -85,3 +99,8 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 = 1.0.0 =
 * Initial release.
+
+== Upgrade Notice ==
+
+= 1.1.0 =
+Adds a default that removes `unfiltered_html` from everyone below administrator. Editors and Authors who could save raw script into a post no longer can. Turn "Limit unfiltered HTML to administrators" off under Settings → Better by Default if your workflow needs it. Session lengths are now in days; the old hours field is gone.

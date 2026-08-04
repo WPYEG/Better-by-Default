@@ -110,7 +110,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { x: 0.9, y: 6.25, w: 11.5, h: 0.5, fontFace: MONO, fontSize: 14, margin: 0 }
   );
   s.addNotes(
-    "Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 27 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop."
+    "Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 31 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop."
   );
 })();
 
@@ -168,7 +168,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { t: "    add_filter( 'rest_endpoints', $hide_users_endpoint );", k: "h" },
     { t: "}   // that's the whole pattern, repeated across the plugin", k: "c" },
   ], 15);
-  s.addNotes("In our demo plugin, a default is an add_filter behind an if ( option ). We have 27 settings built around that pattern.");
+  s.addNotes("In our demo plugin, a default is an add_filter behind an if ( option ). We have 31 settings built around that pattern.");
 })();
 
 /* =================================================================== */
@@ -435,7 +435,7 @@ codeSlide(13, "SECURITY · 6 of 6",
 divider("2", "SECTION TWO", "Content &\nPublic Surfaces", "Close the spam funnels and the thin pages Google (and bots) love to crawl.")
   .addNotes("These reduce channels for spam and clean up the thin, duplicate URLs that bots and search engines get lost in.");
 
-codeSlide(15, "CONTENT · 1 of 3",
+codeSlide(15, "CONTENT · 1 of 4",
   "Disable comments, trackbacks & pingbacks",
   "For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu.",
   "disable_comments / disable_pingbacks / disable_self_pingbacks", "yes each",
@@ -444,13 +444,43 @@ codeSlide(15, "CONTENT · 1 of 3",
     { t: "add_filter( 'pings_open',    '__return_false', 20 );", k: "h" },
     { t: "add_filter( 'comments_array',", k: "" },
     { t: "            '__return_empty_array', 20 );", k: "" },
+    { t: "add_filter( 'get_comments_number', '__return_zero', 20 );", k: "" },
+    { t: "add_filter( 'comments_pre_query',", k: "h" },
+    { t: "            $empty_comment_queries, 10, 2 );", k: "h" },
+    { t: "add_filter( 'render_block',", k: "h" },
+    { t: "            $suppress_comment_blocks, 10, 2 );", k: "h" },
     { t: "", k: "" },
     { t: "// + remove_post_type_support() on init", k: "c" },
     { t: "// + remove_menu_page('edit-comments.php')", k: "c" },
     { t: "// + drop the admin-bar comments node", k: "c" },
-  ]).addNotes("For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu. If you want comments, leave this tuned off — but consider closing pingbacks and trackbacks, which are almost pure spam.");
+  ]).addNotes("For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu. If you want comments, leave this tuned off — but consider closing pingbacks and trackbacks, which are almost pure spam.\n\n" +
+  "Closing comments is four jobs, not one: the template, the data, the editor, and the page. comments_open and comments_array answer the theme's comment template. comments_pre_query answers everything else — /wp/v2/comments most of all, which otherwise serves every comment the site has ever had. allowed_block_types_all takes the comment blocks out of the inserter, but the inserter only decides what an editor can add NEXT, and a block theme has already put those blocks in its post template. That markup needs render_block to return an empty string, or every post prints a \"Comments\" heading over an empty wrapper and the site reads as broken rather than as one that deliberately has no comments. get_comments_number is the same gap one layer down: wp_count_comments() answers zero once the query filter is in place, but the theme's heading reads the post's cached comment_count and cheerfully prints \"1 Comment\" above a thread that renders nothing.\n\n" +
+  "Returning an empty string rather than unregistering the block types is what keeps this reversible. The blocks stay registered, the theme's markup stays as its author wrote it, and turning the setting off brings the whole thing back with nothing to undo.");
 
-codeSlide(16, "CONTENT · 2 of 3",
+codeSlide(16, "CONTENT · 2 of 4",
+  "A clean 404 needs redirect_canonical gone",
+  "Dropping the feed link stops the feed being advertised, not served. Answering it takes a 404 — and the 404 takes one more removal that no filter-level test will ever catch.",
+  "disable_comments, continued", "yes",
+  [
+    { t: "add_action( 'template_redirect',", k: "" },
+    { t: "            $block_comment_feeds, 9 );", k: "" },
+    { t: "", k: "" },
+    { t: "function block_comment_feeds() {", k: "" },
+    { t: "  if ( ! is_comment_feed() ) { return; }", k: "h" },
+    { t: "", k: "" },
+    { t: "  $wp_query->set_404();", k: "" },
+    { t: "  remove_action( 'template_redirect',", k: "h" },
+    { t: "                 'redirect_canonical' );", k: "h" },
+    { t: "", k: "" },
+    { t: "  status_header( 404 );", k: "" },
+    { t: "  nocache_headers();", k: "" },
+    { t: "}", k: "" },
+  ]).addNotes("Dropping the <link rel=\"alternate\"> stops the feed being advertised; it does not stop it being served. /comments/feed/ and <post>/feed/ keep answering 200 to anyone who types the URL, and a crawler that saw one once keeps asking. With comment queries already emptied, they answer 200 with nothing — a live, crawlable endpoint whose only purpose is to say nothing. That is the worst of both.\n\n" +
+  "set_404() re-runs init_query_flags(), which clears is_feed() along with everything else, so the template loader stops routing to do_feed() and renders the theme's 404 instead. That is why is_comment_feed() has to be tested FIRST: a moment later there is nothing left to test.\n\n" +
+  "And redirect_canonical has to go with it — this is the part worth remembering. It does not bail on a 404. It calls redirect_guess_404_permalink(), and against the query we have just emptied it answers /post-name/feed/ with a 301 to /post-name/feed/feed/. Leaving it hooked turns a clean 404 into a redirect to a URL that has never existed, which is worse than the bug we set out to fix.\n\n" +
+  "EVERY FILTER-LEVEL TEST STILL PASSES. ONLY A REAL REQUEST CATCHES IT. That is the honest limit of the pattern this whole talk is built on: a filter behind a toggle is a claim about one hook, and what a visitor actually gets is the sum of all of them. The recursion trap in limit_unfiltered_html_to_admins is the same lesson from the other direction — a user_has_cap filter that asks a capability question calls itself, so it has to decide from $user->roles and the already-resolved $allcaps and never ask. Test the request, not just the hook.");
+
+codeSlide(17, "CONTENT · 3 of 4",
   "Redirect author & attachment pages",
   "Author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. Both dilute SEO and are targets for trouble. Same hook, two conditions.",
   "disable_author_archives / redirect_attachment_pages", "yes / yes",
@@ -466,15 +496,10 @@ codeSlide(16, "CONTENT · 2 of 3",
     { t: "} );", k: "" },
   ]).addNotes("Like the REST user routes, author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. template_redirect fires before a template loads - the perfect place to bounce the unwanted requests. Same hook, two conditions.\n\nTwo details on the attachment half, because the obvious version is subtly wrong. Unattached media has no parent - and that is most of the Media Library - so a naive else-home_url() points every one of those at your homepage, which search engines read as a soft 404. Fall back to the FILE instead, which is what core does. And skip the redirect entirely when the theme ships attachment.php or image.php: that theme built those pages deliberately (the photography case), and quietly bouncing past it deletes someone's feature.\n\nCore moved here too: WordPress 6.4 added wp_attachment_pages_enabled, off for new installs. So this default is not adding the redirect so much as choosing a better destination than the bare file.");
 
-codeSlide(17, "CONTENT · 3 of 3",
+codeSlide(18, "CONTENT · 4 of 4",
   "Disable the emoji script",
   "WordPress core injects an emoji-detection script and inline CSS on every page load, plus a DNS-prefetch hint. Modern browsers render emoji natively, so this is pure dead weight.",
   "disable_emojis", "yes",
-  "limit_unfiltered_html_to_admins", "yes",
-  "disable_post_passwords", "no",
-  "force_classic_editor", "no",
-  "lowercase_upload_filenames", "no",
-  "media_sizes_panel", "no",
   [
     { t: "add_action( 'init', function () {", k: "" },
     { t: "  remove_action( 'wp_head',", k: "h" },
@@ -493,7 +518,7 @@ codeSlide(17, "CONTENT · 3 of 3",
 divider("3", "SECTION THREE", "Admin UX &\nLogin Sessions", "Small quality-of-life defaults: a calmer dashboard and sensible session policy.")
   .addNotes("Now the quality-of-life defaults. These are more about your daily user experience and session safety than raw hardening.");
 
-codeSlide(19, "ADMIN UX",
+codeSlide(20, "ADMIN UX",
   "Faster search, quieter admin bar",
   "Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster.",
   "title_only_admin_search / frontend_admin_bar_behavior", "no / ''",
@@ -510,7 +535,7 @@ codeSlide(19, "ADMIN UX",
     { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
   ], 11).addNotes("Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster. The craft is in the *how*: post_search_columns (WP 6.2+) narrows the columns instead of rewriting the whole SQL clause, so core's term parsing and the logged-out password guard stay intact. Scope the filter; don't bulldoze the query.");
 
-codeSlide(20, "LOGIN & SESSIONS",
+codeSlide(21, "LOGIN & SESSIONS",
   "Right-size the login session",
   "A normal login lasts 2 days; “Remember Me” extends it to 14. Both are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the checkbox entirely. One filter covers all of it.",
   "disable_remember_me / session_regular_days / remember_me_days", "no / 2 / 14",
@@ -532,7 +557,7 @@ codeSlide(20, "LOGIN & SESSIONS",
 divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, then shave the last bit of weight off every page.")
   .addNotes("The last pair brands the login screen. Then we end with two performance levers to shave some weight off every page.");
 
-codeSlide(22, "BRANDING",
+codeSlide(23, "BRANDING",
   "Own the login screen",
   "The default WordPress logo sends users to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents an unexpected external destination. BBD leaves it unchanged unless you opt in.",
   "login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
@@ -547,7 +572,7 @@ codeSlide(22, "BRANDING",
     { t: "            get_bloginfo( 'name' ) );", k: "h" },
   ], 12).addNotes("The login page is a WordPress site's staff entrance, and the default WordPress \"W\" on wp-login.php links to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site. Changing a site's login screen out of the box is intrusive, though, so the default is to LEAVE IT ALONE. Any opt-in change points the link home. Swap in a background-image to use the site's own logo.");
 
-codeSlide(23, "PERFORMANCE · opt-in",
+codeSlide(24, "PERFORMANCE · opt-in",
   "Throttle Heartbeat — and a default we deleted",
   "Throttle Heartbeat to ease up on weak shared hosting. The more interesting half is the toggle that used to be here: WordPress 6.3 gave scripts a per-script loading strategy, so our blanket defer filter had to go.",
   "throttle_heartbeat", "no (opt-in)",
