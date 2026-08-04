@@ -153,6 +153,148 @@ function apply_filters( $hook, $value ) {
 	return $value;
 }
 
+/*
+ * Admin-rendering doubles.
+ *
+ * Just enough of the escaping and form helpers to render the settings screen
+ * into a string. They are faithful to what matters here — escaping actually
+ * escapes, and checked()/selected()/disabled() emit real attributes — so the
+ * markup assertions further down mean something rather than checking that a
+ * template file contains a particular sequence of characters.
+ */
+
+/**
+ * Escaping test double.
+ *
+ * @param string $text Text to escape.
+ * @return string
+ */
+function esc_html( $text ) {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+/**
+ * Attribute-escaping test double.
+ *
+ * @param string $text Text to escape.
+ * @return string
+ */
+function esc_attr( $text ) {
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+/**
+ * Translate-and-escape test double.
+ *
+ * @param string $text   Source text.
+ * @param string $domain Text domain.
+ * @return string
+ */
+function esc_html__( $text, $domain = null ) {
+	unset( $domain );
+	return htmlspecialchars( (string) $text, ENT_QUOTES );
+}
+
+/**
+ * Translate-escape-and-echo test double.
+ *
+ * @param string $text   Source text.
+ * @param string $domain Text domain.
+ * @return void
+ */
+function esc_html_e( $text, $domain = null ) {
+	unset( $domain );
+	echo esc_html( $text );
+}
+
+/**
+ * Markup-filtering test double. The allowlist itself is asserted separately.
+ *
+ * @param string $markup    Markup to filter.
+ * @param array  $allowed   Allowed tags.
+ * @return string
+ */
+function wp_kses( $markup, $allowed ) {
+	unset( $allowed );
+	return (string) $markup;
+}
+
+/**
+ * Checkbox-state test double.
+ *
+ * @param mixed $helper  Value to compare.
+ * @param mixed $current Current value.
+ * @param bool  $display Whether to echo.
+ * @return string
+ */
+function checked( $helper, $current = true, $display = true ) {
+	$markup = ( (string) $helper === (string) $current ) ? ' checked="checked"' : '';
+	if ( $display ) {
+		echo $markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed literal.
+	}
+	return $markup;
+}
+
+/**
+ * Option-state test double.
+ *
+ * @param mixed $helper  Value to compare.
+ * @param mixed $current Current value.
+ * @param bool  $display Whether to echo.
+ * @return string
+ */
+function selected( $helper, $current = true, $display = true ) {
+	$markup = ( (string) $helper === (string) $current ) ? ' selected="selected"' : '';
+	if ( $display ) {
+		echo $markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed literal.
+	}
+	return $markup;
+}
+
+/**
+ * Disabled-state test double.
+ *
+ * @param mixed $helper  Value to compare.
+ * @param mixed $current Current value.
+ * @param bool  $display Whether to echo.
+ * @return string
+ */
+function disabled( $helper, $current = true, $display = true ) {
+	$markup = ( $helper === $current ) ? ' disabled="disabled"' : '';
+	if ( $display ) {
+		echo $markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed literal.
+	}
+	return $markup;
+}
+
+/**
+ * Settings-form-fields test double.
+ *
+ * @param string $group Option group.
+ * @return void
+ */
+function settings_fields( $group ) {
+	echo '<!--settings-fields:' . esc_html( $group ) . '-->';
+}
+
+/**
+ * Submit-button test double.
+ *
+ * @return void
+ */
+function submit_button() {
+	echo '<!--submit-button-->';
+}
+
+/**
+ * Multisite test double.
+ *
+ * @return bool
+ */
+function is_multisite() {
+	return ! empty( $GLOBALS['wpyeg_test_multisite'] );
+}
+
 /**
  * Capability test double.
  *
@@ -463,17 +605,73 @@ foreach ( $schema as $field ) {
 	wpyeg_test_assert( false === strpos( $help_without_safe_markup, '<' ) && false === strpos( $help_without_safe_markup, '>' ), 'Schema help contains no markup outside the narrow allowlist.' );
 }
 
-// Settings controls use their descriptive schema labels, never a generic
-// checkbox label. Keep the source-level convention covered without needing a
-// WordPress admin renderer in this lightweight policy test.
+/*
+ * The settings screen, rendered.
+ *
+ * These assertions used to grep the plugin source for the exact characters the
+ * old inline template happened to emit — including one that matched a literal
+ * `label for="<?php echo esc_attr( $field_id ); ?>"`. That is a test of a
+ * template's punctuation, not of what the screen does, and rewriting the
+ * renderer broke it while the output was byte-identical. Render it instead.
+ */
+ob_start();
+wpyeg_defaults_render_settings_page();
+$settings_markup = ob_get_clean();
+
+wpyeg_test_assert( false === strpos( $settings_markup, 'Enabled</label>' ), 'Checkboxes do not use a generic Enabled label.' );
+wpyeg_test_assert( false !== strpos( $settings_markup, '<table class="form-table" role="presentation">' ), 'The settings screen uses WordPress classic form-table styling.' );
+wpyeg_test_assert( false !== strpos( $settings_markup, 'class="description"' ), 'Settings help uses WordPress classic description styling.' );
+
+/*
+ * Every setting reaches the screen, with a label bound to its control and its
+ * help text connected by aria-describedby.
+ *
+ * The renderer walks wpyeg_defaults_groups(), so a schema entry naming a group
+ * that array does not list would silently never render — a setting that exists,
+ * saves, and takes effect, with no way to change it. Same for a `section` with
+ * no title. Nothing caught that before; this does, per key.
+ */
+$rendered_groups   = wpyeg_defaults_groups();
+$rendered_sections = wpyeg_defaults_section_labels();
+
+foreach ( $schema as $rendered_key => $rendered_field ) {
+	$rendered_id = 'wpyeg-defaults-' . str_replace( '_', '-', $rendered_key );
+
+	wpyeg_test_assert(
+		isset( $rendered_groups[ $rendered_field['group'] ] ),
+		"Setting {$rendered_key} names a group the settings screen renders."
+	);
+
+	if ( isset( $rendered_field['section'] ) ) {
+		wpyeg_test_assert(
+			isset( $rendered_sections[ $rendered_field['section'] ] ),
+			"Setting {$rendered_key} names a section with a title."
+		);
+	}
+
+	wpyeg_test_assert(
+		false !== strpos( $settings_markup, 'name="wpyeg_better_by_default[' . $rendered_key . ']"' ),
+		"Setting {$rendered_key} renders a control on the settings screen."
+	);
+	wpyeg_test_assert(
+		false !== strpos( $settings_markup, 'label for="' . $rendered_id . '"' ),
+		"Setting {$rendered_key} has a label bound to its control."
+	);
+	wpyeg_test_assert(
+		empty( $rendered_field['help'] ) || false !== strpos( $settings_markup, 'aria-describedby="' . $rendered_id . '-description"' ),
+		"Setting {$rendered_key} connects its help text with aria-describedby."
+	);
+}
+
+// A section renders as one row with a fieldset and a screen-reader legend, not
+// as one row per setting.
+wpyeg_test_assert( substr_count( $settings_markup, '<fieldset>' ) === count( $rendered_sections ), 'Each section draws exactly one fieldset.' );
+wpyeg_test_assert( substr_count( $settings_markup, '<fieldset>' ) === substr_count( $settings_markup, '</fieldset>' ), 'Every section fieldset is closed.' );
+wpyeg_test_assert( substr_count( $settings_markup, '<tr>' ) === substr_count( $settings_markup, '</tr>' ), 'Every settings row is closed.' );
+
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
 $plugin_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
-wpyeg_test_assert( false === strpos( $plugin_source, "esc_html_e( 'Enabled'" ), 'Checkboxes do not use a generic Enabled label.' );
-wpyeg_test_assert( false !== strpos( $plugin_source, '<table class="form-table" role="presentation">' ), 'The settings screen uses WordPress classic form-table styling.' );
-wpyeg_test_assert( false !== strpos( $plugin_source, 'class="description"' ), 'Settings help uses WordPress classic description styling.' );
-wpyeg_test_assert( false !== strpos( $plugin_source, 'label for="<?php echo esc_attr( $field_id ); ?>"' ), 'Schema labels are explicitly connected to settings controls.' );
-wpyeg_test_assert( false !== strpos( $plugin_source, '<td colspan="2">' ), 'Toggle controls and their descriptive labels span the settings row.' );
-wpyeg_test_assert( false !== strpos( $plugin_source, 'aria-describedby="<?php echo esc_attr( $help_id ); ?>"' ), 'Settings controls reference their help text.' );
+wpyeg_test_assert( false !== strpos( $settings_markup, '<td colspan="2">' ), 'Toggle controls and their descriptive labels span the settings row.' );
 wpyeg_test_assert( false !== strpos( $plugin_source, "wp_kses( \$field['help'], wpyeg_defaults_help_allowed_html() )" ), 'Settings help is rendered through the narrow markup allowlist.' );
 
 // The explicit update policy is stable across the installation-age defaults
@@ -1674,13 +1872,8 @@ $absent = wpyeg_defaults_sanitize( array() );
 wpyeg_test_assert( 'minor' === $absent['core_update_policy'], 'A select absent from the POST falls back to its schema default.' );
 wpyeg_test_assert( 'no' === $absent['disable_comments'], 'A toggle absent from the POST is stored as off.' );
 
-// The carry itself. Checked in the source because rendering the page needs the
-// admin stack (disabled(), selected(), esc_attr) that this suite deliberately
-// does not stand up.
-// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
-$render_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
-wpyeg_test_assert( 1 === preg_match( '/\$locked \)\s*:\s*\?>\s*<input type="hidden"/s', $render_source ), 'A locked select carries its current value in a hidden input.' );
-wpyeg_test_assert( 1 === preg_match( '/\$locked && \'yes\' === \$value \)\s*:\s*\?>\s*<input type="hidden"/s', $render_source ), 'A locked toggle carries "yes" so a save cannot flip it off.' );
+// The carry itself is asserted against rendered markup at the end of this file,
+// once the wp-config constants that trigger a lock have been defined.
 
 /*
  * DISALLOW_UNFILTERED_HTML is independent of the update constants. Core strips
@@ -1797,5 +1990,60 @@ $GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'hello@realdomain.ca';
 wpyeg_test_assert( false === wpyeg_defaults_should_warn_about_mail(), 'A deliverable address on production says nothing.' );
 
 unset( $GLOBALS['wpyeg_test_filter_values']['wp_mail_from'], $GLOBALS['wpyeg_test_environment'], $GLOBALS['wpyeg_test_can'] );
+
+/*
+ * A locked control, as it actually renders.
+ *
+ * This has to run last: it depends on WP_AUTO_UPDATE_CORE and
+ * DISALLOW_UNFILTERED_HTML being defined, and a constant cannot be undefined
+ * again. Both are set by the config-lock assertions above.
+ *
+ * A disabled control is not submitted, so without a hidden carry the next save
+ * would read the locked setting as unset and quietly overwrite a stored
+ * preference the user cannot currently see or change. The sanitizer's fallback
+ * for an absent value is asserted above; this is the other half.
+ */
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'              => 'all',
+	'limit_unfiltered_html_to_admins' => 'yes',
+);
+
+ob_start();
+wpyeg_defaults_render_settings_page();
+$locked_markup = ob_get_clean();
+
+unset( $GLOBALS['wpyeg_test_option'] );
+
+wpyeg_test_assert(
+	false !== strpos( $locked_markup, '<input type="hidden" name="wpyeg_better_by_default[core_update_policy]" value="all" />' ),
+	'A locked select carries its current value in a hidden input.'
+);
+wpyeg_test_assert(
+	false !== strpos( $locked_markup, '<input type="hidden" name="wpyeg_better_by_default[limit_unfiltered_html_to_admins]" value="yes" />' ),
+	'A locked toggle carries "yes" so a save cannot flip it off.'
+);
+wpyeg_test_assert(
+	1 === preg_match( '/<select id="wpyeg-defaults-core-update-policy"[^>]* disabled="disabled"/', $locked_markup ),
+	'The locked control is disabled rather than left looking effective.'
+);
+wpyeg_test_assert(
+	false !== strpos( $locked_markup, 'WP_AUTO_UPDATE_CORE' ),
+	'The locked control says which constant supersedes it.'
+);
+
+// A toggle that is locked while stored off carries nothing: sanitize treats any
+// submitted value as checked, so carrying "no" would switch it on.
+$GLOBALS['wpyeg_test_option'] = array( 'limit_unfiltered_html_to_admins' => 'no' );
+
+ob_start();
+wpyeg_defaults_render_settings_page();
+$locked_off_markup = ob_get_clean();
+
+unset( $GLOBALS['wpyeg_test_option'] );
+
+wpyeg_test_assert(
+	false === strpos( $locked_off_markup, '<input type="hidden" name="wpyeg_better_by_default[limit_unfiltered_html_to_admins]"' ),
+	'A locked toggle stored off carries nothing, because any carried value would read as on.'
+);
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

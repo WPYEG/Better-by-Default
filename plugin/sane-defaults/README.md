@@ -32,6 +32,10 @@ defines a key, its default, its type (`toggle` / `select` / `number`), and its g
 bootstrap function then wires each *enabled* policy to its WordPress hook. The `wpyeg_`
 option prefix is kept deliberately as the WPYEG org convention.
 
+A new `group` needs a title in `wpyeg_defaults_groups()` and a new `section` one in
+`wpyeg_defaults_section_labels()`; the tests fail if either is missing, because a setting whose
+group has no title would save and take effect while never appearing on the screen.
+
 Settings-screen convention: toggle rows place the descriptive schema label immediately after
 the checkbox inside one clickable label; they never use a generic `Enabled` label. Select and
 number fields retain descriptive row labels. Every control connects its help text with

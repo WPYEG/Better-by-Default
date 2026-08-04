@@ -100,7 +100,17 @@ reference — every default, the reasoning, and the snippet.
 One array — `wpyeg_defaults_schema()` — is the single source of truth. It drives both the
 settings screen and the bootstrap that wires each *enabled* policy to its WordPress hook.
 Adding a new default is one array entry plus one `if`-block in bootstrap; no new settings-page
-code. (The `wpyeg_` option prefix is kept deliberately as the WPYEG org convention.)
+code. Three things beyond that array are extension points rather than one-offs, and the tests
+fail if you miss one: a new `group` needs a title in `wpyeg_defaults_groups()`, a new `section`
+needs one in `wpyeg_defaults_section_labels()`, and a `select` needs its `choices`. (The
+`wpyeg_` option prefix is kept deliberately as the WPYEG org convention.)
+
+The settings screen is three small functions rather than one long template: `…_settings_rows()`
+works out which settings share a row, `…_render_row()` draws a row, and `…_render_control()`
+draws one input with whatever supersedes it and its help text. The row shapes never have to
+know which field type they are drawing, and the field types never have to know which shape
+they are in — which is what the previous single-template version spent forty lines of
+`$section_open` and `$stacked` bookkeeping on.
 
 ### Working on it
 
