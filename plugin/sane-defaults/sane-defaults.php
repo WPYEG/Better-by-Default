@@ -94,6 +94,13 @@ function wpyeg_defaults_schema() {
 			'label'   => 'Require strong passwords',
 			'help'    => 'Server-side rule: 15+ characters, a local blocklist, personal-context screening, and no forced composition rules. For the breach check, BBD sends Have I Been Pwned only the first five characters of a locally computed SHA-1 hash, then matches returned suffixes locally; the password and full hash never leave the site. HIBP outages or invalid responses fail open. See the <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange">HIBP Pwned Passwords range API</a> and <a href="https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver">NIST SP 800-63B-4 § 3.1.1.2, Password Verifiers</a>.',
 		),
+		'limit_unfiltered_html_to_admins' => array(
+			'default' => 'yes',
+			'type'    => 'toggle',
+			'group'   => 'security',
+			'label'   => 'Limit unfiltered HTML to administrators',
+			'help'    => 'Editors hold <code>unfiltered_html</code> on single-site installs, which is enough to save a raw <code>&lt;script&gt;</code> into a post. This removes it from everyone except administrators (and Super Admins on multisite).',
+		),
 		'remove_version'                 => array(
 			'default' => 'no',
 			'type'    => 'toggle',
@@ -186,6 +193,21 @@ function wpyeg_defaults_schema() {
 			'help'    => 'Removes the emoji detection script + inline CSS from every page.',
 		),
 
+		'disable_post_passwords'         => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'content',
+			'label'   => 'Hide post-password protection',
+			'help'    => 'Hides the "Password protected" visibility option in the editor. Post passwords are weak and full-page caches bypass them. Cosmetic and non-destructive: it changes no data, and a post that already has a password keeps its field so it stays editable.',
+		),
+		'force_classic_editor'           => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'content',
+			'label'   => 'Force the classic editor',
+			'help'    => 'Restores the pre-block editing experience for posts, pages, and custom post types, plus the classic Widgets screen. Front-end display of existing block content is unaffected.',
+		),
+
 		// --- Admin & front-end UX --------------------------------------
 		'title_only_admin_search'        => array(
 			'default' => 'no',
@@ -205,6 +227,21 @@ function wpyeg_defaults_schema() {
 				'hide_non_admins' => 'Hide for non-admins',
 				'hide_all'        => 'Hide for everyone',
 			),
+		),
+
+		'lowercase_upload_filenames'     => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'ux',
+			'label'   => 'Lowercase upload filenames',
+			'help'    => 'Lowercases new upload filenames, so a case-sensitive server and a case-insensitive one agree about what a file is called. Only new uploads are affected.',
+		),
+		'media_sizes_panel'              => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'ux',
+			'label'   => 'Show generated image sizes',
+			'help'    => 'Adds a read-only panel to the attachment edit screen listing the resized files WordPress generated, with their dimensions. Useful for confirming what exists without a media-management plugin.',
 		),
 
 		// --- Login & sessions ------------------------------------------
@@ -556,6 +593,11 @@ function wpyeg_defaults_bootstrap() {
 		add_filter( 'rest_pre_insert_user', 'wpyeg_defaults_validate_rest_password', 10, 2 );
 	}
 
+	if ( wpyeg_defaults_enabled( 'limit_unfiltered_html_to_admins' ) ) {
+		// Very late, so it has the final say over other user_has_cap filters.
+		add_filter( 'user_has_cap', 'wpyeg_defaults_limit_unfiltered_html', PHP_INT_MAX - 1, 4 );
+	}
+
 	if ( wpyeg_defaults_enabled( 'remove_version' ) ) {
 		remove_action( 'wp_head', 'wp_generator' );
 		add_filter( 'the_generator', '__return_empty_string' );
@@ -824,6 +866,22 @@ function wpyeg_defaults_bootstrap() {
 		);
 	}
 
+	if ( wpyeg_defaults_enabled( 'disable_post_passwords' ) ) {
+		add_action( 'admin_print_footer_scripts', 'wpyeg_defaults_hide_post_password_ui' );
+	}
+
+	if ( wpyeg_defaults_enabled( 'force_classic_editor' ) ) {
+		wpyeg_defaults_force_classic_editor();
+	}
+
+	if ( wpyeg_defaults_enabled( 'lowercase_upload_filenames' ) ) {
+		add_filter( 'sanitize_file_name', 'wpyeg_defaults_lowercase_filename', 20 );
+	}
+
+	if ( wpyeg_defaults_enabled( 'media_sizes_panel' ) ) {
+		add_action( 'add_meta_boxes_attachment', 'wpyeg_defaults_media_sizes_meta_box' );
+	}
+
 	/* ----- Login & sessions ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
@@ -926,6 +984,148 @@ function wpyeg_defaults_bootstrap() {
 			}
 		);
 	}
+}
+
+/**
+ * Remove `unfiltered_html` from everyone except administrators.
+ *
+ * Editors hold this capability on single-site installs, which is enough to save
+ * a raw `<script>` into a post. This runs on `user_has_cap`, so it sees the
+ * capability map WordPress already resolved.
+ *
+ * The recursion trap is why it reads roles and the resolved map directly, and
+ * why `is_super_admin()` sits behind `is_multisite()`. This runs *inside* the
+ * `user_has_cap` filter, so any capability check made here re-enters the same
+ * filter and recurses until the stack blows. On single site `is_super_admin()`
+ * calls `has_cap( 'delete_users' )`; on multisite it reads the network list,
+ * which is safe. Never call `current_user_can()` or `user_can()` from here.
+ *
+ * @param array    $allcaps Resolved capabilities.
+ * @param array    $caps    Required primitive caps (unused).
+ * @param array    $args    Context args (unused).
+ * @param \WP_User $user    The user being checked.
+ * @return array
+ */
+function wpyeg_defaults_limit_unfiltered_html( $allcaps, $caps, $args, $user ) {
+	if ( empty( $allcaps['unfiltered_html'] ) ) {
+		return $allcaps;
+	}
+
+	$roles = ( isset( $user->roles ) && is_array( $user->roles ) ) ? $user->roles : array();
+
+	// `manage_options` is already resolved in $allcaps, so reading it does not recurse.
+	if ( in_array( 'administrator', $roles, true ) || ! empty( $allcaps['manage_options'] ) ) {
+		return $allcaps;
+	}
+
+	if ( is_multisite() && isset( $user->ID ) && is_super_admin( $user->ID ) ) {
+		return $allcaps;
+	}
+
+	$allcaps['unfiltered_html'] = false;
+
+	return $allcaps;
+}
+
+/**
+ * Force the classic editing experience.
+ *
+ * Four filters, because core asks the question four ways. The post-type gate is
+ * a separate decision from the per-post one — a custom post type registered
+ * with `show_in_rest` is measured against it directly — so filtering only the
+ * per-post gate leaves those post types on the block editor.
+ */
+function wpyeg_defaults_force_classic_editor() {
+	add_filter( 'use_block_editor_for_post', '__return_false' );
+	add_filter( 'use_block_editor_for_post_type', '__return_false' );
+	add_filter( 'gutenberg_can_edit_post', '__return_false' );  // Standalone Gutenberg plugin.
+	add_filter( 'use_widgets_block_editor', '__return_false' ); // Classic Widgets screen.
+}
+
+/**
+ * Lowercase a new upload filename.
+ *
+ * Hooked at priority 20, after core has sanitized, so only new uploads are
+ * affected. UTF-8 aware where mbstring is available.
+ *
+ * @param string $filename Sanitized filename.
+ * @return string
+ */
+function wpyeg_defaults_lowercase_filename( $filename ) {
+	return function_exists( 'mb_strtolower' ) ? mb_strtolower( $filename, 'UTF-8' ) : strtolower( $filename );
+}
+
+/**
+ * Hide the "Password protected" visibility option in the editor.
+ *
+ * Cosmetic and non-destructive: it hides UI, changes no data, and leaves the
+ * field in place on a post that already has a password so that post stays
+ * editable. It depends on editor DOM selectors, so re-check after major
+ * WordPress editor changes — if a selector goes stale the field reappears and
+ * nothing breaks.
+ */
+function wpyeg_defaults_hide_post_password_ui() {
+	global $pagenow, $post;
+
+	if ( empty( $pagenow ) || ( 'post.php' !== $pagenow && 'post-new.php' !== $pagenow ) ) {
+		return;
+	}
+
+	if ( ! empty( $post->post_password ) ) {
+		return;
+	}
+	?>
+	<style id="wpyeg-hide-post-password">
+		#visibility-radio-password,
+		label[for="visibility-radio-password"],
+		#editor-post-password-0,
+		label[for="editor-post-password-0"],
+		#editor-post-password-0-description {
+			display: none;
+		}
+	</style>
+	<?php
+}
+
+/**
+ * Add a read-only panel listing the generated sizes for an attachment.
+ *
+ * @param \WP_Post $post Attachment post.
+ */
+function wpyeg_defaults_media_sizes_meta_box( $post ) {
+	add_meta_box(
+		'wpyeg-media-sizes',
+		'Generated Sizes',
+		'wpyeg_defaults_render_media_sizes',
+		null,
+		'side',
+		'low'
+	);
+}
+
+/**
+ * Render the generated-sizes panel.
+ *
+ * @param \WP_Post $post Attachment post.
+ */
+function wpyeg_defaults_render_media_sizes( $post ) {
+	$meta = wp_get_attachment_metadata( $post->ID );
+
+	if ( empty( $meta['sizes'] ) || ! is_array( $meta['sizes'] ) ) {
+		echo '<p>No generated sizes.</p>';
+		return;
+	}
+
+	echo '<ul style="margin:0">';
+	foreach ( $meta['sizes'] as $name => $size ) {
+		printf(
+			'<li><strong>%s</strong> — %d&times;%d</li>',
+			esc_html( $name ),
+			(int) $size['width'],
+			(int) $size['height']
+		);
+	}
+	echo '</ul>';
 }
 
 /**

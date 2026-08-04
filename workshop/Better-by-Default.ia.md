@@ -498,6 +498,11 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `disable_author_archives` | `yes` | `template_redirect` |
 | `redirect_attachment_pages` | `yes` | `template_redirect` |
 | `disable_emojis` | `yes` | `init` removes emoji assets |
+| `limit_unfiltered_html_to_admins` | `yes` | `user_has_cap` drops the cap for non-admins |
+| `disable_post_passwords` | `no` | CSS hides the editor's password option |
+| `force_classic_editor` | `no` | four editor gates answered false |
+| `lowercase_upload_filenames` | `no` | `sanitize_file_name` at priority 20 |
+| `media_sizes_panel` | `no` | read-only meta box on attachments |
 | `title_only_admin_search` | `no` | `post_search_columns` |
 | `frontend_admin_bar_behavior` | `''` | `show_admin_bar` |
 

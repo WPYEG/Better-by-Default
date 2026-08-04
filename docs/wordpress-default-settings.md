@@ -316,6 +316,111 @@ add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', P
 > untouched while looking careful. Nothing is deleted either way: turn the default off
 > and every comment is queryable again.
 
+### Limit Unfiltered HTML to Administrators
+- **Setting key:** `limit_unfiltered_html_to_admins`
+- **Default:** `yes`
+- **Why:** Editors hold `unfiltered_html` on single-site installs — enough to save a raw
+  `<script>` into a post. This removes it from everyone except administrators, and Super
+  Admins on multisite.
+
+```php
+add_filter( 'user_has_cap', function ( $allcaps, $caps, $args, $user ) {
+    if ( empty( $allcaps['unfiltered_html'] ) ) {
+        return $allcaps;
+    }
+
+    $roles = ( isset( $user->roles ) && is_array( $user->roles ) ) ? $user->roles : array();
+
+    // Decide only from $user->roles and the already-resolved $allcaps. Any capability
+    // check here re-enters this same filter and recurses until the stack blows.
+    if ( in_array( 'administrator', $roles, true ) || ! empty( $allcaps['manage_options'] ) ) {
+        return $allcaps;
+    }
+
+    // is_super_admin() is safe only on multisite, where it reads the network list. On
+    // single site it calls has_cap( 'delete_users' ) — straight back into this filter.
+    if ( is_multisite() && isset( $user->ID ) && is_super_admin( $user->ID ) ) {
+        return $allcaps;
+    }
+
+    $allcaps['unfiltered_html'] = false;
+
+    return $allcaps;
+}, PHP_INT_MAX - 1, 4 );
+```
+
+> **The recursion trap is the lesson here.** A capability filter that asks a capability
+> question calls itself. The fix is not cleverness, it is discipline: read what you were
+> handed, never ask.
+
+### Hide Post-Password Protection
+- **Setting key:** `disable_post_passwords`
+- **Default:** `no`
+- **Why:** Post passwords are weak, and full-page caches bypass them. This hides the option
+  rather than removing the feature: no data changes, and a post that already has a password
+  keeps its field so it stays editable.
+
+```php
+add_action( 'admin_print_footer_scripts', function () {
+    global $pagenow, $post;
+
+    if ( empty( $pagenow ) || ( 'post.php' !== $pagenow && 'post-new.php' !== $pagenow ) ) {
+        return;
+    }
+
+    if ( ! empty( $post->post_password ) ) {
+        return;   // Already protected: leave the field so the post stays editable.
+    }
+    ?>
+    <style>#visibility-radio-password, label[for="visibility-radio-password"] { display: none; }</style>
+    <?php
+} );
+```
+
+### Force the Classic Editor
+- **Setting key:** `force_classic_editor`
+- **Default:** `no`
+- **Why:** Restores the pre-block editing experience for posts, pages, and custom post
+  types, plus the classic Widgets screen. Front-end rendering of existing block content is
+  unaffected — `do_blocks()` still runs.
+
+```php
+add_filter( 'use_block_editor_for_post', '__return_false' );
+add_filter( 'use_block_editor_for_post_type', '__return_false' );  // Separate gate: CPTs are measured against this one.
+add_filter( 'gutenberg_can_edit_post', '__return_false' );         // Standalone Gutenberg plugin.
+add_filter( 'use_widgets_block_editor', '__return_false' );        // Classic Widgets screen.
+```
+
+> Four filters, because core asks the question four ways. Filtering only the per-post gate
+> leaves custom post types registered with `show_in_rest` on the block editor, which is the
+> version of this snippet you will find on most blogs.
+
+### Lowercase Upload Filenames
+- **Setting key:** `lowercase_upload_filenames`
+- **Default:** `no`
+- **Why:** A case-sensitive server and a case-insensitive one disagree about whether
+  `Photo.JPG` and `photo.jpg` are the same file. Lowercasing on upload removes the argument.
+  Only new uploads are affected.
+
+```php
+add_filter( 'sanitize_file_name', function ( $filename ) {
+    return function_exists( 'mb_strtolower' ) ? mb_strtolower( $filename, 'UTF-8' ) : strtolower( $filename );
+}, 20 );   // After core sanitizes.
+```
+
+### Show Generated Image Sizes
+- **Setting key:** `media_sizes_panel`
+- **Default:** `no`
+- **Why:** A read-only panel on the attachment edit screen listing the resized files
+  WordPress generated, with dimensions. Useful for confirming what exists without installing
+  a media-management plugin.
+
+```php
+add_action( 'add_meta_boxes_attachment', function () {
+    add_meta_box( 'wpyeg-media-sizes', 'Generated Sizes', 'wpyeg_defaults_render_media_sizes', null, 'side', 'low' );
+} );
+```
+
 ### Disable Pingbacks and Trackbacks (defaults for new posts)
 - **Setting key:** `disable_pingbacks`
 - **Default:** `yes`
@@ -832,6 +937,11 @@ function wpyeg_strip_asset_ver( $src ) {
 | Disable public author archives | `disable_author_archives` | `yes` | Content |
 | Redirect attachment pages | `redirect_attachment_pages` | `yes` | Content |
 | Disable emoji script | `disable_emojis` | `yes` | Content |
+| Limit unfiltered HTML to administrators | `limit_unfiltered_html_to_admins` | `yes` | Security |
+| Hide post-password protection | `disable_post_passwords` | `no` | Content |
+| Force the classic editor | `force_classic_editor` | `no` | Content |
+| Lowercase upload filenames | `lowercase_upload_filenames` | `no` | UX |
+| Show generated image sizes | `media_sizes_panel` | `no` | UX |
 | Title-only admin search | `title_only_admin_search` | `no` | UX |
 | Front-end admin bar | `frontend_admin_bar_behavior` | `''` | UX |
 | Disable Remember Me | `disable_remember_me` | `no` | Login |
