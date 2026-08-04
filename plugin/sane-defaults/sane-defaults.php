@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.1.4
+ * Version:           1.2.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -965,29 +965,28 @@ function wpyeg_defaults_bootstrap() {
 		);
 	}
 
-	// One filter sets both the remembered and regular session lengths (both in
-	// days). Sanitize guarantees remember >= regular, so ticking Remember Me can
-	// never shorten a login. When Remember Me is disabled every login is regular.
-	add_filter(
-		'auth_cookie_expiration',
-		function ( $expiration, $user_id, $remember ) {
-			$regular_days = (int) wpyeg_defaults_get( 'session_regular_days' );
-			$regular      = $regular_days > 0 ? $regular_days * DAY_IN_SECONDS : $expiration;
-
-			if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
-				return $regular;
-			}
-
-			if ( $remember ) {
-				$remember_days = (int) wpyeg_defaults_get( 'remember_me_days' );
-				return $remember_days > 0 ? $remember_days * DAY_IN_SECONDS : $expiration;
-			}
-
-			return $regular;
-		},
-		10,
-		3
-	);
+	/*
+	 * Session length is set through a REPLACING filter — the callback returns
+	 * its own number and throws away the one it was handed. That kind of filter
+	 * does not compose: when two plugins register one, WordPress keeps whichever
+	 * ran last, the other silently does nothing, and both settings screens go on
+	 * displaying their own number. See
+	 * docs/when-two-plugins-set-the-same-default.md, where this plugin is one of
+	 * the three measured doing it.
+	 *
+	 * A number filter cannot be made additive, so the honest move is to stay out
+	 * of a fight there is nothing to win. Both defaults here are WordPress's own
+	 * values, so on a site that has not changed them, registering would assert
+	 * core's answer over another plugin's deliberate one. Register only when
+	 * these settings actually say something WordPress does not already do.
+	 */
+	if ( wpyeg_defaults_session_policy_is_custom() ) {
+		// A named function, not a closure, for the same reason: it is the one
+		// hook here likely to be contested, and `wp_filter` can only name a
+		// callback that has a name. A plugin nobody can identify in $wp_filter
+		// is a plugin nobody can diagnose.
+		add_filter( 'auth_cookie_expiration', 'wpyeg_defaults_auth_cookie_expiration', 10, 3 );
+	}
 
 	/* ----- Branding ----- */
 
@@ -1047,6 +1046,66 @@ function wpyeg_defaults_bootstrap() {
 			}
 		);
 	}
+}
+
+/**
+ * Whether the session settings say anything WordPress does not already do.
+ *
+ * Both length defaults are WordPress's own — 2 days and 14 days — so a site
+ * that has never touched them wants exactly core's behaviour, and the filter
+ * that would assert it is one no plugin can share. Disabling Remember Me is a
+ * real policy whatever the numbers say, so it counts on its own.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_session_policy_is_custom() {
+	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
+		return true;
+	}
+
+	$schema = wpyeg_defaults_schema();
+
+	foreach ( array( 'session_regular_days', 'remember_me_days' ) as $key ) {
+		if ( (int) wpyeg_defaults_get( $key ) !== (int) $schema[ $key ]['default'] ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Apply the configured session lengths.
+ *
+ * One callback covers both, because core asks the same filter for each and
+ * distinguishes them with $remember. Sanitize guarantees remember >= regular,
+ * so ticking Remember Me can never shorten a login; when Remember Me is
+ * disabled every login gets the regular length.
+ *
+ * Only registered when wpyeg_defaults_session_policy_is_custom() — see the
+ * comment at the registration site for why that matters more than it looks.
+ *
+ * @param int  $expiration Length WordPress or another plugin arrived at.
+ * @param int  $user_id    User the cookie is for (unused).
+ * @param bool $remember   Whether the login ticked Remember Me.
+ * @return int
+ */
+function wpyeg_defaults_auth_cookie_expiration( $expiration, $user_id, $remember ) {
+	unset( $user_id );
+
+	$regular_days = (int) wpyeg_defaults_get( 'session_regular_days' );
+	$regular      = $regular_days > 0 ? $regular_days * DAY_IN_SECONDS : $expiration;
+
+	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
+		return $regular;
+	}
+
+	if ( $remember ) {
+		$remember_days = (int) wpyeg_defaults_get( 'remember_me_days' );
+		return $remember_days > 0 ? $remember_days * DAY_IN_SECONDS : $expiration;
+	}
+
+	return $regular;
 }
 
 /**
@@ -2529,23 +2588,21 @@ define( 'WP_POST_REVISIONS', 10 );</pre>
 	<?php
 }
 
-/**
- * On activation, seed the option with schema defaults so a fresh install
- * behaves as documented out of the box.
+/*
+ * There is no activation hook, and that is deliberate.
+ *
+ * This plugin used to seed the option with every schema default on activation.
+ * It changed nothing: wpyeg_defaults_get() already falls back to the schema
+ * default for any key the stored array does not carry, so a fresh install
+ * behaved identically with or without it. What the seeding did do was freeze a
+ * site at its activation-time defaults — a setting whose default improved in a
+ * later release never reached it, because the old value was sitting in the
+ * database looking like a choice somebody made.
+ *
+ * Without it there is one rule, and it is the one the upgrade notices already
+ * describe: a setting you have saved is yours and is never touched; a setting
+ * you have never saved follows the current default.
  */
-register_activation_hook(
-	__FILE__,
-	function () {
-		if ( false === get_option( WPYEG_DEFAULTS_OPTION, false ) ) {
-			$schema   = wpyeg_defaults_schema();
-			$defaults = array();
-			foreach ( $schema as $key => $field ) {
-				$defaults[ $key ] = $field['default'];
-			}
-			add_option( WPYEG_DEFAULTS_OPTION, $defaults );
-		}
-	}
-);
 
 /**
  * Replace the author name in feeds.

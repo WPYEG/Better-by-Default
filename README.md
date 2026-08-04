@@ -44,7 +44,8 @@ Install the plugin one of three ways:
 wp plugin install ./dist/sane-defaults.zip --activate
 ```
 
-On activation the documented defaults are seeded automatically. Then visit
+The documented defaults apply the moment it activates — they live in the schema, not in the
+database, so there is nothing to seed and nothing to reset. Then visit
 **Settings → Better by Default** to flip switches.
 
 ## The defaults

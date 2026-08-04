@@ -1416,20 +1416,47 @@ wpyeg_test_assert( 2 === $coherent['session_regular_days'] && 30 === $coherent['
  * Run the registered auth_cookie_expiration filter for a given login type.
  *
  * @param bool $remember Whether the login ticked "Remember Me".
- * @return int Cookie lifetime in seconds.
+ * @return int Cookie lifetime in seconds, or the untouched input when the
+ *             plugin did not register the filter at all.
  */
 function wpyeg_test_auth_cookie_expiration( $remember ) {
 	$hook = wpyeg_test_find_hook( 'auth_cookie_expiration' );
+
+	if ( null === $hook ) {
+		return 7 * DAY_IN_SECONDS;
+	}
+
 	return (int) call_user_func( $hook['callback'], 7 * DAY_IN_SECONDS, 1, $remember );
 }
 
-// Out of the box the filter returns the day-based lengths: 2 days regular, 14
-// remembered — the visible no-op defaults, not core's untouched value.
+/*
+ * Out of the box the filter is not registered at all, and that is the point.
+ *
+ * auth_cookie_expiration is a replacing filter: the callback returns its own
+ * number and discards the one it was handed, so two plugins registering one do
+ * not compose — WordPress keeps whichever ran last and the other silently loses
+ * while its settings screen goes on showing a number the site is not using.
+ * Both defaults here are WordPress's own values, so registering on an untouched
+ * site would enter that fight to assert the answer core already gives.
+ */
 $GLOBALS['wpyeg_test_hooks']  = array();
 $GLOBALS['wpyeg_test_option'] = array();
 wpyeg_defaults_bootstrap();
-wpyeg_test_assert( 2 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( false ), 'A regular login lasts the regular length (2 days).' );
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'auth_cookie_expiration' ), 'At the default lengths the session filter is not registered, so it cannot contest another plugin.' );
+wpyeg_test_assert( false === wpyeg_defaults_session_policy_is_custom(), 'Schema defaults are recognised as "no opinion".' );
+
+// Change either length and the plugin does have something to say, so it says it.
+$GLOBALS['wpyeg_test_hooks']  = array();
+$GLOBALS['wpyeg_test_option'] = array( 'session_regular_days' => 1 );
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( true === wpyeg_defaults_session_policy_is_custom(), 'A changed length counts as an opinion.' );
+wpyeg_test_assert( DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( false ), 'A regular login lasts the configured regular length.' );
 wpyeg_test_assert( 14 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'A remembered login lasts the remembered length (14 days).' );
+
+// The callback is a named function, not a closure, so $wp_filter can identify
+// this plugin on the one hook most likely to be contested.
+$session_hook = wpyeg_test_find_hook( 'auth_cookie_expiration' );
+wpyeg_test_assert( 'wpyeg_defaults_auth_cookie_expiration' === $session_hook['callback'], 'The session callback is nameable in $wp_filter rather than an anonymous closure.' );
 
 // Disabling Remember Me routes every login — even a remembered one — through the
 // regular length, and strips the forged flag server-side (not just via JS/CSS).
@@ -1441,6 +1468,12 @@ $GLOBALS['wpyeg_test_option'] = array(
 wpyeg_defaults_bootstrap();
 wpyeg_test_assert( 3 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'Disabling Remember Me makes even a remembered login use the regular length.' );
 wpyeg_test_assert( null !== wpyeg_test_find_hook( 'login_init' ), 'Disabling Remember Me strips the rememberme POST server-side, not only via the checkbox-hiding script.' );
+
+// Disabling Remember Me is a policy even when both lengths are left alone.
+$GLOBALS['wpyeg_test_hooks']  = array();
+$GLOBALS['wpyeg_test_option'] = array( 'disable_remember_me' => 'yes' );
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( 2 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'Disabling Remember Me registers the filter even at the default lengths.' );
 
 unset( $GLOBALS['wpyeg_test_option'] );
 $GLOBALS['wpyeg_test_hooks'] = array();
