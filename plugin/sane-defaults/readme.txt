@@ -69,7 +69,7 @@ No — requiring authentication for all REST requests still permits the logged-i
 
 = Is XML-RPC a critical vulnerability? =
 
-No. It is a legitimate but aging API and an additional attack/resource surface. Incoming pingbacks are the clearest live risk. WordPress 4.4 ended the old system.multicall technique that tested thousands of password guesses in one request; refusing multicall today is modest defence-in-depth against general batching. Keep the endpoint reachable and test method changes when Jetpack or another integration uses it.
+No. It is a legitimate but aging API and an additional attack/resource surface. Incoming pingbacks are the clearest live risk. WordPress 4.4 prevented system.multicall from being used as a password-guessing multiplier; refusing it today is modest defence-in-depth against general batching, not a password control. Keep the endpoint reachable and test method changes when Jetpack or another integration uses it.
 
 = Can I use it as an mu-plugin? =
 

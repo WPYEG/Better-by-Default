@@ -71,14 +71,14 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: allow system.multicall',
-			'help'    => 'OFF (default) refuses <code>system.multicall</code>, a general batching wrapper with little established modern use. WordPress 4.4 stopped it from testing thousands of passwords in one request.',
+			'help'    => 'OFF (default) refuses <code>system.multicall</code>, a general batching wrapper with little established modern use. WordPress 4.4 prevented it from being used as a password-guessing multiplier, so refusing it now is modest defence-in-depth against batching, not a password control.',
 		),
 		'block_xmlrpc_endpoint'          => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'label'   => 'XML-RPC: block the endpoint entirely',
-			'help'    => 'Strictest tier — <code>xmlrpc.php</code> returns <code>403</code> for every request. Do NOT enable on a Jetpack site. Prefer an edge block when possible; this plugin-level block still boots PHP.',
+			'help'    => 'Strictest tier — <code>xmlrpc.php</code> returns <code>403</code> for every request. Leave XML-RPC reachable while Jetpack is active, unless connection and feature testing proves Jetpack no longer needs it. Prefer an edge block when possible; this plugin-level block still boots PHP.',
 		),
 		'disable_application_passwords'  => array(
 			'default' => 'no',
@@ -904,6 +904,38 @@ function wpyeg_defaults_bootstrap() {
 }
 
 /**
+ * Whether Jetpack is active on this site.
+ *
+ * Jetpack reaches WordPress.com over XML-RPC, so blocking the endpoint breaks
+ * the connection and everything downstream of it. Nothing here acts on that by
+ * itself: a toggle that quietly refuses to do what it says is worse than one
+ * that warns and then obeys. This only decides whether the warning is shown.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_jetpack_active() {
+	return defined( 'JETPACK__VERSION' ) || class_exists( 'Automattic\\Jetpack\\Connection\\Manager' );
+}
+
+/**
+ * The Jetpack warning for the XML-RPC endpoint block, when it applies.
+ *
+ * Returned for the settings screen rather than written into the help text,
+ * because it is only true on some sites — and a warning that is always on
+ * teaches people to stop reading warnings.
+ *
+ * @param string $key Schema key being rendered.
+ * @return string Markup, or '' when the warning does not apply.
+ */
+function wpyeg_defaults_jetpack_warning( $key ) {
+	if ( 'block_xmlrpc_endpoint' !== $key || ! wpyeg_defaults_jetpack_active() ) {
+		return '';
+	}
+
+	return '<strong>Jetpack is active on this site.</strong> It uses XML-RPC for its WordPress.com connection, so blocking the endpoint will break it. Leave this off unless connection and feature testing proves Jetpack no longer needs XML-RPC.';
+}
+
+/**
  * Comment types that keep working while comments are disabled.
  *
  * WordPress 6.9's Notes feature stores editorial notes as comments of type
@@ -1632,6 +1664,11 @@ function wpyeg_defaults_render_settings_page() {
 
 									<?php if ( $locked ) : ?>
 										<p class="description"><?php echo wp_kses( $lock, array( 'code' => array() ) ); ?></p>
+									<?php endif; ?>
+
+									<?php $jetpack_note = wpyeg_defaults_jetpack_warning( $key ); ?>
+									<?php if ( '' !== $jetpack_note ) : ?>
+										<p class="description"><?php echo wp_kses( $jetpack_note, wpyeg_defaults_help_allowed_html() ); ?></p>
 									<?php endif; ?>
 
 									<?php if ( ! empty( $field['help'] ) ) : ?>

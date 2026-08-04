@@ -1138,4 +1138,26 @@ wpyeg_test_assert( array() === wpyeg_defaults_remove_comment_blocks( array() ), 
 $wpyeg_test_blocks = wpyeg_defaults_remove_comment_blocks( array( 'core/paragraph', 'core/comments', 'core/latest-comments', 'core/image' ) );
 wpyeg_test_assert( array( 'core/paragraph', 'core/image' ) === array_values( $wpyeg_test_blocks ), 'Comment blocks are removed from an explicit allowlist; everything else survives.' );
 
+/*
+ * Jetpack and the XML-RPC endpoint block.
+ *
+ * Jetpack talks to WordPress.com over XML-RPC, so the blanket 403 breaks the
+ * connection. The plugin warns and then obeys: it never quietly refuses to do
+ * what the toggle says, because a control that lies is worse than one that
+ * warns. The default is already off, so nothing breaks unattended.
+ */
+$jetpack_schema = wpyeg_defaults_schema();
+wpyeg_test_assert( 'no' === $jetpack_schema['block_xmlrpc_endpoint']['default'], 'The endpoint block ships off, so activating the plugin cannot break a Jetpack connection.' );
+wpyeg_test_assert(
+	false !== strpos( $jetpack_schema['block_xmlrpc_endpoint']['help'], 'unless connection and feature testing proves' ),
+	'The help text states the rule: leave XML-RPC reachable while Jetpack is active until testing proves otherwise.'
+);
+
+wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack absent, no warning is shown.' );
+wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'The warning belongs to the endpoint block, not to every setting.' );
+
+define( 'JETPACK__VERSION', '14.0' );
+wpyeg_test_assert( '' !== wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack active, the endpoint block carries a warning.' );
+wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'Even with Jetpack active the warning stays on its own setting.' );
+
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

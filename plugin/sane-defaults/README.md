@@ -63,8 +63,8 @@ does not infer safety from version numbers. An explicit `WP_AUTO_UPDATE_CORE`,
 reported on the settings screen rather than silently overridden.
 
 XML-RPC is an aging API, not a backdoor. Pingbacks are the strongest reason for the locked-down
-default; refusing `system.multicall` is modest defence-in-depth against batching, not protection
-from the obsolete pre-WordPress-4.4 “thousands of password guesses” attack. Keep the endpoint and
+default; refusing `system.multicall` is modest defence-in-depth against batching, not a password
+control — WordPress 4.4 prevented it from being used as a password-guessing multiplier. Keep the endpoint and
 Remote Publishing available when Jetpack needs them, and test connected features after changing
 method controls. Application Passwords inherit the owning user's capabilities, so integrations
 should use a least-privileged account.
