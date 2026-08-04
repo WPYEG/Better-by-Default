@@ -120,14 +120,24 @@ Rebuilding the deck needs `pptxgenjs`, which is not vendored:
 cd workshop && npm install pptxgenjs
 ```
 
-The **PDF handout is not guarded and not automated.** Regenerate it from the rebuilt deck
-whenever the handout goes out:
+The **PDF handout** is regenerated from the rebuilt deck. It needs LibreOffice, which is not
+a dependency of anything else here:
 
 ```bash
 cd workshop && soffice --headless --convert-to pdf Better-by-Default.pptx
 ```
 
-(`node_modules/` in `workshop/` is gitignored. The PDF step needs LibreOffice.)
+On macOS the binary is inside the app bundle and not on `PATH`, so use
+`/Applications/LibreOffice.app/Contents/MacOS/soffice` or symlink it.
+
+The handout is only **partly** guarded, and it is worth knowing where the line is. Its text
+sits in subsetted font encodings that do not survive naive extraction, so the suite compares
+structure alone: one PDF page per slide. That catches a slide added or removed without
+regenerating the handout. It cannot catch a wording correction, because the page count does
+not move — so a green suite is not proof the handout is current. Rebuild it whenever the deck
+changes.
+
+(`node_modules/` in `workshop/` is gitignored.)
 
 ### Spelling
 
