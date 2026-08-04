@@ -1,0 +1,101 @@
+name: CI
+
+# Every guard in this repo used to run only when someone remembered. That is how
+# a broken deck generator and a two-corrections-stale deck both reached main with
+# a green local checkout. These jobs make the guards binding.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor is what the plugin header and composer.json both claim, so
+        # it is tested rather than assumed. The top is the current release.
+        php: ['7.4', '8.1', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          # zip: the suite reads the .pptx and the release zip, both of which are
+          # zip archives. mbstring: the password length checks use mb_strlen.
+          extensions: zip, mbstring
+          coverage: none
+
+      # No composer install: the suite deliberately has no dependencies and no
+      # WordPress. Only the linter needs vendor/.
+      - name: Policy and parity suite
+        run: composer test
+
+      - name: Committed zip matches the plugin source
+        run: composer verify:dist
+
+  lint:
+    name: WordPress Coding Standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: zip, mbstring
+          coverage: none
+
+      - name: Install lint tooling
+        run: composer install --no-interaction --no-progress
+
+      # Errors fail the build. Warnings are printed but do not, because the
+      # plugin carries 31 long-standing array-alignment warnings that predate
+      # this workflow. Drop the runtime-set once those are cleared and warnings
+      # become blocking too.
+      - name: phpcs
+        run: vendor/bin/phpcs --standard=phpcs.xml --runtime-set ignore_warnings_on_exit 1
+
+  deck:
+    name: Deck generator and committed deck agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: zip, mbstring
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: workshop/package-lock.json
+
+      - name: Install pptxgenjs
+        run: npm ci
+        working-directory: workshop
+
+      # Runs build_deck.js into a temporary directory and compares its slide
+      # text with the committed .pptx. This is the check that catches a reworded
+      # slide that was never rebuilt, which the suite's key-and-count assertions
+      # cannot see — and running the generator at all is what catches the
+      # generator being broken.
+      - name: Committed deck matches build_deck.js
+        run: composer verify:deck
+
+# Deliberately not run here: composer verify:pdf. It compares the committed
+# handout against a fresh LibreOffice conversion, and different LibreOffice
+# versions produce different output, so a runner's build would disagree with a
+# maintainer's for reasons that say nothing about whether the handout is stale.
+# It stays a same-machine tool. The suite's page-per-slide assertion is
+# version-independent and does run here, inside `composer test`.

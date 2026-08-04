@@ -17,6 +17,7 @@
     "build": "php bin/build-zip.php",
     "build:deck": "cd workshop && node build_deck.js",
     "verify:dist": "php bin/build-zip.php --check",
+    "verify:deck": "php bin/verify-deck.php",
     "verify:pdf": "php bin/verify-pdf.php"
   },
   "config": {
