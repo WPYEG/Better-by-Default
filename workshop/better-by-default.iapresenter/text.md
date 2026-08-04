@@ -232,7 +232,7 @@ One default and one deliberate non-default — and the difference is the lesson.
 - **`X-Content-Type-Options: nosniff`** — the browser must trust the declared `Content-Type` instead of guessing; kills "a `.txt` the browser decides to run as JavaScript" tricks.
 - **`Referrer-Policy: strict-origin-when-cross-origin`** — sends the full URL within your own site, only the bare domain to other sites, and nothing on an HTTPS→HTTP downgrade; keeps tokens and private paths from leaking in the `Referer`.
 
-**`X-Frame-Options` is deliberately a separate setting** (`wpyeg_frame_options`, default `SAMEORIGIN`), and that split is the point worth teaching. It is the only one of the three that can break a working site: blocking cross-origin framing also blocks *legitimate* embedding — a client intranet, a partner site, a preview tool — and it fails as a silent blank frame, which is a miserable thing to debug. Bundled with the other two, a site that needs to be embeddable would have to give up `nosniff` as well. Two headers with no real downside and one with a genuine trade-off do not belong behind one checkbox.
+**`X-Frame-Options` is deliberately a separate setting** (`frame_options`, default `SAMEORIGIN`), and that split is the point worth teaching. It is the only one of the three that can break a working site: blocking cross-origin framing also blocks *legitimate* embedding — a client intranet, a partner site, a preview tool — and it fails as a silent blank frame, which is a miserable thing to debug. Bundled with the other two, a site that needs to be embeddable would have to give up `nosniff` as well. Two headers with no real downside and one with a genuine trade-off do not belong behind one checkbox.
 
 Note *how* they are applied, too, because this changed in 1.1.1. The original rule was "set only if unset", which sounds polite and is wrong: whatever arrived first won, so a host's permissive `X-Frame-Options` silently beat a deliberately configured `DENY`. The values are compared now, and the configured one replaces what is there only when it is strictly stronger — an unrecognised value, a deprecated `ALLOW-FROM` say, is left alone rather than guessed at. `X-Content-Type-Options` has exactly one effective value, so an existing header saying anything else is not a policy to respect, it is a header doing nothing; it gets corrected in place. And names are matched case-insensitively, because HTTP says header names are and PHP array keys say they are not — that mismatch used to make another plugin's `x-content-type-options` invisible here and add a second, conflicting line. `Referrer-Policy` still defers to whatever is already set: its tokens have no single strictness axis, so there is nothing to compare.
 
@@ -438,7 +438,7 @@ Nothing in the API tells you which kind you are writing. Both are `add_filter()`
 
 You cannot make a number filter additive. What you can do is decline the fights you have no stake in — our defaults *are* WordPress's own 2 and 14, so on a site that has not changed them we would be registering only to assert the answer core already gives. Hence the `if`. And the callback has a name rather than being anonymous, because `$wp_filter` can only report a callback that has one; an anonymous one shows up as `closure` in exactly the diagnostic you would run to work out who won.
 
-Then there is the `50`, which is the half everyone forgets. Declining a fight worth nothing only helps if you win the one worth something, and on a replacing filter the **last** callback to run is the one that counts. Register at the default `10` and you are not being polite, you are queueing up behind every plugin that never thought about priority at all — so a session length somebody set on purpose gets decided by load order. This plugin shipped at `10` for its first four releases and lost to both its siblings on any site running two of them. Fifty is late enough to be the last word and low enough that a site wanting the final say can still take it deliberately.
+Then there is the `50`, which is the half everyone forgets. Declining a fight worth nothing only helps if you win the one worth something, and on a replacing filter the **last** callback to run is the one that counts. Register at the default `10` and you are not being polite, you are queueing up behind every plugin that never thought about priority at all — so a session length somebody set on purpose gets decided by load order. This plugin shipped at `10` in every release before 1.2.2 and lost to both its siblings on any site running two of them. Fifty is late enough to be the last word and low enough that a site wanting the final say can still take it deliberately.
 
 When you write a filter callback, ask: *if a second plugin did exactly this, would both still work?* If the answer is no, you are setting policy, and only one plugin on the site can win — so make sure you have decided both whether to enter and when.
 
@@ -564,7 +564,7 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `xmlrpc_allow_pingbacks` | `no` | `xmlrpc_methods` / headers |
 | `xmlrpc_allow_remote_publishing` | `no` | `xmlrpc_methods` / discovery |
 | `xmlrpc_allow_multicall` | `no` | `wp_xmlrpc_server_class` |
-| `block_xmlrpc_endpoint` | `no` | `template_redirect` |
+| `block_xmlrpc_endpoint` | `no` | `wp_xmlrpc_server_class` |
 | `disable_application_passwords` | `no` | `wp_is_application_passwords_available` |
 | `require_strong_passwords` | `yes` | server-side password validation |
 
@@ -625,7 +625,7 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `DISALLOW_FILE_EDIT` | manual | `wp-config.php` |
 | revisions / autosave constants | manual | `wp-config.php` |
 
-[The visible names on earlier slides are schema keys, not separate WordPress options. All values live in the `wpyeg_better_by_default` array. Remembered sessions are capped at five days by default; regular sessions inherit core because zero means unchanged. The login logo and Heartbeat remain opt-in, and the three configuration constants stay above the plugin layer.]
+[The visible names on earlier slides are schema keys, not separate WordPress options. All values live in the `wpyeg_better_by_default` array. A regular login lasts 2 days and a remembered one 14 - WordPress's own values, prefilled rather than sentinels, with a one-day floor on each and the remembered length clamped so it can never be shorter than the regular one. The login logo and Heartbeat remain opt-in, and the three configuration constants stay above the plugin layer.]
 
 ---
 
