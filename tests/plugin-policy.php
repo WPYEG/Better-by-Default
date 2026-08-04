@@ -2187,6 +2187,50 @@ $GLOBALS['wpyeg_test_option'] = array( 'disable_remember_me' => 'yes' );
 wpyeg_defaults_bootstrap();
 wpyeg_test_assert( 2 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'Disabling Remember Me registers the filter even at the default lengths.' );
 
+/*
+ * A stored pair that never went through sanitize.
+ *
+ * The clamp in wpyeg_defaults_sanitize() is asserted above, and it is real — but
+ * it only runs when the settings form is saved. WP-CLI, a migration, or another
+ * plugin writing the option directly bypasses it entirely, and the docblock on
+ * the callback used to promise, unconditionally, that ticking Remember Me could
+ * never shorten a login. It could: with a remembered length stored below the
+ * regular one, the remembered branch returned the smaller number and a
+ * "remember me" login expired sooner than an ordinary one — the exact thing the
+ * setting exists to prevent.
+ *
+ * So the callback clamps as well, and this is the path that proves it. The
+ * assertions above cannot: they all go through sanitize, which repairs the pair
+ * before the callback ever sees it.
+ */
+$GLOBALS['wpyeg_test_hooks']  = array();
+$GLOBALS['wpyeg_test_option'] = array(
+	'session_regular_days' => 10,
+	'remember_me_days'     => 3,
+);
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert(
+	10 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ),
+	'A remembered login is never shorter than a regular one, even when the stored pair bypassed sanitize.'
+);
+wpyeg_test_assert(
+	10 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( false ),
+	'And a regular login is unaffected by the clamp.'
+);
+
+// The converse, so the clamp cannot pass by flattening every remembered login to
+// the regular length: a coherent pair still gets its longer remembered value.
+$GLOBALS['wpyeg_test_hooks']  = array();
+$GLOBALS['wpyeg_test_option'] = array(
+	'session_regular_days' => 2,
+	'remember_me_days'     => 30,
+);
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert(
+	30 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ),
+	'A coherent pair still gives a remembered login its longer length.'
+);
+
 unset( $GLOBALS['wpyeg_test_option'] );
 $GLOBALS['wpyeg_test_hooks'] = array();
 
