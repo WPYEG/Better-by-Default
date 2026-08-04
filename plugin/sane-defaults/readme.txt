@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -31,7 +31,7 @@ Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 * Send baseline security headers
 * Set X-Frame-Options to SAMEORIGIN
 * Disable AI connectors
-* Disable comments, pingbacks & self-pingbacks
+* Disable comments, pingbacks and self-pingbacks
 * Redirect public author archives and attachment pages
 * Disable the emoji script
 * Right-size login sessions in days: a 2-day regular login, 14 days when remembered
@@ -89,6 +89,13 @@ Yes, and you do not have to justify it. It is the only thing this plugin does th
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.1.2 =
+* Password rules can be scoped by role with the `wpyeg_weak_roles` filter, which defaults to `array( 'subscriber' )`. A 15-character minimum is right for an account that can publish or configure and disproportionate for one that can only read. Exemption requires *every* one of a user's roles to be exempt — a Subscriber who is also an Editor is an Editor — and an unknown or empty role set enforces. Breach screening deliberately runs *before* the role gate, so an exempt account is still screened: a password already in a breach corpus costs its owner nothing to avoid, and low-privilege accounts are the ones most likely to reuse one.
+* All ten public `wpyeg_*` filters are documented in the reference doc, and a test now fails when one is added without an entry.
+* The password field's help text states the rule and points at the readme instead of carrying the k-anonymity protocol inline; that detail lives in the reference doc now.
+* The settings screen reports `DISALLOW_UNFILTERED_HTML`. When that constant is set in `wp-config.php`, WordPress strips unfiltered HTML from every role including administrators, so "Limit unfiltered HTML to administrators" can add nothing on top of it. The control now says so and is disabled, rather than presenting a switch that cannot change anything.
+* Removed ampersands from the settings screen: the group headings and the comments label read "and" instead of "&".
 
 = 1.1.1 =
 * Security headers are compared rather than yielded to. "Set only if unset" sounded polite and was the wrong rule: whatever arrived first won, so a host's permissive `X-Frame-Options` silently beat a deliberately configured `DENY`. The configured value now replaces an existing one only when it is strictly stronger, and an unrecognised value — a deprecated `ALLOW-FROM`, say — is still left alone rather than guessed at.
