@@ -595,8 +595,8 @@ codeSlide(22, "LOGIN & SESSIONS",
 /* =================================================================== */
 /* SECTION 4 — BRANDING + PERFORMANCE (combined divider)               */
 /* =================================================================== */
-divider("4", "SECTION FOUR", "Branding &\nPerformance", "Own the login screen, then shave the last bit of weight off every page.")
-  .addNotes("The last pair brands the login screen. Then we end with two performance levers to shave some weight off every page.");
+divider("4", "SECTION FOUR", "Branding, Performance\n& Email", "Brand the login screen, throttle one polling API, and end on the only default that changes nothing at all.")
+  .addNotes("We brand the login screen, throttle one polling API, and end on the only default in the plugin that changes nothing at all.");
 
 codeSlide(24, "BRANDING",
   "Own the login screen",
@@ -627,6 +627,24 @@ codeSlide(25, "PERFORMANCE · opt-in",
     { t: "wp_enqueue_script( 'front', $src, array(), '1.0',", k: "" },
     { t: "  array( 'strategy' => 'defer' ) );", k: "h" },
   ]).addNotes("The Heartbeat API polls admin-ajax every 15-60s. Throttle it to ease up on weak shared hosting.\n\nThe more interesting half of this slide is the toggle that USED to be here. We shipped a \"defer front-end scripts\" default that hooked script_loader_tag and string-replaced ' src=' with ' defer src=' on every handle. It had to skip jQuery core, and it still broke anything expecting a particular execution order — because a blanket filter cannot know which scripts are safe to defer.\n\nWordPress 6.3 added a per-script loading strategy, so core now answers this precisely, at the point of enqueue, where the person who wrote the script decides. Keeping our version would have meant teaching a workaround for a problem the platform already solved. Deleting a default is a legitimate result.");
+
+codeSlide(26, "EMAIL",
+  "Say so when the site cannot send mail",
+  "WordPress sends from wordpress@yourdomain unless something changes it. On a domain that cannot send, password resets fail silently — wp_mail() returns false and nothing surfaces it. This warns, and that is all it does.",
+  "mail_deliverability_notice", "yes",
+  [
+    { t: "// The From address the site will ACTUALLY use.", k: "c" },
+    { t: "$from = apply_filters( 'wp_mail_from',", k: "" },
+    { t: "          'wordpress@' . $host );", k: "h" },
+    { t: "", k: "" },
+    { t: "// A shape check, not a delivery test.", k: "c" },
+    { t: "$risky = ! is_email( $from )", k: "" },
+    { t: "  || in_array( $domain, $never_resolves )", k: "h" },
+    { t: "  || preg_match( '/\\.(local|test|invalid)$/', $d );", k: "h" },
+    { t: "", k: "" },
+    { t: "// Warn. Never block, never rewrite.", k: "c" },
+    { t: "add_action( 'admin_notices', $render_notice );", k: "" },
+  ], 11).addNotes("WordPress sends mail from wordpress@yourdomain unless something changes it. On a domain that cannot actually send \u2014 a staging host, a .local address, a domain with no mail records \u2014 password resets and order receipts FAIL SILENTLY. wp_mail() returns false and nothing surfaces it. Nobody finds out until a customer says they never got the email.\n\nSo this default warns, and that is all it does. Be precise about how little it claims: it is a SHAPE CHECK, NOT A DELIVERY TEST. Proving mail works needs SPF and DMARC lookups and a real send \u2014 far more than a settings screen should do on page load. These are the cases knowable for free: not a valid address, example.com, localhost, or a reserved TLD that never resolves publicly (.local, .test, .invalid, .example \u2014 RFC 2606 and RFC 6762).\n\nTwo details make it honest. It reads the EFFECTIVE From address through wp_mail_from, so whatever your SMTP plugin actually sets is what gets judged, not the theoretical default it replaced. And it stays quiet when wp_get_environment_type() says local, because a local site is MEANT to have an undeliverable address \u2014 warning there is exactly how a notice trains people to dismiss notices. Staging is not local, and staging does warn, which is usually where this catches something real.\n\nThe lesson is the one thing here that is not about email. Every other default in this plugin changes what WordPress does. THIS ONE CHANGES NOTHING. It has no effect on a single request; it only tells an administrator something true that WordPress had been keeping to itself. Deciding not to intervene is a design decision as real as any filter, and often the better one \u2014 a plugin that silently rewrote your From address to something deliverable would be a considerably worse plugin. When you find a silent failure, the first question is not how do I fix this for them, but who needs to know, and would they rather I told them or guessed on their behalf?");
 
 /* =================================================================== */
 /* 23. wp-config things                                                */
