@@ -724,11 +724,39 @@ function wpyeg_test_find_hook( $hook ) {
 }
 
 /*
- * Accuracy guard for the repository's teaching copy. WordPress 4.4 made the
- * old "thousands of guesses per multicall" description obsolete; keep the
- * correction synchronized across every workshop representation.
+ * Accuracy guard for the repository's teaching copy.
+ *
+ * Everything else in this suite compares structure — keys, counts, one artifact
+ * against another. None of it can tell that a paragraph describes a rule the
+ * code no longer follows, and that has now happened twice: the "thousands of
+ * guesses per multicall" claim survived until WordPress 4.4 made it false, and
+ * the "set only if unset" header rule survived the release that replaced it,
+ * so the talk contradicted the plugin through several merges.
+ *
+ * This is the answer, and it is a narrow one. It catches only drift someone
+ * thought to name. That is worth having anyway, because the moment you change
+ * behaviour is the moment you know which sentence just became false — and
+ * writing it down here costs one line.
+ *
+ * WHEN YOU RETIRE A BEHAVIOUR, ADD THE SENTENCE THAT DESCRIBED IT.
+ *
+ * One trap, learned the hard way. Forbid only phrasings that assert the old
+ * rule as current. Corrected copy often *quotes* the old rule to explain what
+ * changed — the headers slide now says the original rule was "set only if
+ * unset", which is exactly right and must keep passing. Pick the phrase that
+ * cannot survive an honest rewrite.
  */
+$retired_claims = array(
+	'amplifier that batches thousands of login guesses'        => 'the obsolete multicall claim',
+	'Gate the whole endpoint off'                              => 'the xmlrpc_enabled misdescription',
+	'stopped testing credentials after the first failed login' => 'the pre-correction multicall wording',
+	'only fill in what nothing else set'                       => 'the replaced "set only if unset" header rule',
+	'Note the isset() guards'                                  => 'the replaced isset()-guard header note',
+	'we should not fight that layer'                           => 'deference to an upstream header that is now compared against',
+);
+
 $accuracy_files = array(
+	dirname( __DIR__ ) . '/README.md',
 	dirname( __DIR__ ) . '/docs/wordpress-default-settings.md',
 	dirname( __DIR__ ) . '/plugin/sane-defaults/README.md',
 	dirname( __DIR__ ) . '/plugin/sane-defaults/readme.txt',
@@ -741,8 +769,13 @@ $accuracy_files = array(
 foreach ( $accuracy_files as $accuracy_file ) {
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
 	$accuracy_copy = file_get_contents( $accuracy_file );
-	wpyeg_test_assert( false === strpos( $accuracy_copy, 'amplifier that batches thousands of login guesses' ), basename( $accuracy_file ) . ' does not repeat the obsolete multicall claim.' );
-	wpyeg_test_assert( false === strpos( $accuracy_copy, 'Gate the whole endpoint off' ), basename( $accuracy_file ) . ' does not misdescribe xmlrpc_enabled.' );
+
+	foreach ( $retired_claims as $retired_claim => $claim_description ) {
+		wpyeg_test_assert(
+			false === strpos( $accuracy_copy, $retired_claim ),
+			basename( $accuracy_file ) . ' does not repeat ' . $claim_description . '.'
+		);
+	}
 }
 
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
@@ -1104,9 +1137,16 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 	}
 
 	wpyeg_test_assert( false !== strpos( $deck_text, "We have {$setting_count} settings" ), 'The rendered deck states the current setting count.' );
-	wpyeg_test_assert( false === strpos( $deck_text, 'amplifier that batches thousands of login guesses' ), 'The rendered deck does not repeat the obsolete multicall claim.' );
-	wpyeg_test_assert( false === strpos( $deck_text, 'stopped testing credentials after the first failed login' ), 'The rendered deck carries the corrected multicall wording.' );
-	wpyeg_test_assert( false === strpos( $deck_text, 'Gate the whole endpoint off' ), 'The rendered deck does not misdescribe xmlrpc_enabled.' );
+
+	// Same list as the sources, not a copy of it. A retired claim corrected in
+	// build_deck.js but never rebuilt into the deck is precisely the drift that
+	// shipped last time.
+	foreach ( $retired_claims as $retired_claim => $claim_description ) {
+		wpyeg_test_assert(
+			false === strpos( $deck_text, $retired_claim ),
+			'The rendered deck does not repeat ' . $claim_description . '.'
+		);
+	}
 
 	/*
 	 * The PDF handout, as far as it can honestly be checked. Its text lives in

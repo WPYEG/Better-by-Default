@@ -210,16 +210,15 @@ BBD also sends `Add-Padding: true`, so response size does not disclose how many 
 remove_action( 'wp_head', 'wp_generator' );
 
 add_filter( 'wp_headers', function ( $h ) {
-  // only fill in what nothing else set
-  if ( ! isset( $h['X-Content-Type-Options'] ) )
-    $h['X-Content-Type-Options'] = 'nosniff';
-  if ( ! isset( $h['Referrer-Policy'] ) )
-    $h['Referrer-Policy'] =
-      'strict-origin-when-cross-origin';
+  // compare, do not yield — see the notes
+  $key = find_key( $h, 'X-Frame-Options' );
+  if ( stronger( $want, $h[ $key ] ) )
+    $h[ $key ] = $want;
+
+  // one effective value, so correct it
+  $h[ ctk( $h ) ] = 'nosniff';
   return $h;
 } );
-
-// framing is its own setting — see the notes
 ```
 
 One default and one deliberate non-default — and the difference is the lesson. Hiding the version is **obscurity, not hardening**: it does not make an out-of-date site any safer, and it does not even hide much, since the version still leaks from asset query strings and feeds. What it genuinely buys is quieter logs. That is worth opting into, not worth shipping on and calling security — so it defaults to off. The headers are the opposite: real, low-risk defaults most sites can adopt without breaking anything:
