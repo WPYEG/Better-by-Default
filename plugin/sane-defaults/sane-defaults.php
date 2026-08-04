@@ -758,6 +758,10 @@ function wpyeg_defaults_bootstrap() {
 				}
 			}
 		);
+		// Redirecting /author/ pages does not stop feeds naming the author in
+		// every <dc:creator> element, so the login names this default exists to
+		// hide were still published — just one URL over.
+		add_filter( 'the_author', 'wpyeg_defaults_mask_feed_author' );
 	}
 
 	if ( wpyeg_defaults_enabled( 'redirect_attachment_pages' ) ) {
@@ -806,6 +810,11 @@ function wpyeg_defaults_bootstrap() {
 				remove_filter( 'comment_text_rss', 'wp_staticize_emoji' );
 				remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
 				add_filter( 'emoji_svg_url', '__return_false' );
+				// The classic editor loads emoji support as a TinyMCE plugin, which
+				// none of the removals above reach — they cover the front end, the
+				// admin head, feeds and mail. Without this, the editor still loads
+				// wp-emoji-release.min.js on a site that asked for no emojis.
+				add_filter( 'tiny_mce_plugins', 'wpyeg_defaults_remove_emoji_tinymce_plugin' );
 			}
 		);
 	}
@@ -870,10 +879,15 @@ function wpyeg_defaults_bootstrap() {
 				unset( $_POST['rememberme'], $_REQUEST['rememberme'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.NonceVerification.Recommended
 			}
 		);
+		// CSS at login_head, not a script at login_footer. The script approach
+		// leaves the checkbox visible and tickable with JavaScript off, and under
+		// a strict script-src CSP that blocks inline scripts. The $_POST strip
+		// above is what actually enforces the policy either way; this is the part
+		// that has to survive a browser that will not run our JavaScript.
 		add_action(
-			'login_footer',
+			'login_head',
 			function () {
-				echo "<script>(function(){var c=document.getElementById('rememberme');if(c&&c.closest('p')){c.closest('p').style.display='none';}})();</script>";
+				echo '<style id="wpyeg-hide-remember-me">.login form .forgetmenot { display: none; }</style>';
 			}
 		);
 	}
@@ -2183,3 +2197,35 @@ register_activation_hook(
 		}
 	}
 );
+
+/**
+ * Replace the author name in feeds.
+ *
+ * `the_author` also runs on the front end, so the feed check is what keeps this
+ * from renaming bylines on the site itself — the default hides login names from
+ * automated harvesting, not from readers.
+ *
+ * @param string $author Author display name.
+ * @return string
+ */
+function wpyeg_defaults_mask_feed_author( $author ) {
+	if ( ! is_feed() ) {
+		return $author;
+	}
+
+	return (string) apply_filters( 'wpyeg_feed_author_name', 'Site Contributor' );
+}
+
+/**
+ * Drop the emoji plugin from the TinyMCE plugin list.
+ *
+ * Core registers `wpemoji` for the classic editor separately from the front-end
+ * and admin-head emoji output, so removing those actions leaves this one
+ * loading.
+ *
+ * @param mixed $plugins TinyMCE plugin list.
+ * @return array
+ */
+function wpyeg_defaults_remove_emoji_tinymce_plugin( $plugins ) {
+	return is_array( $plugins ) ? array_values( array_diff( $plugins, array( 'wpemoji' ) ) ) : array();
+}
