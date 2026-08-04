@@ -1539,6 +1539,175 @@ wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_s
 wpyeg_test_assert( false === strpos( $deck_source, 'OPTION   ' ), 'Workshop chips identify schema keys rather than separate options.' );
 
 /*
+ * Every PHP sample on a slide has to be PHP that parses.
+ *
+ * This is a teaching deck: a sample on screen is something an attendee copies
+ * into a real site. Two shipped slides carried code that does not compile —
+ * `add_filter( 'heartbeat_settings', fn( $s ) => { ... } )`, an arrow function
+ * given a block body, and `add_action( 'init', fn )`, where `fn` was meant as a
+ * placeholder but has been a reserved word since PHP 7.4. Both were on built
+ * slides, and every check in this file passed the whole time, because nothing
+ * had ever asked whether the code on a slide was code.
+ *
+ * Samples appear in build_deck.js in two shapes: arrays of
+ * { t: "<line>", k: "<kind>" } for the code panels, and a bare ex: "<line>" for
+ * the actions/filters glossary. Both are checked.
+ *
+ * A slide passes if the WHOLE slide parses, or FAILING THAT if every
+ * blank-line-separated block within it parses on its own. Both readings are
+ * needed and neither is sufficient: some slides split one listing across a
+ * blank line for spacing, so only the whole slide parses; the "add your own
+ * setting" slide deliberately shows an array entry and a statement block side
+ * by side, so only the individual blocks do.
+ *
+ * "Parses" means in any reasonable context — as statements, or as an excerpt
+ * from an array literal, which is how the schema slides show a single entry.
+ * The aim is not to reject fragments, it is that no sample gets to be
+ * unparseable under every reading.
+ */
+
+/**
+ * Whether a slide sample parses as PHP in any reasonable reading.
+ *
+ * @param string $sample Sample source, comments stripped.
+ * @return string Empty when it parses, otherwise the parser's complaint.
+ */
+function wpyeg_deck_sample_error( $sample ) {
+	if ( '' === trim( $sample ) ) {
+		return '';
+	}
+
+	$contexts    = array( '%s', '$sample = array(' . "\n" . '%s' . "\n" . ');' );
+	$first_error = '';
+
+	foreach ( $contexts as $context ) {
+		$tmp = tempnam( sys_get_temp_dir(), 'bbd-deck' ) . '.php';
+		file_put_contents( $tmp, "<?php\n" . sprintf( $context, $sample ) . "\n" ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+
+		$output = array();
+		$status = 0;
+		exec( escapeshellarg( PHP_BINARY ) . ' -l ' . escapeshellarg( $tmp ) . ' 2>&1', $output, $status ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
+		unlink( $tmp ); // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- a temp file in a CLI test; wp_delete_file() is not loaded here.
+
+		if ( 0 === $status ) {
+			return '';
+		}
+
+		if ( '' === $first_error ) {
+			$first_error = trim( (string) reset( $output ) );
+		}
+	}
+
+	return '' !== $first_error ? $first_error : 'did not parse';
+}
+
+/**
+ * Strip full-line comments so a sample is judged on its code.
+ *
+ * @param string $sample Sample source.
+ * @return string
+ */
+function wpyeg_deck_sample_code( $sample ) {
+	return trim( preg_replace( '/^\s*\/\/.*$/m', '', $sample ) );
+}
+
+// --- gather the code panels, one group per slide ---
+$deck_slide_samples = array();
+$deck_slide_lines   = array();
+$deck_slide_cursor  = null;
+
+if ( preg_match_all( '/\{\s*t:\s*"((?:[^"\\\\]|\\\\.)*)"\s*,\s*k:\s*"[a-z]*"\s*\}/', $deck_source, $deck_slide_matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE ) ) {
+	foreach ( $deck_slide_matches as $deck_slide_match ) {
+		$deck_slide_start = (int) $deck_slide_match[0][1];
+
+		// A closing bracket between two samples means a new slide started.
+		if ( null !== $deck_slide_cursor
+			&& false !== strpos( substr( $deck_source, $deck_slide_cursor, $deck_slide_start - $deck_slide_cursor ), ']' ) ) {
+			$deck_slide_samples[] = $deck_slide_lines;
+			$deck_slide_lines     = array();
+		}
+
+		$deck_slide_lines[] = stripcslashes( $deck_slide_match[1][0] );
+		$deck_slide_cursor  = $deck_slide_start + strlen( $deck_slide_match[0][0] );
+	}
+}
+if ( $deck_slide_lines ) {
+	$deck_slide_samples[] = $deck_slide_lines;
+}
+
+wpyeg_test_assert( count( $deck_slide_samples ) > 10, 'The deck scan found the slide code panels (' . count( $deck_slide_samples ) . ' slides).' );
+
+// The glossary rows carry a single line each, checked the same way.
+if ( preg_match_all( '/ex:\s*"((?:[^"\\\\]|\\\\.)*)"/', $deck_source, $deck_glossary_matches ) ) {
+	foreach ( $deck_glossary_matches[1] as $deck_glossary_sample ) {
+		$deck_slide_samples[] = array( stripcslashes( $deck_glossary_sample ) );
+	}
+	wpyeg_test_assert( count( $deck_glossary_matches[1] ) > 1, 'The deck scan found the glossary samples.' );
+}
+
+$deck_samples_checked = 0;
+
+foreach ( $deck_slide_samples as $deck_slide ) {
+	$deck_whole = wpyeg_deck_sample_code( implode( "\n", $deck_slide ) );
+
+	// Nothing that calls or declares anything is not code worth linting.
+	if ( ! preg_match( '/\w\s*\(/', $deck_whole ) ) {
+		continue;
+	}
+
+	++$deck_samples_checked;
+
+	$deck_whole_error = wpyeg_deck_sample_error( $deck_whole );
+
+	if ( '' === $deck_whole_error ) {
+		continue;
+	}
+
+	// Fall back to judging each block on its own, for the slides that
+	// deliberately place two contexts side by side.
+	$deck_blocks  = array();
+	$deck_current = array();
+
+	foreach ( $deck_slide as $deck_line ) {
+		if ( '' === trim( $deck_line ) ) {
+			if ( $deck_current ) {
+				$deck_blocks[] = implode( "\n", $deck_current );
+				$deck_current  = array();
+			}
+			continue;
+		}
+		$deck_current[] = $deck_line;
+	}
+	if ( $deck_current ) {
+		$deck_blocks[] = implode( "\n", $deck_current );
+	}
+
+	$deck_block_error = '';
+
+	foreach ( $deck_blocks as $deck_block ) {
+		$deck_block_code = wpyeg_deck_sample_code( $deck_block );
+
+		if ( '' === $deck_block_code ) {
+			continue;
+		}
+
+		$deck_block_error = wpyeg_deck_sample_error( $deck_block_code );
+
+		if ( '' !== $deck_block_error ) {
+			break;
+		}
+	}
+
+	wpyeg_test_assert(
+		'' === $deck_block_error,
+		'A PHP sample on a slide does not parse (' . $deck_block_error . '); sample begins: '
+			. trim( strtok( $deck_whole, "\n" ) )
+	);
+}
+
+wpyeg_test_assert( $deck_samples_checked > 15, "The lint pass reached the slide samples ({$deck_samples_checked} checked)." );
+
+/*
  * The setting count is prose, so the per-key row checks above never saw it. It
  * sat at 27 through two commits that took the schema to 31.
  */

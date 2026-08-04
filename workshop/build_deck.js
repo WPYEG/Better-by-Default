@@ -185,7 +185,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   });
 
   const rows = [
-    { g: "A", t: "Actions", d: "“When you reach this moment, also DO this.”", ex: "add_action( 'init', fn );" },
+    { g: "A", t: "Actions", d: "“When you reach this moment, also DO this.”", ex: "add_action( 'init', 'my_callback' );" },
     { g: "F", t: "Filters", d: "“Before you use this value, let me CHANGE it first.”", ex: "add_filter( 'xmlrpc_enabled', '__return_false' );" },
   ];
   rows.forEach((r, i) => {
@@ -612,8 +612,9 @@ codeSlide(25, "PERFORMANCE · opt-in",
   "Throttle Heartbeat to ease up on weak shared hosting. The more interesting half is the toggle that used to be here: WordPress 6.3 gave scripts a per-script loading strategy, so our blanket defer filter had to go.",
   "throttle_heartbeat", "no (opt-in)",
   [
-    { t: "add_filter( 'heartbeat_settings', fn( $s ) => {", k: "" },
-    { t: "  $s['interval'] = 60; return $s;", k: "h" },
+    { t: "add_filter( 'heartbeat_settings', function ( $s ) {", k: "" },
+    { t: "  $s['interval'] = 60;", k: "h" },
+    { t: "  return $s;", k: "" },
     { t: "} );", k: "" },
     { t: "", k: "" },
     { t: "// Deferring is NOT a setting here. Since WP 6.3:", k: "c" },
