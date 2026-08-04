@@ -296,6 +296,21 @@ function is_multisite() {
 }
 
 /**
+ * Super Admin test double.
+ *
+ * Only consulted on multisite by the code under test: on single site
+ * is_super_admin() calls has_cap(), which would re-enter the user_has_cap filter
+ * this runs inside and recurse until the stack blows.
+ *
+ * @param int $user_id User ID.
+ * @return bool
+ */
+function is_super_admin( $user_id = 0 ) {
+	$super = isset( $GLOBALS['wpyeg_test_super_admins'] ) ? (array) $GLOBALS['wpyeg_test_super_admins'] : array();
+	return in_array( (int) $user_id, array_map( 'intval', $super ), true );
+}
+
+/**
  * Capability test double.
  *
  * @param string $capability Capability being checked.
@@ -704,10 +719,28 @@ foreach ( $settings_rows[1] as $settings_row ) {
  * sibling plugins' screens are too. Sentence case in the left column under a
  * Title Case heading is the sort of mixed convention nobody decides on — it
  * accumulates one setting at a time, which is why it is worth a guard rather
- * than a note. Short conjunctions, articles and prepositions stay lowercase
- * unless they lead; acronyms and hyphenated compounds are left alone.
+ * than a note.
+ *
+ * Articles and coordinating conjunctions stay lowercase inside a title.
+ * Prepositions capitalise — "Accounts Per Step", not "Accounts per Step".
+ *
+ * That second rule is not the usual one, so here is the reasoning rather than a
+ * pointer to whoever else does it. This list began as an ad-hoc set of "short
+ * words" and was arbitrary: it held `via` but not `per`, `with`, `from` or
+ * `into`, so it lowercased some prepositions and capitalised others with no
+ * principle deciding which. A half-list is worse than either whole rule,
+ * because nothing tells you which half a new word belongs to.
+ *
+ * Lowercasing every preposition and capitalising every preposition are both
+ * defensible. Capitalising is what the shipped copy across these plugins
+ * already does — "Accounts Per Step" was written that way by hand, before any
+ * guard existed — so it is the rule derived from practice rather than imposed
+ * on it, and adopting it changed no heading here. Whichever is chosen, the
+ * rules must agree across the three plugins: they were mutually exclusive
+ * before this, so a heading containing a preposition could not satisfy both
+ * and no string could be copied between the repos.
  */
-$title_case_small_words = array( 'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'the', 'to', 'up', 'via' );
+$title_case_small_words = array( 'a', 'an', 'the', 'and', 'or', 'nor', 'but' );
 
 /**
  * Assert one heading is Title Case.
@@ -725,8 +758,8 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
 		/*
 		 * A small word inside a title stays lowercase; a leading one still
 		 * capitalises. Checking only that big words are capitalised lets
-		 * "Pingbacks On New Posts" through, which is Title Case done wrong
-		 * rather than not done — Keel's guard caught that and this one did not.
+		 * "Comments And Pings" through, which is Title Case done wrong rather
+		 * than not done — Keel's guard caught that and this one did not.
 		 */
 		if ( $position > 0 && in_array( strtolower( $heading_word ), $title_case_small_words, true ) ) {
 			wpyeg_test_assert(
@@ -1338,6 +1371,138 @@ wpyeg_test_assert( 'ALLOW-FROM https://example.com' === $unknown['X-Frame-Option
 $referrer = wpyeg_test_send_headers( array( 'referrer-policy' => 'same-origin' ) );
 wpyeg_test_assert( 'same-origin' === $referrer['referrer-policy'], 'An existing Referrer-Policy is respected whatever its casing.' );
 wpyeg_test_assert( ! isset( $referrer['Referrer-Policy'] ), 'And is not duplicated.' );
+
+/*
+ * Strictness ordering, which the assertions above do not reach.
+ *
+ * They check that a header is not duplicated and that an unrecognised value is
+ * left alone. Neither notices whether DENY and SAMEORIGIN are ranked correctly
+ * against each other — ranking DENY equal to SAMEORIGIN kept every one of them
+ * passing, because "do not downgrade" and "do not touch" look the same when the
+ * two values compare equal.
+ *
+ * The ordering is the whole point of the header logic: a host or CDN that
+ * already sends DENY must never be relaxed to this site's SAMEORIGIN, and a
+ * site that deliberately configures DENY must still tighten a weaker value it
+ * finds in place.
+ */
+wpyeg_test_assert( 2 === wpyeg_defaults_frame_option_strength( 'DENY' ), 'DENY is the strictest ranked value.' );
+wpyeg_test_assert( 1 === wpyeg_defaults_frame_option_strength( 'SAMEORIGIN' ), 'SAMEORIGIN ranks below DENY.' );
+wpyeg_test_assert(
+	wpyeg_defaults_frame_option_strength( 'DENY' ) > wpyeg_defaults_frame_option_strength( 'SAMEORIGIN' ),
+	'DENY outranks SAMEORIGIN, so a stricter existing header is never downgraded.'
+);
+wpyeg_test_assert( null === wpyeg_defaults_frame_option_strength( 'ALLOW-FROM https://example.com' ), 'An unranked value has no strength.' );
+wpyeg_test_assert( 2 === wpyeg_defaults_frame_option_strength( '  deny  ' ), 'Ranking ignores case and surrounding space.' );
+
+// End to end: the default is SAMEORIGIN, so an existing DENY survives it.
+$wpyeg_saved_option = isset( $GLOBALS['wpyeg_test_option'] ) ? $GLOBALS['wpyeg_test_option'] : null;
+$kept_deny          = wpyeg_test_send_headers( array( 'X-Frame-Options' => 'DENY' ) );
+wpyeg_test_assert( 'DENY' === $kept_deny['X-Frame-Options'], 'A stricter existing X-Frame-Options is kept, not downgraded to the configured value.' );
+
+// And the converse, so the assertion above cannot pass by never writing at all:
+// configured DENY tightens a weaker existing SAMEORIGIN.
+$GLOBALS['wpyeg_test_option'] = array( 'frame_options' => 'DENY' );
+$GLOBALS['wpyeg_test_hooks']  = array();
+wpyeg_defaults_bootstrap();
+$tightened = wpyeg_test_send_headers( array( 'X-Frame-Options' => 'SAMEORIGIN' ) );
+wpyeg_test_assert( 'DENY' === $tightened['X-Frame-Options'], 'A configured DENY tightens a weaker existing value.' );
+
+if ( null === $wpyeg_saved_option ) {
+	unset( $GLOBALS['wpyeg_test_option'] );
+} else {
+	$GLOBALS['wpyeg_test_option'] = $wpyeg_saved_option;
+}
+$GLOBALS['wpyeg_test_hooks'] = array();
+wpyeg_defaults_bootstrap();
+
+/*
+ * The unfiltered_html clamp had no test at all.
+ *
+ * It is the one default here that removes a capability rather than adding
+ * behaviour, so every exemption in it is load-bearing: drop the Super Admin
+ * branch and a network's owner silently loses the ability to save a script tag,
+ * with nothing to say why.
+ *
+ * The recursion note in its docblock is the reason it reads $user->roles and the
+ * already-resolved $allcaps instead of calling current_user_can() — these
+ * assertions pin the decisions, not the mechanism.
+ */
+$wpyeg_editor        = new stdClass();
+$wpyeg_editor->ID    = 7;
+$wpyeg_editor->roles = array( 'editor' );
+
+$wpyeg_admin        = new stdClass();
+$wpyeg_admin->ID    = 1;
+$wpyeg_admin->roles = array( 'administrator' );
+
+$wpyeg_caps = array(
+	'unfiltered_html' => true,
+	'edit_posts'      => true,
+);
+
+$GLOBALS['wpyeg_test_multisite']    = false;
+$GLOBALS['wpyeg_test_super_admins'] = array();
+
+$clamped = wpyeg_defaults_limit_unfiltered_html( $wpyeg_caps, array(), array(), $wpyeg_editor );
+wpyeg_test_assert( empty( $clamped['unfiltered_html'] ), 'An Editor loses unfiltered_html.' );
+
+$kept = wpyeg_defaults_limit_unfiltered_html( $wpyeg_caps, array(), array(), $wpyeg_admin );
+wpyeg_test_assert( ! empty( $kept['unfiltered_html'] ), 'An Administrator keeps unfiltered_html.' );
+
+// manage_options is the resolved-cap proxy for "is an admin", for a user whose
+// role slug is not literally 'administrator'.
+$wpyeg_manager        = new stdClass();
+$wpyeg_manager->ID    = 8;
+$wpyeg_manager->roles = array( 'site_manager' );
+$manager_caps         = array(
+	'unfiltered_html' => true,
+	'manage_options'  => true,
+);
+$manager_result       = wpyeg_defaults_limit_unfiltered_html( $manager_caps, array(), array(), $wpyeg_manager );
+wpyeg_test_assert( ! empty( $manager_result['unfiltered_html'] ), 'A non-administrator role holding manage_options keeps unfiltered_html.' );
+
+// Super Admins keep it on multisite — and the guard is multisite-only, because
+// is_super_admin() calls has_cap() on single site and would recurse.
+$GLOBALS['wpyeg_test_multisite']    = true;
+$GLOBALS['wpyeg_test_super_admins'] = array( 7 );
+$super                              = wpyeg_defaults_limit_unfiltered_html( $wpyeg_caps, array(), array(), $wpyeg_editor );
+wpyeg_test_assert( ! empty( $super['unfiltered_html'] ), 'A Super Admin keeps unfiltered_html on multisite.' );
+
+$GLOBALS['wpyeg_test_super_admins'] = array();
+$not_super                          = wpyeg_defaults_limit_unfiltered_html( $wpyeg_caps, array(), array(), $wpyeg_editor );
+wpyeg_test_assert( empty( $not_super['unfiltered_html'] ), 'A non-Super-Admin on multisite still loses it.' );
+$GLOBALS['wpyeg_test_multisite'] = false;
+
+// A user who never had the capability is returned untouched rather than having
+// the key invented as false.
+$without = wpyeg_defaults_limit_unfiltered_html( array( 'edit_posts' => true ), array(), array(), $wpyeg_editor );
+wpyeg_test_assert( ! array_key_exists( 'unfiltered_html', $without ), 'A user without the capability is left exactly as found.' );
+
+/*
+ * oEmbed author identity.
+ *
+ * Redirecting author archives does nothing about /wp-json/oembed/1.0/embed,
+ * which returns author_name and an author_url carrying the account nicename —
+ * so a site that had hidden its authors was still handing out login names
+ * through a route nobody thinks of as a user endpoint. Both fields go, and
+ * nothing else does, or embeds on other sites break.
+ */
+$oembed = wpyeg_defaults_strip_oembed_author(
+	array(
+		'author_name'   => 'admin',
+		'author_url'    => 'https://example.test/author/admin/',
+		'title'         => 'A post',
+		'provider_name' => 'Example',
+		'html'          => '<blockquote>…</blockquote>',
+	)
+);
+wpyeg_test_assert( ! array_key_exists( 'author_name', $oembed ), 'oEmbed no longer returns author_name.' );
+wpyeg_test_assert( ! array_key_exists( 'author_url', $oembed ), 'oEmbed no longer returns author_url, which carried the nicename.' );
+wpyeg_test_assert( 'A post' === $oembed['title'], 'The title survives, so embeds elsewhere keep working.' );
+wpyeg_test_assert( 'Example' === $oembed['provider_name'], 'The provider survives.' );
+wpyeg_test_assert( false !== strpos( $oembed['html'], 'blockquote' ), 'The embed markup survives.' );
+wpyeg_test_assert( 'nope' === wpyeg_defaults_strip_oembed_author( 'nope' ), 'A non-array response is returned untouched.' );
 
 // The point of splitting them: framing can be handed back to the host without
 // also giving up nosniff, which the old single toggle made impossible.
