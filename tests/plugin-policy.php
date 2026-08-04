@@ -349,6 +349,7 @@ wpyeg_test_assert(
 	'Help text permits only attribute-free code markup and href-only reference links.'
 );
 wpyeg_test_assert( false !== strpos( $schema['xmlrpc_allow_pingbacks']['help'], '<code>pingback.ping</code>' ), 'Machine-facing XML-RPC identifiers use code markup.' );
+
 /*
  * The protocol detail moved out of the field help and into the reference doc
  * and readme.txt — see "Where password copy goes" in the feature matrix. The
