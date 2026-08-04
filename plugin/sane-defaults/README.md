@@ -53,8 +53,14 @@ checked against `wpyeg_defaults_schema()` by `composer test`, which is why this 
 restate them: an unchecked fourth copy is just somewhere else for the truth to go stale.
 
 Sessions are in days — a 2-day regular login, 14 days when remembered, floored so ticking
-"Remember Me" can never shorten a session. Translation files retain WordPress's existing
-automatic-update behaviour.
+"Remember Me" can never shorten a session. Both are WordPress's own values, and the filter is
+registered **only when the settings say something WordPress does not already do**.
+`auth_cookie_expiration` is a replacing filter — the callback returns its own number and
+discards the one it was handed — so two plugins registering one cannot both win, and the loser
+goes on displaying a value the site does not use. Staying off the hook when there is nothing to
+assert is the only way to lose that fight gracefully. See
+[when-two-plugins-set-the-same-default.md](../../docs/when-two-plugins-set-the-same-default.md).
+Translation files retain WordPress's existing automatic-update behaviour.
 
 Plugin and theme code updates keep using WordPress's per-item auto-update choices. The plugin
 does not infer safety from version numbers. An explicit `WP_AUTO_UPDATE_CORE`,
@@ -67,6 +73,27 @@ control — WordPress 4.4 prevented it from being used as a password-guessing mu
 Remote Publishing available when Jetpack needs them, and test connected features after changing
 method controls. Application Passwords inherit the owning user's capabilities, so integrations
 should use a least-privileged account.
+
+## Who the password rules apply to
+
+Subscriber-only accounts skip the length, blocklist, and personal-context rules by default. A
+15-character minimum is right for an account that can publish or configure and disproportionate
+for one that can only read, where it is signup friction protecting nothing.
+
+Two things keep that from being a hole. **Breach screening is never waived** — it runs before
+the role check, for every account, because a password already published in a breach costs its
+owner nothing to avoid and the accounts most likely to reuse one are exactly the low-privilege
+ones. And **a user is exempt only if every role they hold is exempt**: someone who is both a
+Subscriber and an Editor is an Editor here. An unknown or empty role set enforces.
+
+```php
+add_filter( 'wpyeg_weak_roles', function ( $roles ) {
+    $roles[] = 'author';                     // exempt authors too
+    return $roles;
+} );
+
+add_filter( 'wpyeg_weak_roles', '__return_empty_array' );  // or enforce on everyone
+```
 
 ## Switching the breach lookup off
 
