@@ -604,38 +604,14 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'security_headers' ) ) {
-		add_filter(
-			'wp_headers',
-			function ( $headers ) {
-				// Only fill in what nothing else has set. A managed host or CDN often
-				// owns these, and two sources setting the same header is at best
-				// redundant. Caveat worth knowing: PHP can only see headers set in
-				// PHP — one added by nginx or a CDN is invisible here, so this
-				// cannot catch every duplicate. Check the response, not just this.
-				if ( ! isset( $headers['X-Content-Type-Options'] ) ) {
-					$headers['X-Content-Type-Options'] = 'nosniff';
-				}
-				if ( ! isset( $headers['Referrer-Policy'] ) ) {
-					$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
-				}
-				return $headers;
-			}
-		);
+		add_filter( 'wp_headers', 'wpyeg_defaults_set_content_type_header' );
+		add_filter( 'wp_headers', 'wpyeg_defaults_set_referrer_policy_header' );
 	}
 
 	// Framing is its own setting: it is the only one of the three that can break
 	// a working site, so it must be switchable without also giving up nosniff.
-	$wpyeg_frame_options = wpyeg_defaults_get( 'frame_options' );
-	if ( '' !== $wpyeg_frame_options ) {
-		add_filter(
-			'wp_headers',
-			function ( $headers ) use ( $wpyeg_frame_options ) {
-				if ( ! isset( $headers['X-Frame-Options'] ) ) {
-					$headers['X-Frame-Options'] = $wpyeg_frame_options;
-				}
-				return $headers;
-			}
-		);
+	if ( '' !== wpyeg_defaults_get( 'frame_options' ) ) {
+		add_filter( 'wp_headers', 'wpyeg_defaults_set_frame_option_header' );
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_ai_connectors' ) ) {
@@ -1414,6 +1390,138 @@ function wpyeg_defaults_attachment_redirect_target( $attachment_id ) {
 }
 
 /**
+ * Find a header by name regardless of how it was capitalised.
+ *
+ * HTTP header names are case-insensitive, and PHP arrays are not. Another plugin
+ * setting `x-frame-options` is the same header as `X-Frame-Options` to every
+ * browser, but `isset()` misses it — so a "only set what is not already set"
+ * check adds a second, conflicting header line instead of deferring.
+ *
+ * @param array  $headers Headers, keyed by name.
+ * @param string $name    Header name to find.
+ * @return string|null The existing key as written, or null when absent.
+ */
+function wpyeg_defaults_find_header_key( $headers, $name ) {
+	if ( ! is_array( $headers ) ) {
+		return null;
+	}
+	foreach ( array_keys( $headers ) as $key ) {
+		if ( 0 === strcasecmp( (string) $key, $name ) ) {
+			return (string) $key;
+		}
+	}
+	return null;
+}
+
+/**
+ * Relative strength of an X-Frame-Options value.
+ *
+ * Only the two values browsers actually honour are ranked. Anything else returns
+ * null so the caller leaves the response alone — which keeps a deprecated
+ * `ALLOW-FROM`'s permissive intent intact rather than silently tightening it.
+ *
+ * @param mixed $value Header value.
+ * @return int|null 2 = DENY, 1 = SAMEORIGIN, null = unrecognised.
+ */
+function wpyeg_defaults_frame_option_strength( $value ) {
+	switch ( strtoupper( trim( (string) $value ) ) ) {
+		case 'DENY':
+			return 2;
+		case 'SAMEORIGIN':
+			return 1;
+		default:
+			return null;
+	}
+}
+
+/**
+ * Set X-Frame-Options without ever downgrading a stronger existing value.
+ *
+ * "Set only if unset" sounds polite and is the wrong rule here: if something
+ * upstream already sent a *weaker* value, deferring to it means the weaker
+ * header wins purely because it arrived first. Compare instead — a host's DENY
+ * is never reduced to SAMEORIGIN, and a deliberately configured DENY still
+ * tightens a weaker existing value.
+ *
+ * Writes back to the existing key so a differently cased header does not emit a
+ * second line.
+ *
+ * @param array $headers Headers.
+ * @return array
+ */
+function wpyeg_defaults_set_frame_option_header( $headers ) {
+	$value        = wpyeg_defaults_get( 'frame_options' );
+	$existing_key = wpyeg_defaults_find_header_key( $headers, 'X-Frame-Options' );
+
+	if ( null !== $existing_key ) {
+		$existing_strength   = wpyeg_defaults_frame_option_strength( $headers[ $existing_key ] );
+		$configured_strength = wpyeg_defaults_frame_option_strength( $value );
+
+		// One of them is a value browsers do not honour. Leave it alone rather
+		// than guess what was intended.
+		if ( null === $existing_strength || null === $configured_strength ) {
+			return $headers;
+		}
+
+		if ( $configured_strength <= $existing_strength ) {
+			return $headers;
+		}
+
+		$headers[ $existing_key ] = $value;
+		return $headers;
+	}
+
+	$headers['X-Frame-Options'] = $value;
+	return $headers;
+}
+
+/**
+ * Set X-Content-Type-Options: nosniff.
+ *
+ * `nosniff` is this header's only effective value, so there is no such thing as
+ * a stronger one already being present. An existing value that is anything else
+ * — empty, "off", a typo — is not a policy to defer to, it is a header doing
+ * nothing. Corrected in place.
+ *
+ * @param array $headers Headers.
+ * @return array
+ */
+function wpyeg_defaults_set_content_type_header( $headers ) {
+	$existing_key = wpyeg_defaults_find_header_key( $headers, 'X-Content-Type-Options' );
+
+	if ( null !== $existing_key ) {
+		if ( 'nosniff' === strtolower( trim( (string) $headers[ $existing_key ] ) ) ) {
+			return $headers;
+		}
+		$headers[ $existing_key ] = 'nosniff';
+		return $headers;
+	}
+
+	$headers['X-Content-Type-Options'] = 'nosniff';
+	return $headers;
+}
+
+/**
+ * Set a baseline Referrer-Policy.
+ *
+ * Unlike the other two, Referrer-Policy has no single strictness axis across its
+ * tokens — `same-origin` and `strict-origin-when-cross-origin` are not
+ * comparable — so an existing policy is deferred to rather than second-guessed.
+ * Case-insensitively, which is the part "set only if unset" got wrong.
+ *
+ * @param array $headers Headers.
+ * @return array
+ */
+function wpyeg_defaults_set_referrer_policy_header( $headers ) {
+	if ( null !== wpyeg_defaults_find_header_key( $headers, 'Referrer-Policy' ) ) {
+		return $headers;
+	}
+
+	$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+	return $headers;
+}
+
+/**
  * Validate a password against the policy.
  *
  * One reusable validator behind every entry point — profile screen, password
@@ -1717,6 +1825,31 @@ function wpyeg_defaults_rest_password_context( $request ) {
  * @return bool True when the password appears in a known breach.
  */
 function wpyeg_password_is_pwned( $password ) {
+	/*
+	 * An off switch for the one thing this plugin does that leaves the server.
+	 *
+	 * The lookup is already k-anonymous — only the first five characters of a
+	 * locally computed SHA-1 are sent, and the response is padded — but "it is
+	 * safe" is not the same as "you have no choice". Three situations need it:
+	 * an air-gapped or intranet site where the request can only ever fail and
+	 * add four seconds to every password change; a privacy review that has to
+	 * be able to point at a switch rather than an argument; and a site that
+	 * would rather refuse passwords on its own terms than fail open when the
+	 * API is unreachable.
+	 *
+	 * Both forms because they answer different questions: the constant is an
+	 * operator's declaration in wp-config.php, the filter lets a plugin decide
+	 * per password.
+	 */
+	$disabled = ( defined( 'WPYEG_DISABLE_HIBP' ) && WPYEG_DISABLE_HIBP )
+		|| (bool) apply_filters( 'wpyeg_disable_hibp', false, $password );
+
+	if ( $disabled ) {
+		// Same answer as an unreachable API: not known to be breached. The
+		// length, blocklist and personal-context rules still apply.
+		return false;
+	}
+
 	$hash   = strtoupper( sha1( $password ) );
 	$prefix = substr( $hash, 0, 5 );
 	$suffix = substr( $hash, 5 );
