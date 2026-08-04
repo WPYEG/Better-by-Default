@@ -418,10 +418,11 @@ function session_length( $exp, $uid, $remember ) {
     : 2 * DAY_IN_SECONDS;
 }
 
-// Only when we differ from core's own 2 / 14.
+// Only when we differ from core's own 2 / 14,
+// and late enough to be the last word.
 if ( policy_is_custom() )
   add_filter( 'auth_cookie_expiration',
-    'session_length', 10, 3 );
+    'session_length', 50, 3 );
 ```
 
 A normal login lasts 2 days; ticking "Remember Me" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the "Remember Me" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) WordPress ships handy time constants like `DAY_IN_SECONDS`, so you never need to do the math.
@@ -432,7 +433,9 @@ Nothing in the API tells you which kind you are writing. Both are `add_filter()`
 
 You cannot make a number filter additive. What you can do is decline the fights you have no stake in — our defaults *are* WordPress's own 2 and 14, so on a site that has not changed them we would be registering only to assert the answer core already gives. Hence the `if`. And the callback has a name rather than being anonymous, because `$wp_filter` can only report a callback that has one; an anonymous one shows up as `closure` in exactly the diagnostic you would run to work out who won.
 
-When you write a filter callback, ask: *if a second plugin did exactly this, would both still work?* If the answer is no, you are setting policy, and only one plugin on the site can win.
+Then there is the `50`, which is the half everyone forgets. Declining a fight worth nothing only helps if you win the one worth something, and on a replacing filter the **last** callback to run is the one that counts. Register at the default `10` and you are not being polite, you are queueing up behind every plugin that never thought about priority at all — so a session length somebody set on purpose gets decided by load order. This plugin shipped at `10` for its first four releases and lost to both its siblings on any site running two of them. Fifty is late enough to be the last word and low enough that a site wanting the final say can still take it deliberately.
+
+When you write a filter callback, ask: *if a second plugin did exactly this, would both still work?* If the answer is no, you are setting policy, and only one plugin on the site can win — so make sure you have decided both whether to enter and when.
 
 ---
 
