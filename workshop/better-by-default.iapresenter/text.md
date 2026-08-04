@@ -198,6 +198,8 @@ The privacy trick is **k-anonymity**. BBD computes the candidate's SHA-1 hash lo
 
 BBD also sends `Add-Padding: true`, so response size does not disclose how many real matches exist; synthetic rows have a count of zero and are ignored. WordPress caps the response at 128 KiB with `limit_response_size`. Because a response reaching that cap may be truncated, capped, empty, malformed, failed, and non-200 responses are treated as unavailable and **fail open**. Only structurally valid prefix responses are cached for 12 hours. The local length, blocklist, and personal-context checks still apply. The same server-side validator covers profile changes, password resets, and REST user-password requests.
 
+**And you can switch it off** — `WPYEG_DISABLE_HIBP` in `wp-config.php`, or the `wpyeg_disable_hibp` filter for a per-password decision. This is the only thing the whole plugin does that leaves your server, and everything on this slide is an argument that it is safe to do: hashed locally, five characters sent, padded response, nothing recoverable. All true, and none of it is an answer to "may I decline." Someone under a data-protection regime, on an air-gapped network, or just unwilling to make an outbound call on every password change does not owe anyone a justification. Which is the whole talk, pointed back at us: a default you cannot turn off is not a default, it is a requirement wearing a default's clothes. Every other setting here has a toggle. This one is the test of whether we meant it.
+
 ---
 
 ## Remove fingerprints, add headers

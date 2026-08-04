@@ -74,6 +74,14 @@ out-of-date site safer, so it is not presented as a security default.
 Three more live in `wp-config.php`, above the plugin layer, and are documented as manual steps:
 `DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, and `WP_POST_REVISIONS`.
 
+**Breach screening can be declined.** The Have I Been Pwned lookup is the only thing here that
+leaves your server. It is k-anonymous — the password is hashed locally, five characters of that
+hash are sent, and neither the password nor its full hash ever goes anywhere — but that answers
+"is it safe," not "may I say no." Define `WPYEG_DISABLE_HIBP` in `wp-config.php`, or filter
+`wpyeg_disable_hibp` for a per-password decision; the local length, blocklist, and
+personal-context rules keep running either way. A default you cannot switch off is not a
+default.
+
 Plugin and theme code updates keep using WordPress's individual per-item choices. Better by
 Default does not guess release risk from version numbers, and it reports rather than overrides
 an explicit `WP_AUTO_UPDATE_CORE`, `AUTOMATIC_UPDATER_DISABLED`, or `DISALLOW_FILE_MODS` policy.
