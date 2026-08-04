@@ -123,6 +123,7 @@ composer verify:dist      # check the committed zip matches the source, without 
 composer build:deck       # rebuild workshop/Better-by-Default.pptx (needs node)
 composer verify:deck      # check the committed deck matches build_deck.js (needs node)
 composer verify:pdf       # check the handout matches the deck (needs LibreOffice)
+composer verify:handout   # check a deck change also rebuilt the handout (no LibreOffice)
 ```
 
 `composer test`, `verify:dist`, `verify:deck`, and `lint` run in CI on every push and pull
@@ -176,6 +177,21 @@ compares, and writes nothing:
 ```bash
 composer verify:pdf
 ```
+
+That one needs LibreOffice, so it cannot run in CI — different versions produce different
+output for reasons that say nothing about staleness. `composer verify:handout` closes the same
+gap without converting anything: it compares the committed deck's `ppt/slides/*.xml` against
+the base branch's and, when they differ, requires the committed PDF to have moved too. PHP and
+zip only, so it runs in CI on every pull request.
+
+It looks at slides and **not** speaker notes, deliberately. The handout is slides-only, so a
+notes pass changes the `.pptx` and legitimately leaves the PDF alone; a blunter "deck changed,
+handout must change" rule would fail those builds, and a guard that cries wolf is one people
+learn to override.
+
+This exists because the gap was real twice in one day: a pull request rebuilt the deck, left
+the handout, and every check passed — the page-per-slide assertion in `composer test` does not
+move when a slide is reworded.
 
 The handout is only **partly** guarded, and it is worth knowing where the line is. Its text
 sits in subsetted font encodings that do not survive naive extraction, so both checks compare
