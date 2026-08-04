@@ -571,19 +571,20 @@ codeSlide(21, "ADMIN UX",
 
 codeSlide(22, "LOGIN & SESSIONS",
   "Right-size the login session",
-  "A normal login lasts 2 days; “Remember Me” extends it to 14. Both are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the checkbox entirely. One filter covers all of it.",
+  "A normal login lasts 2 days; “Remember Me” extends it to 14. Both are in days, and the remembered one can never be shorter. Now look at the registration: this callback throws away the value it was handed, so two plugins setting it cannot both win — and at core's own 2 / 14 we have nothing to say, so we stay out of it.",
   "disable_remember_me / session_regular_days / remember_me_days", "no / 2 / 14",
   [
-    { t: "add_filter( 'auth_cookie_expiration',", k: "" },
-    { t: "  function ( $exp, $uid, $remember ) {", k: "" },
-    { t: "    $regular = 2 * DAY_IN_SECONDS;", k: "" },
-    { t: "    return $remember", k: "" },
-    { t: "      ? 14 * DAY_IN_SECONDS", k: "h" },
-    { t: "      : $regular;", k: "h" },
-    { t: "  }, 10, 3 );", k: "" },
+    { t: "function session_length( $exp, $uid, $remember ) {", k: "" },
+    { t: "  return $remember", k: "" },
+    { t: "    ? 14 * DAY_IN_SECONDS", k: "h" },
+    { t: "    : 2 * DAY_IN_SECONDS;", k: "h" },
+    { t: "}", k: "" },
     { t: "", k: "" },
-    { t: "// DAY_IN_SECONDS: core time constant", k: "c" },
-  ]).addNotes("A normal login lasts 2 days; ticking \"Remember Me\" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the \"Remember Me\" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) One filter covers all of it. WordPress ships handy time constants like DAY_IN_SECONDS, so you never need to do the math.");
+    { t: "// only when we differ from core's 2 / 14", k: "c" },
+    { t: "if ( policy_is_custom() )", k: "h" },
+    { t: "  add_filter( 'auth_cookie_expiration',", k: "" },
+    { t: "    'session_length', 10, 3 );", k: "" },
+  ]).addNotes("A normal login lasts 2 days; ticking \"Remember Me\" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the \"Remember Me\" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) DAY_IN_SECONDS is one of core's time constants, so you never do the math. — Now the two lines that are not about session length, because they are the most portable thing in this deck. This callback ignores the $exp it was handed and returns its own number. A filter that ADDS TO its input composes: several plugins can each contribute a header to wp_headers and all of them survive. A filter that REPLACES its input does not. WordPress runs all of them and keeps whichever answered last, the others do nothing at all, and every losing plugin's settings screen goes on displaying a number the site is not using. No error, nothing logged, nothing on Site Health. Nothing in the API tells you which kind you are writing — both are add_filter(). The difference is entirely in what your callback does with the argument it was given, and it decides whether your plugin can coexist with another one or silently fights it. You cannot make a number filter additive. What you can do is decline the fights you have no stake in: our defaults ARE WordPress's own 2 and 14, so on a site that has not changed them we would be registering only to assert the answer core already gives. Hence the if. And the callback has a name rather than being anonymous, because $wp_filter can only report a callback that has one — an anonymous one shows up as 'closure' in exactly the diagnostic you would run to find out who won. The question to ask of any filter callback you write: if a second plugin did exactly this, would both still work? If not, you are setting policy, and only one plugin on the site can win.");
 
 /* =================================================================== */
 /* SECTION 4 — BRANDING + PERFORMANCE (combined divider)               */
