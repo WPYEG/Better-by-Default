@@ -1536,6 +1536,56 @@ function wpyeg_defaults_set_referrer_policy_header( $headers ) {
 }
 
 /**
+ * Whether the strong-password policy is enforced for a given user.
+ *
+ * A hard length rule adds signup friction for accounts that can only read,
+ * without protecting anything worth protecting — so subscriber-only accounts
+ * are skipped by default. Any privileged or editorial role enforces, and so
+ * does an unknown or empty role set: when we cannot tell who this is, the safe
+ * answer is to enforce.
+ *
+ * Two rules keep this scoping honest rather than a loophole:
+ *
+ * 1. **Breach screening is never waived.** It runs before this gate is
+ *    consulted. A password already published in a breach costs its owner
+ *    nothing to avoid, whatever the account can do. Get the order wrong and the
+ *    one free rule becomes the one waived for the accounts most likely to reuse
+ *    a password from somewhere else.
+ * 2. **A user is exempt only if *every* role they hold is exempt.** Someone who
+ *    is both a Subscriber and an Editor is an Editor for this purpose.
+ *
+ * Filter-only, with no setting: Better by Default has no multi-select field
+ * type, and adding one to expose this would cost more surface than the control
+ * is worth here. Sites that want it wire the filter in a small plugin.
+ *
+ * @param WP_User|stdClass|null $user User context, when available.
+ * @return bool
+ */
+function wpyeg_defaults_password_enforced_for_user( $user ) {
+	$weak_roles = array_map( 'strval', (array) apply_filters( 'wpyeg_weak_roles', array( 'subscriber' ) ) );
+
+	$roles = array();
+	if ( isset( $user->roles ) && is_array( $user->roles ) ) {
+		$roles = $user->roles;
+	} elseif ( ! empty( $user->role ) && is_string( $user->role ) ) {
+		$roles = array( $user->role );
+	}
+
+	// Unknown role set, or no user context at all, enforces.
+	if ( empty( $roles ) ) {
+		return true;
+	}
+
+	foreach ( $roles as $role ) {
+		if ( ! in_array( (string) $role, $weak_roles, true ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Validate a password against the policy.
  *
  * One reusable validator behind every entry point — profile screen, password
@@ -1547,6 +1597,24 @@ function wpyeg_defaults_set_referrer_policy_header( $headers ) {
  * @return true|WP_Error True when acceptable, WP_Error describing the failure.
  */
 function wpyeg_defaults_validate_password( $password, $user = null ) {
+	/*
+	 * Breach screening runs first, for every account, exempt or not. The role
+	 * gate below deliberately sits after it — see that function's docblock for
+	 * why the order is the whole design.
+	 */
+	if ( wpyeg_password_is_pwned( $password ) ) {
+		return new WP_Error(
+			'wpyeg_password_pwned',
+			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
+		);
+	}
+
+	// Everything below is role-scoped: length, the blocklist and the
+	// personal-context rule are the parts a read-only account can skip.
+	if ( ! wpyeg_defaults_password_enforced_for_user( $user ) ) {
+		return true;
+	}
+
 	// NIST SP 800-63B-4 § 3.1.1.2: favour length and screening over forced composition.
 	// rules (upper/lower/number/symbol), which push users toward predictable
 	// patterns like Password1! without adding entropy.
@@ -1605,13 +1673,6 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 				);
 			}
 		}
-	}
-
-	if ( wpyeg_password_is_pwned( $password ) ) {
-		return new WP_Error(
-			'wpyeg_password_pwned',
-			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
-		);
 	}
 
 	return true;
