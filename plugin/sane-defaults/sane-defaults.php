@@ -417,6 +417,16 @@ function wpyeg_defaults_bootstrap() {
 
 	if ( wpyeg_defaults_enabled( 'disable_rest' ) ) {
 		add_filter( 'rest_authentication_errors', 'wpyeg_defaults_require_rest_auth', PHP_INT_MAX );
+
+		/*
+		 * Closing a door and taking down the sign are two separate jobs. With the
+		 * filter above in place every anonymous request gets a 401, and the page
+		 * carries on advertising the endpoint anyway — core prints the discovery
+		 * link three different ways, so all three have to go.
+		 */
+		remove_action( 'wp_head', 'rest_output_link_wp_head', 10 );
+		remove_action( 'template_redirect', 'rest_output_link_header', 11 );
+		remove_action( 'xmlrpc_rsd_apis', 'rest_output_rsd' );
 	}
 
 	/*
@@ -667,9 +677,19 @@ function wpyeg_defaults_bootstrap() {
 			}
 		);
 
-		// Stop advertising comment feeds that lead nowhere.
+		// Report zero comments. wp_count_comments() answers zero once the query
+		// filter below is in place, but get_comments_number() reads the post's
+		// cached comment_count and does not — so the theme prints "1 Comment" as
+		// a heading over a thread that renders nothing.
+		add_filter( 'get_comments_number', '__return_zero', 20 );
+
+		// Stop advertising comment feeds that lead nowhere, then stop serving
+		// them. Removing the link is not removing the feed: /comments/feed/ and
+		// <post>/feed/ keep answering 200 to anyone who types the URL, and a
+		// crawler that saw one once keeps asking for it.
 		add_filter( 'feed_links_show_comments_feed', '__return_false' );
 		add_filter( 'feed_links_extra_show_post_comments_feed', '__return_false' );
+		add_action( 'template_redirect', 'wpyeg_defaults_block_comment_feeds', 9 );
 
 		// Answer comment queries as empty. The three filters above cover the theme's
 		// comment template; everything else that reads comments — /wp/v2/comments
@@ -679,6 +699,11 @@ function wpyeg_defaults_bootstrap() {
 		// Take the comment blocks out of the inserter: on a site with comments off
 		// they can only render nothing.
 		add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
+
+		// And stop the ones already saved in a block theme's templates from
+		// rendering. The inserter filter decides what an editor may add next; it
+		// has no say over markup that is already in the template.
+		add_filter( 'render_block', 'wpyeg_defaults_suppress_comment_blocks', 10, 2 );
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_pingbacks' ) ) {
@@ -1069,6 +1094,78 @@ function wpyeg_defaults_remove_comment_blocks( $allowed_block_types ) {
 	}
 
 	return $filtered;
+}
+
+/**
+ * Stop the comment blocks rendering on the front end.
+ *
+ * The lesson this one teaches is the gap between an editor filter and the page a
+ * visitor sees. wpyeg_defaults_remove_comment_blocks() governs the inserter,
+ * which decides what an editor can add *next*. A block theme has already put the
+ * comment blocks in its single/post templates, and that markup is untouched — so
+ * with only the inserter filter, every post still prints a "Comments" heading
+ * above an empty block wrapper. The site reads as broken rather than as one that
+ * deliberately has no comments.
+ *
+ * Returning an empty string rather than unregistering the block types is what
+ * keeps the default reversible: the blocks stay registered, the theme's template
+ * markup stays as the theme author wrote it, and turning the setting off brings
+ * the whole thing back with nothing to undo.
+ *
+ * @param string $block_content Rendered block markup.
+ * @param array  $block         Parsed block, including its blockName.
+ * @return string
+ */
+function wpyeg_defaults_suppress_comment_blocks( $block_content, $block ) {
+	if ( ! isset( $block['blockName'] ) ) {
+		return $block_content;
+	}
+
+	if ( in_array( $block['blockName'], wpyeg_defaults_comment_blocks(), true ) ) {
+		return '';
+	}
+
+	return $block_content;
+}
+
+/**
+ * Answer comment feed requests with a 404.
+ *
+ * Removing the <link rel="alternate"> markup stops the feed being advertised; it
+ * does not stop it being served. /comments/feed/ and <post>/feed/ keep answering
+ * 200 for anyone who types the URL. Because comment queries are already
+ * short-circuited the feed comes back empty, which is the worst of both: a live,
+ * crawlable endpoint whose only purpose is to say nothing.
+ *
+ * set_404() re-runs init_query_flags(), which clears is_feed() along with
+ * everything else — so the template loader stops routing to do_feed() and renders
+ * the theme's 404 instead. That is why is_comment_feed() has to be tested first:
+ * a moment later there is nothing left to test.
+ *
+ * redirect_canonical() has to go with it, and this is the part worth remembering.
+ * It does not bail on a 404 — it calls redirect_guess_404_permalink(), and
+ * against the query this function has just emptied it answers /post-name/feed/
+ * with a 301 to /post-name/feed/feed/. Leaving it hooked turns a clean 404 into a
+ * redirect to a URL that has never existed, which is worse than the bug being
+ * fixed. Every filter-level test still passes; only a real request catches it.
+ *
+ * @return void
+ */
+function wpyeg_defaults_block_comment_feeds() {
+	if ( ! is_comment_feed() ) {
+		return;
+	}
+
+	global $wp_query;
+
+	if ( $wp_query instanceof WP_Query ) {
+		$wp_query->set_404();
+	}
+
+	remove_action( 'template_redirect', 'redirect_canonical' );
+
+	status_header( 404 );
+	nocache_headers();
 }
 
 /**
