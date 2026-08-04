@@ -444,9 +444,9 @@ When you write a filter callback, ask: *if a second plugin did exactly this, wou
 
 ---
 
-# Section 4 — Branding & Performance
+# Section 4 — Branding, Performance & Email
 
-The last pair brands the login screen. Then we end with two performance levers to shave some weight off every page.
+We brand the login screen, throttle one polling API, and end on the only default in the plugin that changes nothing at all.
 
 ---
 
@@ -484,6 +484,34 @@ wp_enqueue_script( 'front', $src, array(), '1.0',
 ```
 
 The Heartbeat API polls `admin-ajax` every 15–60s. Throttle it to ease up on weak shared hosting. The more interesting half of this slide is the toggle that *used* to be here. We shipped a "defer front-end scripts" default that hooked `script_loader_tag` and string-replaced ` src=` with ` defer src=` on every handle. It had to skip jQuery core, and it still broke anything expecting a particular execution order — because a blanket filter cannot know which scripts are safe to defer. WordPress 6.3 added a per-script loading strategy, so core now answers this precisely, at the point of enqueue, where the person who wrote the script decides. Keeping our version would have meant teaching a workaround for a problem the platform already solved. Deleting a default is a legitimate result.
+
+---
+
+## Say so when the site cannot send mail
+
+	`mail_deliverability_notice` · default **yes**
+
+```php
+// The From address the site will ACTUALLY use.
+$from = apply_filters( 'wp_mail_from',
+          'wordpress@' . $host );
+
+// A shape check, not a delivery test.
+$risky = ! is_email( $from )
+  || in_array( $domain, $never_resolves )
+  || preg_match( '/\.(local|test|invalid)$/', $domain );
+
+// Warn. Never block, never rewrite.
+add_action( 'admin_notices', $render_notice );
+```
+
+WordPress sends mail from `wordpress@yourdomain` unless something changes it. On a domain that cannot actually send — a staging host, a `.local` address, a domain with no mail records — password resets and order receipts **fail silently**. `wp_mail()` returns false and nothing surfaces it. Nobody finds out until a customer says they never got the email.
+
+So this default warns, and that is all it does. It is worth being precise about how little it claims: it is a **shape check, not a delivery test**. Proving mail actually works needs SPF and DMARC lookups and a real send — far more than a settings screen should do on page load. These are the cases where the answer is knowable for free: not a valid address at all, `example.com`, `localhost`, or one of the reserved TLDs that never resolve publicly (`.local`, `.test`, `.invalid`, `.example` — RFC 2606 and RFC 6762).
+
+Two details make it honest. It reads the **effective** From address through `wp_mail_from`, so whatever your SMTP plugin actually sets is what gets judged, not the theoretical default it replaced. And it stays quiet when `wp_get_environment_type()` says `local`, because a local site is *meant* to have an undeliverable address — warning there is exactly how a notice trains people to dismiss notices. Staging is not local, and staging does warn, which is usually where this catches something real.
+
+The lesson is the one thing on this slide that is not about email. **Every other default in this plugin changes what WordPress does. This one changes nothing.** It has no effect on a single request; it only tells an administrator something true that WordPress had been keeping to itself. Deciding *not* to intervene is a design decision as real as any filter, and often the better one — a plugin that silently rewrote your From address to something deliverable would be a considerably worse plugin. When you find a silent failure, the first question is not "how do I fix this for them" but "who needs to know, and would they rather I told them or guessed on their behalf?"
 
 ---
 
