@@ -98,6 +98,7 @@ composer lint             # phpcs against phpcs.xml (composer lint:fix to autofi
 composer build            # rewrite dist/sane-defaults.zip from plugin/
 composer verify:dist      # check the committed zip matches the source, without rewriting
 composer build:deck       # rebuild workshop/Better-by-Default.pptx (needs node)
+composer verify:pdf       # check the handout matches the deck (needs LibreOffice)
 ```
 
 `composer test` is the one that matters most, and not only for the policy assertions.
@@ -130,12 +131,24 @@ cd workshop && soffice --headless --convert-to pdf Better-by-Default.pptx
 On macOS the binary is inside the app bundle and not on `PATH`, so use
 `/Applications/LibreOffice.app/Contents/MacOS/soffice` or symlink it.
 
+Do **not** rebuild the handout defensively. The conversion is not byte-reproducible —
+LibreOffice numbers PDF objects and tags font subsets differently on every run, so rebuilding
+an unchanged deck yields a file that renders identically but differs in tens of thousands of
+bytes. Committing that buries the real handout changes it is supposed to show.
+
+To check without rebuilding, `composer verify:pdf` converts into a temporary directory,
+compares, and writes nothing:
+
+```bash
+composer verify:pdf
+```
+
 The handout is only **partly** guarded, and it is worth knowing where the line is. Its text
-sits in subsetted font encodings that do not survive naive extraction, so the suite compares
-structure alone: one PDF page per slide. That catches a slide added or removed without
-regenerating the handout. It cannot catch a wording correction, because the page count does
-not move — so a green suite is not proof the handout is current. Rebuild it whenever the deck
-changes.
+sits in subsetted font encodings that do not survive naive extraction, so both checks compare
+structure rather than pixels. `composer test` asserts one PDF page per slide. `verify:pdf`
+adds the normalized byte length, which any real content change moves. Neither is a rendering
+comparison: an edit that changed the page while leaving the compressed length untouched would
+pass. Rebuild and look at the handout before it goes out.
 
 (`node_modules/` in `workshop/` is gitignored.)
 
