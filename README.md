@@ -98,8 +98,14 @@ composer lint             # phpcs against phpcs.xml (composer lint:fix to autofi
 composer build            # rewrite dist/sane-defaults.zip from plugin/
 composer verify:dist      # check the committed zip matches the source, without rewriting
 composer build:deck       # rebuild workshop/Better-by-Default.pptx (needs node)
+composer verify:deck      # check the committed deck matches build_deck.js (needs node)
 composer verify:pdf       # check the handout matches the deck (needs LibreOffice)
 ```
+
+`composer test`, `verify:dist`, `verify:deck`, and `lint` run in CI on every push and pull
+request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The tests run against
+PHP 7.4, 8.1, and 8.4, so the `Requires PHP: 7.4` claim is tested rather than asserted.
+`verify:pdf` is deliberately excluded, for the reason given below.
 
 `composer test` is the one that matters most, and not only for the policy assertions.
 The suite ends with a cross-artifact parity guard: every key in `wpyeg_defaults_schema()`
@@ -110,15 +116,19 @@ learner-facing material, because the tests fail first.
 
 The guard reaches the **rendered deck** too. `Better-by-Default.pptx` is a zip of XML, so the
 suite reads its slide text and speaker notes back out and holds them to the same standard as
-the sources. That is what catches a generator change that was never built — and it is the
-only check that exercises the generator at all, because the sole way to satisfy it is to run
-`composer build:deck`. Before that guard existed, `node build_deck.js` sat broken through a
-commit and the shipped deck was two corrections behind, with nothing to say so.
+the sources. Before that guard existed, `node build_deck.js` sat broken through a commit and
+the shipped deck was two corrections behind, with nothing to say so.
 
-Rebuilding the deck needs `pptxgenjs`, which is not vendored:
+Those assertions cover keys, the setting count, and the claims worth policing. They cannot see
+a plain rewrite — reword a slide in `build_deck.js`, skip the rebuild, and the suite stays
+green while the deck says the old thing. `composer verify:deck` closes that: it runs the
+generator into a temporary directory and compares its slide text against the committed deck,
+so it catches both the stale rebuild and a generator that no longer runs. It writes nothing.
+
+Rebuilding the deck needs `pptxgenjs`, pinned in `workshop/package.json`:
 
 ```bash
-cd workshop && npm install pptxgenjs
+cd workshop && npm ci
 ```
 
 The **PDF handout** is regenerated from the rebuilt deck. It needs LibreOffice, which is not
