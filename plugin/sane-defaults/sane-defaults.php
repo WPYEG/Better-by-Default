@@ -1115,9 +1115,15 @@ function wpyeg_defaults_session_policy_is_custom() {
  * Apply the configured session lengths.
  *
  * One callback covers both, because core asks the same filter for each and
- * distinguishes them with $remember. Sanitize guarantees remember >= regular,
- * so ticking Remember Me can never shorten a login; when Remember Me is
- * disabled every login gets the regular length.
+ * distinguishes them with $remember. When Remember Me is disabled every login
+ * gets the regular length.
+ *
+ * The max() is a second belt, and the reason is that sanitize is not enough on
+ * its own. Sanitize does keep a stored remembered length at or above the regular
+ * one — but it only runs when the settings form is saved. An option written by
+ * WP-CLI, a migration, or another plugin never passes through it, and this is
+ * where that would otherwise surface: ticking Remember Me shortening a login,
+ * which is the one thing this setting exists to prevent.
  *
  * Only registered when wpyeg_defaults_session_policy_is_custom() — see the
  * comment at the registration site for why that matters more than it looks.
@@ -1139,7 +1145,9 @@ function wpyeg_defaults_auth_cookie_expiration( $expiration, $user_id, $remember
 
 	if ( $remember ) {
 		$remember_days = (int) wpyeg_defaults_get( 'remember_me_days' );
-		return $remember_days > 0 ? $remember_days * DAY_IN_SECONDS : $expiration;
+		$remembered    = $remember_days > 0 ? $remember_days * DAY_IN_SECONDS : $expiration;
+
+		return max( $regular, $remembered );
 	}
 
 	return $regular;
