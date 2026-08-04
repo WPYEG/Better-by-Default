@@ -2162,6 +2162,18 @@ $GLOBALS['wpyeg_test_hooks']  = array();
 $GLOBALS['wpyeg_test_option'] = array( 'session_regular_days' => 1 );
 wpyeg_defaults_bootstrap();
 wpyeg_test_assert( true === wpyeg_defaults_session_policy_is_custom(), 'A changed length counts as an opinion.' );
+
+/*
+ * And it says it late. On a replacing filter the last callback to run wins, so
+ * registering at the default 10 guarantees losing to anything that does not
+ * bother to choose a priority — which would make a deliberately set session
+ * length lose to load order, the exact thing setting it was meant to prevent.
+ * The sibling plugins register at 50; matching them is what lets a site reason
+ * about the outcome instead of discovering it.
+ */
+$session_hook = wpyeg_test_find_hook( 'auth_cookie_expiration' );
+wpyeg_test_assert( null !== $session_hook, 'A custom session policy registers the filter.' );
+wpyeg_test_assert( 50 === $session_hook['priority'], 'The session filter registers at priority 50, late enough to be the last word.' );
 wpyeg_test_assert( DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( false ), 'A regular login lasts the configured regular length.' );
 wpyeg_test_assert( 14 * DAY_IN_SECONDS === wpyeg_test_auth_cookie_expiration( true ), 'A remembered login lasts the remembered length (14 days).' );
 

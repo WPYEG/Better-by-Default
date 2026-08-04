@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -107,6 +107,12 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= 1.2.2 =
+* The session-length filter registers at priority 50 instead of 10. `auth_cookie_expiration` is a replacing filter, so the *last* callback to run is the one that counts — registering at the default priority guaranteed losing to any other plugin that did not choose one. 1.2.0 made this plugin stop contesting the filter when it had nothing to say; this is the other half, so that when it does have something to say it is not overruled by load order. Both sibling plugins already register at 50.
+* Corrected the plugin header's own explanation of its patterns. It cited `auth_cookie_expiration` as the example of "register always, decide inside", which stopped being true in 1.2.0 when that registration became conditional. The correction is worth more than the error: needing a runtime argument (`$remember`) does not oblige you to register — what a login's length should *be* and whether this plugin should answer at all are different questions, and the second is answerable at bootstrap.
+* The reference doc's session snippet showed priority 10 to match the old code, and now shows 50 with the reasoning.
+* A test asserts the priority, so it cannot drift back silently.
+
 = 1.2.1 =
 * Every setting now sits in a labelled section, so no row has an empty left column. A toggle used to draw full-width with its label beside the checkbox and nothing in the label column, which left twenty bare rows interleaved with the seven that had one — ragged rather than deliberate. Twenty-seven rows become nineteen, each under a heading that names the category ("Capabilities", "Response Headers") while the text beside each checkbox stays the specific claim. "Remember Me" joins the two session-length fields, because those three settings are one policy.
 * Section headings are Title Case, matching the group headings directly above them and the sibling plugins' screens. Sentence case in the left column under a Title Case heading is a mixed convention nobody decides on; a test now fails on it.
@@ -162,6 +168,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.2.2 =
+Only affects sites that changed a session length (or turned "Remember Me" off) AND run another plugin that also sets session length. This plugin now registers that filter at priority 50 instead of 10, so where it previously lost to the other plugin it may now win, and logins can get longer or shorter accordingly. That is the intended fix — a length you set deliberately should not be decided by which plugin loaded last — but check the result if two plugins on the site both manage sessions. Nothing changes on a site at the shipped 2/14 defaults, where this plugin still does not register at all.
 
 = 1.2.0 =
 If your session lengths are still 2 and 14 days and "Remember Me" is enabled — the shipped defaults — this plugin no longer filters `auth_cookie_expiration` at all. Your sessions do not change, but another plugin that sets session length will now take effect where it was previously overruled at random. Change either length, or disable "Remember Me", and this plugin filters as before. The activation hook is also gone: existing sites keep every value already saved, and a setting you have never saved now follows the current default instead of the default that was current when you activated.
