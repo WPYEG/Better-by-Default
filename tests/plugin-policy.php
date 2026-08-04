@@ -1084,4 +1084,58 @@ wpyeg_test_assert( null !== wpyeg_test_find_hook( 'login_init' ), 'Disabling Rem
 unset( $GLOBALS['wpyeg_test_option'] );
 $GLOBALS['wpyeg_test_hooks'] = array();
 
+/*
+ * Comment teardown: the parts that reach past the theme template.
+ *
+ * The REST case is the one that matters. Core's comments controller declares
+ * `'type' => array( 'default' => 'comment' )`, so every GET /wp/v2/comments
+ * arrives asking for that type — an implementation that exempts `comment`
+ * queries leaves the main exposure open while looking careful.
+ */
+
+/**
+ * Minimal WP_Comment_Query stand-in: only query_vars is consulted.
+ *
+ * @param array $vars Query vars.
+ * @return object
+ */
+function wpyeg_test_comment_query( $vars ) {
+	$query             = new stdClass();
+	$query->query_vars = $vars;
+	return $query;
+}
+
+wpyeg_test_assert( array( 'note' ) === wpyeg_defaults_allowed_comment_types(), 'Block Notes are exempt from the comment teardown by default.' );
+
+wpyeg_test_assert(
+	array() === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'type' => 'comment' ) ) ),
+	'A type=comment query is answered empty — that is every GET /wp/v2/comments.'
+);
+wpyeg_test_assert(
+	array() === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array() ) ),
+	'An untyped comment query is answered empty.'
+);
+wpyeg_test_assert(
+	null === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'type' => 'note' ) ) ),
+	'A note query runs normally.'
+);
+wpyeg_test_assert(
+	null === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'type__in' => array( 'comment', 'note' ) ) ) ),
+	'A query naming notes among other types still runs.'
+);
+wpyeg_test_assert(
+	0 === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'count' => true ) ) ),
+	'A count query is answered with 0, not an array.'
+);
+wpyeg_test_assert(
+	array() === wpyeg_defaults_empty_comment_queries( null, null ),
+	'A query object without query vars is answered empty rather than let through.'
+);
+
+wpyeg_test_assert( false === wpyeg_defaults_remove_comment_blocks( false ), 'A prior deny-all (false) is preserved, not expanded.' );
+wpyeg_test_assert( array() === wpyeg_defaults_remove_comment_blocks( array() ), 'An empty allowlist is a deliberate deny-all and stays empty.' );
+
+$wpyeg_test_blocks = wpyeg_defaults_remove_comment_blocks( array( 'core/paragraph', 'core/comments', 'core/latest-comments', 'core/image' ) );
+wpyeg_test_assert( array( 'core/paragraph', 'core/image' ) === array_values( $wpyeg_test_blocks ), 'Comment blocks are removed from an explicit allowlist; everything else survives.' );
+
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

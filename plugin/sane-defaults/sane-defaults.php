@@ -658,6 +658,27 @@ function wpyeg_defaults_bootstrap() {
 				}
 			}
 		);
+
+		// New content defaults to comments closed, not merely filtered closed.
+		add_filter(
+			'get_default_comment_status',
+			function () {
+				return 'closed';
+			}
+		);
+
+		// Stop advertising comment feeds that lead nowhere.
+		add_filter( 'feed_links_show_comments_feed', '__return_false' );
+		add_filter( 'feed_links_extra_show_post_comments_feed', '__return_false' );
+
+		// Answer comment queries as empty. The three filters above cover the theme's
+		// comment template; everything else that reads comments — /wp/v2/comments
+		// most of all — goes to the database and answers normally without this.
+		add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
+
+		// Take the comment blocks out of the inserter: on a site with comments off
+		// they can only render nothing.
+		add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_pingbacks' ) ) {
@@ -880,6 +901,142 @@ function wpyeg_defaults_bootstrap() {
 			}
 		);
 	}
+}
+
+/**
+ * Comment types that keep working while comments are disabled.
+ *
+ * WordPress 6.9's Notes feature stores editorial notes as comments of type
+ * `note`. They are not public commentary and have nothing to do with the comment
+ * form, so switching comments off must not take them with it.
+ *
+ * Deliberately does NOT include `comment`: see wpyeg_defaults_empty_comment_queries().
+ *
+ * @return string[]
+ */
+function wpyeg_defaults_allowed_comment_types() {
+	return array_map( 'strval', (array) apply_filters( 'wpyeg_allowed_comment_types', array( 'note' ) ) );
+}
+
+/**
+ * Short-circuit comment queries while comments are disabled.
+ *
+ * The teardown's other filters cover the theme's comment template. Everything
+ * else that reads comments — `/wp/v2/comments`, a Recent Comments widget,
+ * `wp_count_comments()`, a plugin's own WP_Comment_Query — goes straight to the
+ * database and answers normally, so a site with comments "disabled" still hands
+ * them to anyone who asks the REST API. This answers the query instead.
+ *
+ * The `comment` type is not exempt, and that is the whole point. It is tempting
+ * to let a query that explicitly asks for comments run, on the grounds that code
+ * asking for them deliberately should get them — but core's REST controller
+ * declares `'type' => array( 'default' => 'comment' )`, so *every*
+ * `GET /wp/v2/comments` arrives asking for exactly that type. Exempting it would
+ * leave the main exposure open while looking careful.
+ *
+ * Nothing is deleted. Turn the default off and every comment is queryable again.
+ *
+ * @param array|int|null    $comment_data Short-circuit value, null to run the query.
+ * @param \WP_Comment_Query $query        The query being run.
+ * @return array|int|null
+ */
+function wpyeg_defaults_empty_comment_queries( $comment_data, $query ) {
+	// Without query vars there is no way to tell an allowed type from a
+	// disallowed one, so answer empty rather than guess open.
+	if ( ! is_object( $query ) || ! isset( $query->query_vars ) || ! is_array( $query->query_vars ) ) {
+		return array();
+	}
+
+	$allowed = wpyeg_defaults_allowed_comment_types();
+
+	// Both query vars accept a string or an array.
+	$requested = array();
+	foreach ( array( 'type', 'type__in' ) as $var ) {
+		$value = isset( $query->query_vars[ $var ] ) ? $query->query_vars[ $var ] : '';
+
+		if ( '' === $value || null === $value || array() === $value ) {
+			continue;
+		}
+
+		$requested = array_merge( $requested, array_map( 'strval', (array) $value ) );
+	}
+
+	if ( ! empty( $requested ) && ! empty( array_intersect( $requested, $allowed ) ) ) {
+		return $comment_data;
+	}
+
+	// A count query expects a number, not a list.
+	if ( ! empty( $query->query_vars['count'] ) ) {
+		return 0;
+	}
+
+	return array();
+}
+
+/**
+ * Comment blocks removed from the inserter while comments are disabled.
+ *
+ * @return string[]
+ */
+function wpyeg_defaults_comment_blocks() {
+	return (array) apply_filters(
+		'wpyeg_comment_blocks',
+		array(
+			'core/comment-author-name',
+			'core/comment-content',
+			'core/comment-date',
+			'core/comment-edit-link',
+			'core/comment-reply-link',
+			'core/comment-template',
+			'core/comments',
+			'core/comments-pagination',
+			'core/comments-pagination-next',
+			'core/comments-pagination-numbers',
+			'core/comments-pagination-previous',
+			'core/comments-title',
+			'core/latest-comments',
+			'core/post-comments',
+			'core/post-comments-form',
+		)
+	);
+}
+
+/**
+ * Drop the comment blocks from the editor while comments are disabled.
+ *
+ * Both deny-all shapes have to survive untouched. `false` means another filter
+ * has already disallowed every block, and expanding it to "all registered blocks
+ * minus comments" would re-enable everything that filter just turned off. An
+ * empty array is also a deny-all — WordPress treats `array()` the same as
+ * `false` — so it must not be expanded either; the loop below returns it
+ * unchanged, which is correct by construction.
+ *
+ * @param bool|string[] $allowed_block_types Allowed block types, or true/false.
+ * @return bool|string[]
+ */
+function wpyeg_defaults_remove_comment_blocks( $allowed_block_types ) {
+	if ( false === $allowed_block_types ) {
+		return false;
+	}
+
+	if ( ! is_array( $allowed_block_types ) ) {
+		if ( ! class_exists( 'WP_Block_Type_Registry' ) ) {
+			return $allowed_block_types;
+		}
+
+		$allowed_block_types = array_keys( WP_Block_Type_Registry::get_instance()->get_all_registered() );
+	}
+
+	$disallowed = wpyeg_defaults_comment_blocks();
+	$filtered   = array();
+
+	foreach ( $allowed_block_types as $block ) {
+		if ( ! in_array( $block, $disallowed, true ) ) {
+			$filtered[] = $block;
+		}
+	}
+
+	return $filtered;
 }
 
 /**

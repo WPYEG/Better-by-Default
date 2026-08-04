@@ -256,7 +256,7 @@ add_action( 'admin_init', function () {
 
 ---
 
-## 2. Content, Comments & Public Surfaces
+## 2. Content, Comments and Public Surfaces
 
 ### Disable Comments, Trackbacks, and Pingbacks
 - **Setting key:** `disable_comments`
@@ -290,7 +290,31 @@ add_action( 'wp_before_admin_bar_render', function () {
     global $wp_admin_bar;
     $wp_admin_bar->remove_node( 'comments' );
 } );
+
+// New content defaults to closed, and the comment feeds stop being advertised.
+add_filter( 'get_default_comment_status', function () {
+    return 'closed';
+} );
+add_filter( 'feed_links_show_comments_feed', '__return_false' );
+add_filter( 'feed_links_extra_show_post_comments_feed', '__return_false' );
+
+// Answer comment queries as empty. Everything above covers the theme's comment
+// template; without this, /wp/v2/comments still serves every comment the site
+// has. Block Notes (WordPress 6.9, comment_type 'note') stay queryable.
+add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
+
+// Take the comment blocks out of the inserter: with comments off they can only
+// render nothing.
+add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
 ```
+
+> **The `comment` type is not exempt, and that is the point.** It is tempting to let a
+> query that explicitly asks for comments run — code asking deliberately should get what
+> it asked for. But core's REST comments controller declares
+> `'type' => array( 'default' => 'comment' )`, so *every* `GET /wp/v2/comments` arrives
+> asking for exactly that type. Exempting it leaves the largest reader of comment data
+> untouched while looking careful. Nothing is deleted either way: turn the default off
+> and every comment is queryable again.
 
 ### Disable Pingbacks and Trackbacks (defaults for new posts)
 - **Setting key:** `disable_pingbacks`
