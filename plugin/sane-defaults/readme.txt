@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -41,7 +41,7 @@ This table is generated from the same `wpyeg_defaults_schema()` array the plugin
 | Send baseline security headers | `security_headers` | `yes` |
 | X-Frame-Options (clickjacking) | `frame_options` | `SAMEORIGIN` |
 | Disable AI connectors | `disable_ai_connectors` | `yes` |
-| Automatic WordPress core updates | `core_update_policy` | `minor` |
+| Automatic WordPress Core Updates | `core_update_policy` | `minor` |
 | Disable comments, trackbacks and pingbacks | `disable_comments` | `yes` |
 | Default new posts to pings closed | `disable_pingbacks` | `yes` |
 | Disable self-pingbacks | `disable_self_pingbacks` | `yes` |
@@ -51,13 +51,13 @@ This table is generated from the same `wpyeg_defaults_schema()` array the plugin
 | Hide post-password protection | `disable_post_passwords` | `no` |
 | Force the classic editor | `force_classic_editor` | `no` |
 | Title-only admin search | `title_only_admin_search` | `no` |
-| Front-end admin bar | `frontend_admin_bar_behavior` | `''` |
+| Front-End Admin Bar | `frontend_admin_bar_behavior` | `''` |
 | Lowercase upload filenames | `lowercase_upload_filenames` | `yes` |
 | Show generated image sizes | `media_sizes_panel` | `yes` |
 | Disable "Remember Me" | `disable_remember_me` | `no` |
 | Regular session length (days) | `session_regular_days` | `2` |
 | Remember Me length (days) | `remember_me_days` | `14` |
-| Login logo | `login_logo_behavior` | `keep_default` |
+| Login Logo | `login_logo_behavior` | `keep_default` |
 | Warn when the site's From address looks undeliverable | `mail_deliverability_notice` | `yes` |
 | Throttle the Heartbeat API | `throttle_heartbeat` | `no` |
 
@@ -106,6 +106,11 @@ Yes, and you do not have to justify it. It is the only thing this plugin does th
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.2.1 =
+* Every setting now sits in a labelled section, so no row has an empty left column. A toggle used to draw full-width with its label beside the checkbox and nothing in the label column, which left twenty bare rows interleaved with the seven that had one — ragged rather than deliberate. Twenty-seven rows become nineteen, each under a heading that names the category ("Capabilities", "Response Headers") while the text beside each checkbox stays the specific claim. "Remember Me" joins the two session-length fields, because those three settings are one policy.
+* Section headings are Title Case, matching the group headings directly above them and the sibling plugins' screens. Sentence case in the left column under a Title Case heading is a mixed convention nobody decides on; a test now fails on it.
+* No behaviour change: this is layout and wording only. Every control keeps its key, its default, its bound label and its `aria-describedby`.
 
 = 1.2.0 =
 * Session lengths no longer contest the `auth_cookie_expiration` filter on a site that has not changed them. That filter is a *replacing* one — a callback returns its own number and discards the value it was handed — so two plugins registering one do not compose: WordPress keeps whichever ran last, the loser does nothing, and both settings screens go on displaying a number the site is not using. Both defaults here are WordPress's own values, so on an untouched site this plugin was entering that fight only to assert the answer core already gives. It now registers the filter when a length differs from its default, or when "Remember Me" is disabled, and the callback is a named function instead of an anonymous one so `$wp_filter` can identify it. See `docs/when-two-plugins-set-the-same-default.md`.
