@@ -19,10 +19,19 @@ and the others likewise), so nothing was declared twice.
 **No settings clobbered.** Each stores its own option, so nobody overwrote
 anybody's saved choices.
 
-**Security headers came out right.** All three set
-`X-Content-Type-Options` and `Referrer-Policy`, and all three check whether the
-header is already set before writing it. Three plugins, one correct result,
-whatever order they ran in.
+**Security headers came out right.** All three set `X-Content-Type-Options` and
+`Referrer-Policy`, and all three *add to* the header array they were handed
+rather than replacing it — so every contribution survived and the order they ran
+in did not matter. Three plugins, one correct result.
+
+That is the composition property, and it is separate from what each plugin does
+about a header somebody else already set. The two siblings write only when the
+key is absent. Better by Default does not: it corrects `X-Content-Type-Options`
+to `nosniff` whatever it said before, because that header has exactly one
+effective value and an existing anything-else is not a policy to defer to; it
+replaces `X-Frame-Options` only when its configured value is strictly stronger;
+and it defers on `Referrer-Policy`, whose tokens cannot be ranked. Different
+policies, same additive shape — which is why they still composed.
 
 That last one is the important observation, and the rest of this page is about
 why.

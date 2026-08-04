@@ -22,38 +22,54 @@ The plugin is data-driven: one `wpyeg_defaults_schema()` array is the single sou
 
 Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 
-= Defaults ON out of the box =
+= Every setting and its default =
 
-* Restrict REST API user discovery
-* Lock down XML-RPC by category — incoming pingbacks off (header stripped), remote publishing off (RSD link dropped), system.multicall refused
-* Require strong passwords (server-side: 15+ characters, breach-screened, no forced composition)
-* Limit unfiltered HTML to administrators — Editors hold `unfiltered_html` on single-site installs, which is enough to save a raw script into a post
-* Send baseline security headers
-* Set X-Frame-Options to SAMEORIGIN
-* Disable AI connectors
-* Disable comments, pingbacks and self-pingbacks
-* Redirect public author archives and attachment pages
-* Disable the emoji script
-* Lowercase upload filenames (new uploads only)
-* Show generated image sizes — a read-only panel on the attachment edit screen
-* Warn when the site's From address looks undeliverable
-* Right-size login sessions in days: a 2-day regular login, 14 days when remembered
-* Automatically install WordPress core maintenance/security releases, while holding major releases for testing
-* Leave WordPress's existing automatic translation-file updates unchanged
+This table is generated from the same `wpyeg_defaults_schema()` array the plugin runs on, and the test suite fails if a row here disagrees with it. `yes`/`no` are toggles; the rest are select or number fields.
 
-= Opt-in (OFF by default) =
+| Setting | Key | Default |
+| --- | --- | --- |
+| Restrict REST API user discovery | `restrict_rest_user_discovery` | `yes` |
+| Require auth for all REST requests | `disable_rest` | `no` |
+| Accept incoming pingbacks | `xmlrpc_allow_pingbacks` | `no` |
+| Allow remote publishing (blogging apps) | `xmlrpc_allow_remote_publishing` | `no` |
+| Allow system.multicall | `xmlrpc_allow_multicall` | `no` |
+| Block the endpoint entirely (returns 403) | `block_xmlrpc_endpoint` | `no` |
+| Prohibit Application Passwords | `disable_application_passwords` | `no` |
+| Require strong passwords | `require_strong_passwords` | `yes` |
+| Limit unfiltered HTML to administrators | `limit_unfiltered_html_to_admins` | `yes` |
+| Remove WordPress version fingerprint | `remove_version` | `no` |
+| Send baseline security headers | `security_headers` | `yes` |
+| X-Frame-Options (clickjacking) | `frame_options` | `SAMEORIGIN` |
+| Disable AI connectors | `disable_ai_connectors` | `yes` |
+| Automatic WordPress core updates | `core_update_policy` | `minor` |
+| Disable comments, trackbacks and pingbacks | `disable_comments` | `yes` |
+| Default new posts to pings closed | `disable_pingbacks` | `yes` |
+| Disable self-pingbacks | `disable_self_pingbacks` | `yes` |
+| Disable public author archives | `disable_author_archives` | `yes` |
+| Redirect attachment pages | `redirect_attachment_pages` | `yes` |
+| Disable emoji script | `disable_emojis` | `yes` |
+| Hide post-password protection | `disable_post_passwords` | `no` |
+| Force the classic editor | `force_classic_editor` | `no` |
+| Title-only admin search | `title_only_admin_search` | `no` |
+| Front-end admin bar | `frontend_admin_bar_behavior` | `''` |
+| Lowercase upload filenames | `lowercase_upload_filenames` | `yes` |
+| Show generated image sizes | `media_sizes_panel` | `yes` |
+| Disable "Remember Me" | `disable_remember_me` | `no` |
+| Regular session length (days) | `session_regular_days` | `2` |
+| Remember Me length (days) | `remember_me_days` | `14` |
+| Login logo | `login_logo_behavior` | `keep_default` |
+| Warn when the site's From address looks undeliverable | `mail_deliverability_notice` | `yes` |
+| Throttle the Heartbeat API | `throttle_heartbeat` | `no` |
 
-* Require authentication for ALL REST requests
-* Remove the WordPress version fingerprint (obscurity, not hardening — it trims scanner noise but does not make an out-of-date site safer)
-* Prohibit Application Passwords (left available by default; use them with a least-privileged account because they inherit that user's access)
-* Block the XML-RPC endpoint entirely (403 for every request — not for Jetpack sites)
-* Title-only admin search
-* Remove, unlink, or replace the login logo (the WordPress logo and its wp.org link are kept by default; any change points the link home)
-* Hide the front-end admin bar
-* Hide post-password protection (hides the editor's option; no data changes, and a post that already has a password keeps its field)
-* Force the classic editor for posts, pages, custom post types, and widgets
-* Disable "Remember Me"
-* Throttle the Heartbeat API
+Sessions are in days, and the remembered length can never be shorter than the regular one — a 2-day regular login and 14 days when remembered, matching WordPress's own values. WordPress's existing automatic translation-file updates are left unchanged.
+
+= The three defaults that are deliberately not locked down =
+
+**Application Passwords stay available.** They are the safer, revocable REST and XML-RPC credential. Prohibiting them does not remove an integration's need for credentials; it pushes people to a shared login or a third-party auth plugin, which are harder to isolate and revoke and bypass 2FA the same way. Use them on a least-privileged account, because they inherit that user's access.
+
+**The login screen is left untouched.** Changing what someone sees at wp-login.php out of the box is intrusive, so removing, unlinking, or replacing the logo is an administrator's choice. Any of those changes points the header link at your home page instead of wordpress.org.
+
+**Removing the version fingerprint is off**, and not because it is risky. It is obscurity rather than hardening: it trims automated scanner noise from your logs, but it does not make an out-of-date site any safer, and the version still leaks from asset query strings and feeds. Worth opting into; not worth presenting as a security default.
 
 Plugin and theme code updates continue to use WordPress's individual per-item choices. Better by Default does not guess release risk from plugin version numbers. Explicit update constants in wp-config.php remain operator-owned and are reported rather than silently overridden.
 

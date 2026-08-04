@@ -41,24 +41,15 @@ through `wp_kses()`, for machine-facing identifiers. It may also contain an `<a>
 publication or directive and section when one exists; do not use vague attributions such as
 "per NIST." Keep that pattern when adding settings.
 
-Defaults on out of the box: restrict REST user discovery, lock down XML-RPC by category
-(incoming pingbacks off, remote publishing off, system.multicall refused), require strong
-passwords (15+ chars, breach-screened, no forced composition), limit `unfiltered_html` to
-administrators, send baseline security headers,
-set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments/pingbacks/self-pingbacks,
-disable author archives, redirect attachment pages, disable emojis, right-size login sessions in
-days (a 2-day regular login, 14 days when remembered, floored so ticking "Remember Me" can never
-shorten a session), and install core maintenance/security releases automatically while holding
-major releases for testing. Translation files retain WordPress's existing automatic-update behaviour.
+Every setting and its shipped default is tabulated in [`readme.txt`](readme.txt), and again with
+the reasoning and a code snippet for each in
+[`docs/wordpress-default-settings.md`](../../docs/wordpress-default-settings.md). Both tables are
+checked against `wpyeg_defaults_schema()` by `composer test`, which is why this file does not
+restate them: an unchecked fourth copy is just somewhere else for the truth to go stale.
 
-Off by default (opt-in, because they change behaviour): require-auth-for-all-REST, prohibit
-Application Passwords (left available by default — the safer, revocable REST credential),
-block the XML-RPC endpoint entirely, title-only admin search, remove/unlink/replace the login
-logo (the WordPress logo is kept by default), hide the front-end admin bar, hide the editor's
-post-password option, force the classic editor, lowercase upload filenames, show the generated
-image sizes on the attachment screen, disable Remember Me,
-throttle Heartbeat, and remove the version fingerprint — that last one because it
-is obscurity, not hardening: it trims scanner noise but does not make an out-of-date site safer.
+Sessions are in days — a 2-day regular login, 14 days when remembered, floored so ticking
+"Remember Me" can never shorten a session. Translation files retain WordPress's existing
+automatic-update behaviour.
 
 Plugin and theme code updates keep using WordPress's per-item auto-update choices. The plugin
 does not infer safety from version numbers. An explicit `WP_AUTO_UPDATE_CORE`,

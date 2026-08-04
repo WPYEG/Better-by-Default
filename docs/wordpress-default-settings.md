@@ -59,7 +59,12 @@ add_filter( 'rest_endpoints', function ( $endpoints ) {
 
 ```php
 add_filter( 'rest_authentication_errors', function ( $result ) {
-    if ( ! empty( $result ) ) {
+    // Only an existing error short-circuits. Treating any truthy $result as
+    // "already authenticated" is the trap: core's rest_cookie_check_errors()
+    // returns true after calling wp_set_current_user( 0 ) when a cookie carries
+    // no X-WP-Nonce, so `if ( ! empty( $result ) ) return $result;` reads that
+    // true as success and dispatches the request as user 0.
+    if ( is_wp_error( $result ) ) {
         return $result;
     }
 
@@ -72,7 +77,14 @@ add_filter( 'rest_authentication_errors', function ( $result ) {
     }
 
     return $result;
-} );
+}, PHP_INT_MAX );   // After core resolves app-password (90) and cookie (100) auth.
+
+// Closing a door and taking down the sign are two separate jobs: with the filter
+// above in place the page still advertises the endpoint, and core prints the
+// discovery link three different ways.
+remove_action( 'wp_head', 'rest_output_link_wp_head', 10 );
+remove_action( 'template_redirect', 'rest_output_link_header', 11 );
+remove_action( 'xmlrpc_rsd_apis', 'rest_output_rsd' );
 ```
 
 ### Harden XML-RPC (per-category, not all-or-nothing)
@@ -212,27 +224,34 @@ add_action( 'validate_password_reset', function ( $errors, $user ) {
 }, 10, 2 );
 
 function wpyeg_enforce_strong_password( $errors, $update, $user ) {
-    $password = isset( $_POST['pass1'] ) ? (string) $_POST['pass1'] : '';
+    // Measure exactly what core will store. edit_user() trims the password and
+    // saves the trimmed value, but fires this hook with $_POST untouched — so
+    // validating the raw string lets "              a" pass a length rule while
+    // core saves a one-character password.
+    $password = isset( $_POST['pass1'] ) ? trim( (string) wp_unslash( $_POST['pass1'] ) ) : '';
 
     if ( '' === $password ) {
-        return; // No password change requested.
+        return; // No password change requested (or whitespace-only).
     }
 
-    // NIST SP 800-63B-4 § 3.1.1.2 favours length over composition.
-    if ( strlen( $password ) < 15 ) {
-        $errors->add( 'pass_too_short', __( '<strong>Error:</strong> Password must be at least 15 characters.' ) );
+    // Breach screening first, before any exemption: a password already in a
+    // breach corpus costs its owner nothing to avoid, whatever the account can do.
+    if ( wpyeg_defaults_password_is_pwned( $password ) ) {
+        $errors->add( 'pass_pwned', __( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.' ) );
         return;
     }
 
-    // Strength + breach screening beat forced upper/lower/number/symbol rules:
-    // require "medium" or better on the bundled zxcvbn meter, and reject passwords
-    // that appear in a known breach corpus.
-    if ( wpyeg_zxcvbn_score( $password ) < 3 || wpyeg_is_pwned( $password ) ) {
-        $errors->add( 'pass_too_weak', __( '<strong>Error:</strong> Choose a stronger password that has not appeared in a known data breach.' ) );
+    // NIST SP 800-63B-4 § 3.1.1.2 favours length over composition. Count
+    // characters, not bytes: strlen() reads eight emoji as 32 and waves through
+    // a password far shorter than the rule intends.
+    $length = function_exists( 'mb_strlen' ) ? mb_strlen( $password ) : strlen( $password );
+
+    if ( $length < 15 ) {
+        $errors->add( 'pass_too_short', __( '<strong>Error:</strong> Password must be at least 15 characters.' ) );
     }
 }
 ```
-> **Note:** the companion plugin ships a working `wpyeg_password_is_pwned()`. It queries the
+> **Note:** the companion plugin ships a working `wpyeg_defaults_password_is_pwned()`. It queries the
 > [Have I Been Pwned range API](https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange)
 > by k-anonymity: it hashes the candidate locally, sends only the first 5 SHA-1 characters, and
 > compares the remaining 35 characters against the returned suffixes locally. Neither the password
@@ -263,7 +282,7 @@ add_filter( 'wpyeg_disable_hibp', function ( $disabled, $password ) {
 }, 10, 2 );
 ```
 
-With the lookup off, `wpyeg_password_is_pwned()` answers "not breached" without making a
+With the lookup off, `wpyeg_defaults_password_is_pwned()` answers "not breached" without making a
 request — the same answer it gives when the API is unreachable, because the check fails open
 either way. **The rest of the policy still applies:** the length minimum, the blocklist, and
 the personal-context rules are all local and keep running.
@@ -593,7 +612,7 @@ a feature someone wrote on purpose.
  * Decide the target separately from performing the redirect, so the decision is
  * testable without a request.
  */
-function wpyeg_attachment_redirect_target( $attachment_id ) {
+function wpyeg_defaults_attachment_redirect_target( $attachment_id ) {
     $keep = (bool) locate_template( array( 'attachment.php', 'image.php' ) );
     if ( apply_filters( 'wpyeg_keep_attachment_page', $keep, $attachment_id ) ) {
         return '';
@@ -610,7 +629,7 @@ add_action( 'template_redirect', function () {
         return;
     }
 
-    $target = wpyeg_attachment_redirect_target( get_queried_object_id() );
+    $target = wpyeg_defaults_attachment_redirect_target( get_queried_object_id() );
     if ( '' === $target ) {
         return;
     }
@@ -642,6 +661,14 @@ add_action( 'init', function () {
 
     // Stop the emoji DNS-prefetch hint too.
     add_filter( 'emoji_svg_url', '__return_false' );
+
+    // The classic editor loads emoji support as a TinyMCE plugin, which none of
+    // the removals above reach — they cover the front end, the admin head, feeds
+    // and mail. Without this, the editor still loads wp-emoji-release.min.js on a
+    // site that asked for no emojis.
+    add_filter( 'tiny_mce_plugins', function ( $plugins ) {
+        return is_array( $plugins ) ? array_values( array_diff( $plugins, array( 'wpemoji' ) ) ) : array();
+    } );
 } );
 ```
 
@@ -673,7 +700,7 @@ add_filter( 'post_search_columns', function ( $columns, $search, WP_Query $query
 
 ### Disable Front-End Admin Bar
 - **Setting key:** `frontend_admin_bar_behavior`
-- **Default:** `''` (unchanged) — or `hide_for_non_admins` as a common hardening default
+- **Default:** `''` (unchanged) — or `hide_non_admins` as a common hardening default
 - **Why:** The admin bar (toolbar) on the front end nudges layout, leaks that a user is logged
   in, and is rarely needed for subscribers/customers. Two common policies below.
 
@@ -699,23 +726,24 @@ add_filter( 'show_admin_bar', function ( $show ) {
   because it hurts convenience.
 
 ```php
-add_action( 'login_footer', function () {
-    ?>
-    <script>
-        (function () {
-            var wrap = document.querySelector('.login form #rememberme');
-            if (wrap && wrap.closest('p')) { wrap.closest('p').style.display = 'none'; }
-        })();
-    </script>
-    <?php
-} );
-
-// Belt-and-suspenders: strip the flag server-side so a forged POST can't opt
-// back into a persistent session. login_init fires before wp-login.php reads it.
+// The policy: strip the submitted flag so a forged POST cannot opt back into a
+// persistent session. login_init fires before wp-login.php reads $_POST.
 add_action( 'login_init', function () {
     unset( $_POST['rememberme'], $_REQUEST['rememberme'] );
 } );
+
+// The UI: CSS at login_head, not a script at login_footer.
+add_action( 'login_head', function () {
+    echo '<style id="wpyeg-hide-remember-me">.login form .forgetmenot { display: none; }</style>';
+} );
 ```
+
+> **Why CSS and not JavaScript.** The version of this you will find on most blogs hides the
+> checkbox with a script at `login_footer`. That leaves it visible and tickable with JavaScript
+> off, and under a strict `script-src` Content Security Policy that blocks inline scripts — on
+> a login screen, of all places. The `$_POST` strip is what actually enforces the policy either
+> way; this is the half that has to survive a browser that will not run your JavaScript, so it
+> should not be the half written in JavaScript.
 
 ### Change the Session Lengths
 - **Setting keys:** `session_regular_days` / `remember_me_days`
@@ -864,31 +892,93 @@ client intranet, a partner site, a preview or proofing tool — and it usually f
 blank frame. Bundling it with `nosniff` would mean a site that needs to be embeddable has to
 give up `nosniff` as well. Set it to *leave unchanged* when a host or CDN already sends it.
 
+**Deferring to an existing header is the wrong default, and this is the part worth studying.**
+The obvious rule is "set it only if nothing else has" — it sounds polite, and it means whatever
+arrived first wins, so a host's permissive header silently beats a deliberately configured
+strict one. Each of the three headers needs a different rule, and which rule applies depends
+entirely on whether its values can be ranked:
+
+| Header | Rule | Why |
+| --- | --- | --- |
+| `X-Content-Type-Options` | overwrite, always | `nosniff` is its only effective value, so an existing anything-else is not a policy to respect — it is a header doing nothing |
+| `X-Frame-Options` | overwrite only when strictly stronger | `DENY` > `SAMEORIGIN` is a real ranking, so a host's `DENY` is never reduced, and a configured `DENY` still tightens a weaker value |
+| `Referrer-Policy` | defer to any existing value | its tokens have no single strictness axis — `same-origin` and `strict-origin-when-cross-origin` are not comparable, so there is nothing to compare |
+
 ```php
+/**
+ * HTTP header names are case-insensitive; PHP array keys are not. Another
+ * plugin's `x-frame-options` is the same header to every browser, but isset()
+ * misses it — so a naive "already set?" check adds a second, conflicting line
+ * instead of deferring. Find the key as it was actually written.
+ */
+function wpyeg_find_header_key( $headers, $name ) {
+    foreach ( array_keys( (array) $headers ) as $key ) {
+        if ( 0 === strcasecmp( (string) $key, $name ) ) {
+            return (string) $key;
+        }
+    }
+
+    return null;
+}
+
+// nosniff: correct in place, whatever was there before.
 add_filter( 'wp_headers', function ( $headers ) {
-    // Only fill in what nothing else has set — a host or CDN may own these.
-    if ( ! isset( $headers['X-Content-Type-Options'] ) ) {
-        $headers['X-Content-Type-Options'] = 'nosniff';
-    }
-    if ( ! isset( $headers['Referrer-Policy'] ) ) {
-        $headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
-    }
+    $key = wpyeg_find_header_key( $headers, 'X-Content-Type-Options' );
+    $headers[ $key ? $key : 'X-Content-Type-Options' ] = 'nosniff';
+
     return $headers;
 } );
 
-// Framing, separately, so it can be changed without giving up the above.
+// Referrer-Policy: no strictness axis, so an existing policy stands.
 add_filter( 'wp_headers', function ( $headers ) {
-    if ( ! isset( $headers['X-Frame-Options'] ) ) {
-        $headers['X-Frame-Options'] = 'SAMEORIGIN'; // or DENY
+    if ( null === wpyeg_find_header_key( $headers, 'Referrer-Policy' ) ) {
+        $headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
     }
+
     return $headers;
 } );
 ```
 
-> **Caveat on the `isset()` guards:** PHP can only see headers set in PHP. One added by nginx,
-> Apache, or a CDN is invisible here, so this cannot catch every duplicate — check the actual
-> response, not just this code. Headers are ultimately an edge concern; this is the fallback for
-> when you do not control the edge.
+Framing is its own setting, and its own comparison. Only the two values browsers honour are
+ranked; anything else — a deprecated `ALLOW-FROM`, a typo — returns `null` and the response is
+left alone rather than silently tightened:
+
+```php
+function wpyeg_frame_option_strength( $value ) {
+    switch ( strtoupper( trim( (string) $value ) ) ) {
+        case 'DENY':       return 2;
+        case 'SAMEORIGIN': return 1;
+        default:           return null;   // Unrecognised: do not guess.
+    }
+}
+
+add_filter( 'wp_headers', function ( $headers ) {
+    $configured = wpyeg_defaults_get( 'frame_options' );   // '' = leave unchanged
+    $key        = wpyeg_find_header_key( $headers, 'X-Frame-Options' );
+
+    if ( null === $key ) {
+        $headers['X-Frame-Options'] = $configured;
+
+        return $headers;
+    }
+
+    $existing_strength   = wpyeg_frame_option_strength( $headers[ $key ] );
+    $configured_strength = wpyeg_frame_option_strength( $configured );
+
+    // Replace only when both are rankable and ours is strictly stronger.
+    if ( null !== $existing_strength && null !== $configured_strength
+        && $configured_strength > $existing_strength ) {
+        $headers[ $key ] = $configured;   // Write back to the key already there.
+    }
+
+    return $headers;
+} );
+```
+
+> **What none of this can see:** PHP only knows about headers set in PHP. One added by nginx,
+> Apache, or a CDN is invisible to `wp_headers` entirely, so no amount of comparison here
+> catches every duplicate — check the actual response, not just this code. Headers are
+> ultimately an edge concern; this is the fallback for when you do not control the edge.
 
 **Disable self-pingbacks.** Stops your own internal links from creating pingback noise.
 
@@ -1047,7 +1137,7 @@ function wpyeg_defaults_mail_is_risky() {
 > local environments, where an undeliverable address is the correct state.
 
 
-## 7. Filters
+## 7. Filters and actions
 
 Everything above is a toggle. These are the code-level hooks — no setting, no UI. They exist
 where a value is a judgement call that varies by site, and where adding a control would cost
@@ -1068,6 +1158,13 @@ Put them in a small plugin or an mu-plugin, not the theme, so they survive a the
 | `wpyeg_comment_blocks` | the core comment block list | Which editor blocks the comment teardown removes from the inserter. |
 | `wpyeg_keep_attachment_page` | `false` | Keeps a specific attachment page reachable instead of redirecting it. |
 | `wpyeg_feed_author_name` | `Site Contributor` | The name printed in feeds in place of the real author. |
+
+One action, not a filter — it returns nothing and exists purely as a place to hang your own
+teardown:
+
+| Action | Fires | What it is for |
+| --- | --- | --- |
+| `wpyeg_disable_ai_connectors` | `init`, priority 20, only when the AI-connector default is on | Unregistering AI providers core does not know about — a plugin's own connector, say. It fires on `init` rather than at plugin load precisely so the providers it is meant to remove have registered by the time it runs. |
 
 ### Scoping the password policy by role
 

@@ -844,12 +844,17 @@ function wpyeg_test_find_hook( $hook ) {
  * cannot survive an honest rewrite.
  */
 $retired_claims = array(
-	'amplifier that batches thousands of login guesses'        => 'the obsolete multicall claim',
-	'Gate the whole endpoint off'                              => 'the xmlrpc_enabled misdescription',
+	'amplifier that batches thousands of login guesses' => 'the obsolete multicall claim',
+	'Gate the whole endpoint off'                       => 'the xmlrpc_enabled misdescription',
+	'Only fill in what nothing else has set'            => 'the "set only if unset" header rule the reference doc kept teaching after 1.1.1 replaced it',
+	'all three check whether the'                       => 'the claim that this plugin only writes a header nobody else has set',
+	"wrap.closest('p').style.display"                   => 'the login_footer script the Remember Me default deliberately does not use',
+	'wpyeg_is_pwned('                                   => 'a breach-check function this plugin has never shipped',
+	'hide_for_non_admins'                               => 'the misspelled admin-bar choice value',
 	'stopped testing credentials after the first failed login' => 'the pre-correction multicall wording',
-	'only fill in what nothing else set'                       => 'the replaced "set only if unset" header rule',
-	'Note the isset() guards'                                  => 'the replaced isset()-guard header note',
-	'we should not fight that layer'                           => 'deference to an upstream header that is now compared against',
+	'only fill in what nothing else set'                => 'the replaced "set only if unset" header rule',
+	'Note the isset() guards'                           => 'the replaced isset()-guard header note',
+	'we should not fight that layer'                    => 'deference to an upstream header that is now compared against',
 );
 
 $accuracy_files = array(
@@ -901,7 +906,36 @@ wpyeg_test_assert( null !== $ai_gate, 'Disabling AI connectors filters core wp_s
 wpyeg_test_assert( '__return_false' === $ai_gate['callback'], 'The AI gate returns false, so provider connectors never register.' );
 wpyeg_test_assert( null !== wpyeg_test_find_hook( 'admin_menu' ), 'The core Connectors screen is removed from the menu.' );
 wpyeg_test_assert( null !== wpyeg_test_find_hook( 'admin_init' ), 'The Connectors screen is closed, not merely unlinked.' );
-wpyeg_test_assert( in_array( 'wpyeg_disable_ai_connectors', $GLOBALS['wpyeg_test_did_actions'], true ), 'The seam still fires for AI integrations core does not know about.' );
+
+/*
+ * The seam fires on init, not during bootstrap. Firing it at plugin load put it
+ * before every plugin that registers its own hooks from a plugins_loaded
+ * callback, and before the providers it exists to unregister had registered at
+ * all — a seam nothing could reach. Assert both halves: that bootstrap does not
+ * dispatch it, and that the init callback it registers does.
+ */
+wpyeg_test_assert(
+	! in_array( 'wpyeg_disable_ai_connectors', $GLOBALS['wpyeg_test_did_actions'], true ),
+	'The AI seam does not fire during bootstrap, when nothing could have hooked it yet.'
+);
+
+$ai_seam = null;
+foreach ( $GLOBALS['wpyeg_test_hooks'] as $ai_hook ) {
+	if ( 'init' === $ai_hook['hook'] && 20 === $ai_hook['priority'] ) {
+		$ai_seam = $ai_hook;
+	}
+}
+
+wpyeg_test_assert( null !== $ai_seam, 'The AI seam is registered on init at priority 20.' );
+
+if ( $ai_seam ) {
+	call_user_func( $ai_seam['callback'] );
+}
+
+wpyeg_test_assert(
+	in_array( 'wpyeg_disable_ai_connectors', $GLOBALS['wpyeg_test_did_actions'], true ),
+	'The seam still fires for AI integrations core does not know about.'
+);
 
 /**
  * Run every registered wp_headers filter over a starting set of headers.
@@ -934,12 +968,12 @@ wpyeg_test_assert( 'SAMEORIGIN' === $sent['X-Frame-Options'], 'Framing ships as 
 // The assertion that matters is that *no request is made*: returning false is
 // also what an unreachable API does, so a false return proves nothing on its own.
 $GLOBALS['wpyeg_test_last_http_url'] = null;
-wpyeg_test_assert( false === wpyeg_password_is_pwned( 'a password nobody has' ), 'Screening answers "not breached" when the API returns nothing.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( 'a password nobody has' ), 'Screening answers "not breached" when the API returns nothing.' );
 wpyeg_test_assert( null !== $GLOBALS['wpyeg_test_last_http_url'], 'Baseline: screening normally does reach the API.' );
 
 $GLOBALS['wpyeg_test_filter_values']['wpyeg_disable_hibp'] = true;
 $GLOBALS['wpyeg_test_last_http_url']                       = null;
-wpyeg_test_assert( false === wpyeg_password_is_pwned( 'a password nobody has' ), 'With screening off the answer is "not breached".' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( 'a password nobody has' ), 'With screening off the answer is "not breached".' );
 wpyeg_test_assert( null === $GLOBALS['wpyeg_test_last_http_url'], 'And nothing leaves the server: the filter short-circuits before wp_remote_get.' );
 unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_disable_hibp'] );
 
@@ -1028,7 +1062,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "0000000000000000000000000000000000A:3\r\n{$hibp_suffix}:42\r\n",
 );
-wpyeg_test_assert( true === wpyeg_password_is_pwned( $hibp_password ), 'A hash suffix returned with a non-zero count is treated as breached.' );
+wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A hash suffix returned with a non-zero count is treated as breached.' );
 wpyeg_test_assert( 128 * 1024 === $GLOBALS['wpyeg_test_last_http_args']['limit_response_size'], 'HIBP responses are capped at 128 KiB through the WordPress HTTP API.' );
 wpyeg_test_assert( 'true' === $GLOBALS['wpyeg_test_last_http_args']['headers']['Add-Padding'], 'HIBP range requests ask for padded responses.' );
 
@@ -1038,19 +1072,19 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "{$hibp_suffix}:0\r\n",
 );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'Padded rows (count 0) are ignored rather than read as a breach.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'Padded rows (count 0) are ignored rather than read as a breach.' );
 
 // An unreachable API must fail open, never lock out a password change.
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'offline' );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A transport failure fails open.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A transport failure fails open.' );
 
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 503 ),
 	'body'     => '',
 );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A non-200 response fails open.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A non-200 response fails open.' );
 
 // A body that reaches the transport limit may be truncated and is unavailable.
 $GLOBALS['wpyeg_test_transients'] = array();
@@ -1058,7 +1092,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => str_repeat( 'A', 128 * 1024 ),
 );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A response reaching the 128 KiB transport cap fails open.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A response reaching the 128 KiB transport cap fails open.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A capped response is never cached.' );
 
 /*
@@ -1086,14 +1120,14 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'body'     => $hibp_capped_body,
 );
 wpyeg_test_assert( strlen( $hibp_capped_body ) === $hibp_cap, 'The truncation fixture reaches the cap exactly.' );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A well-formed response reaching the cap fails open rather than trusting a truncated range.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A well-formed response reaching the cap fails open rather than trusting a truncated range.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A well-formed capped response is never cached.' );
 unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] );
 
 // A cached response that no longer validates is cleared, not reused for 12h.
 $GLOBALS['wpyeg_test_transients'] = array( 'wpyeg_hibp_' . substr( $hibp_hash, 0, 5 ) => 'CORRUPTED CACHE ENTRY' );
 $GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'network down' );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'An invalid cached range response fails open.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An invalid cached range response fails open.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'An invalid cached range response is deleted so the next call refetches.' );
 
 // One invalid row invalidates the response, even if another row looks like a match.
@@ -1102,7 +1136,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "MALFORMED\r\n{$hibp_suffix}:42\r\n",
 );
-wpyeg_test_assert( false === wpyeg_password_is_pwned( $hibp_password ), 'A malformed range response fails open instead of trusting partial data.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A malformed range response fails open instead of trusting partial data.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A malformed range response is never cached.' );
 
 // The range response is cached per prefix, so a second call makes no request.
@@ -1111,9 +1145,9 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "{$hibp_suffix}:9\r\n",
 );
-wpyeg_password_is_pwned( $hibp_password );
+wpyeg_defaults_password_is_pwned( $hibp_password );
 $GLOBALS['wpyeg_test_http'] = new WP_Error( 'http_request_failed', 'must not be called' );
-wpyeg_test_assert( true === wpyeg_password_is_pwned( $hibp_password ), 'The cached range response is reused instead of refetching.' );
+wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'The cached range response is reused instead of refetching.' );
 
 // The valid-response scan remains allocation-light and exits on the first match.
 wpyeg_test_assert( false !== strpos( $plugin_source, "foreach ( preg_split( '/\\r\\n|\\n/', \$body ) as \$line )" ), 'HIBP suffixes are scanned directly rather than copied into another result array.' );
@@ -1133,6 +1167,8 @@ $workshop_source = file_get_contents( $repo_root . '/workshop/Better-by-Default.
 $presenter_source = file_get_contents( $repo_root . '/workshop/better-by-default.iapresenter/text.md' );
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
 $deck_source = file_get_contents( $repo_root . '/workshop/build_deck.js' );
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
+$plugin_readme = file_get_contents( $repo_root . '/plugin/sane-defaults/readme.txt' );
 
 $group_labels = array(
 	'security'    => 'Security',
@@ -1152,9 +1188,19 @@ foreach ( $schema as $key => $field ) {
 	$map_row = '/^\\| `' . preg_quote( $key, '/' ) . '` \\| `' . preg_quote( $display, '/' ) . '` \\|/m';
 	$js_row  = '["' . $key . '", "' . $display . '",';
 
+	/*
+	 * readme.txt is the shipped plugin's own description of itself, so it lists
+	 * every setting with its default — and now gets checked like the rest. Two
+	 * releases ago this file and both READMEs described the split in prose that
+	 * nothing read, and two settings whose defaults flipped in 1.1.3 went on
+	 * being documented as off. Prose cannot be guarded; a table can.
+	 */
+	$readme_row = '/^\\| [^|]+ \\| `' . preg_quote( $key, '/' ) . '` \\| `' . preg_quote( $display, '/' ) . '` \\|$/m';
+
 	wpyeg_test_assert( 1 === preg_match( $doc_row, $reference_doc ), "Reference table matches schema key {$key}." );
 	wpyeg_test_assert( 1 === preg_match( $map_row, $workshop_source ), "Workshop schema map matches schema key {$key}." );
 	wpyeg_test_assert( false !== strpos( $deck_source, $js_row ), "Deck source matches schema key {$key}." );
+	wpyeg_test_assert( 1 === preg_match( $readme_row, $plugin_readme ), "readme.txt lists schema key {$key} with its shipped default." );
 }
 
 wpyeg_test_assert( $workshop_source === $presenter_source, 'The iA Presenter source is identical to the canonical workshop source.' );
@@ -1282,12 +1328,37 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 	wpyeg_test_assert( $slide_count === $page_count, "The PDF handout has one page per slide (deck {$slide_count}, handout {$page_count})." );
 }
 
-foreach ( array( 'README.md', 'plugin/sane-defaults/README.md', 'plugin/sane-defaults/readme.txt' ) as $readme_path ) {
+/*
+ * The two prose READMEs point at a guarded table instead of restating it.
+ *
+ * They used to carry their own on/off lists, checked only for three magic
+ * strings — enough to prove the words "AI connectors" appeared somewhere, and
+ * not enough to notice that both files called two on-by-default settings
+ * opt-in for two releases. The lists are gone; what is checked now is that
+ * each file still sends the reader somewhere the defaults are guaranteed
+ * current, and that neither has quietly grown a replacement list.
+ */
+foreach ( array( 'README.md', 'plugin/sane-defaults/README.md' ) as $readme_path ) {
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
 	$readme = file_get_contents( $repo_root . '/' . $readme_path );
-	wpyeg_test_assert( false !== stripos( $readme, 'AI connectors' ), "{$readme_path} documents the enabled AI-connector policy." );
-	wpyeg_test_assert( false !== strpos( $readme, 'SAMEORIGIN' ), "{$readme_path} documents the enabled frame policy." );
+
+	wpyeg_test_assert(
+		false !== strpos( $readme, 'wordpress-default-settings.md' ) || false !== strpos( $readme, 'readme.txt' ),
+		"{$readme_path} points at a table that is checked against the schema."
+	);
 	wpyeg_test_assert( false !== strpos( $readme, '14 days' ), "{$readme_path} documents the remembered-session length." );
+
+	// A prose list of settings is the shape that went stale. Schema keys are how
+	// one gets written: naming three or more of them here means the enumeration
+	// is back, in a file nothing checks per-key.
+	$key_mentions = 0;
+	foreach ( array_keys( $schema ) as $schema_key ) {
+		if ( false !== strpos( $readme, $schema_key ) ) {
+			++$key_mentions;
+		}
+	}
+
+	wpyeg_test_assert( $key_mentions < 3, "{$readme_path} has not regrown an unguarded list of settings ({$key_mentions} keys named)." );
 }
 
 unset( $GLOBALS['wpyeg_test_http'] );
@@ -1460,17 +1531,42 @@ wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'Eve
 $plugin_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
 $filter_doc    = file_get_contents( dirname( __DIR__ ) . '/docs/wordpress-default-settings.md' );
 
-preg_match_all( "/apply_filters\(\s*'(wpyeg_[a-z_]+)'/", $plugin_source, $filter_matches );
+// Actions count too. The scan used to read apply_filters() only, so
+// wpyeg_disable_ai_connectors — a seam the AI-connector default advertises in
+// its own help text — was never held to this.
+preg_match_all( "/(?:apply_filters|do_action)\(\s*'(wpyeg_[a-z_]+)'/", $plugin_source, $filter_matches );
 $public_filters = array_values( array_unique( $filter_matches[1] ) );
 
-wpyeg_test_assert( count( $public_filters ) > 0, 'Filter scan found at least one public filter.' );
+wpyeg_test_assert( count( $public_filters ) > 0, 'Hook scan found at least one public hook.' );
 
 foreach ( $public_filters as $filter ) {
 	wpyeg_test_assert(
 		false !== strpos( $filter_doc, '`' . $filter . '`' ),
-		"Public filter {$filter} is documented in the reference doc."
+		"Public hook {$filter} is documented in the reference doc."
 	);
 }
+
+/*
+ * Version consistency: the plugin header, readme.txt's Stable tag, and the
+ * newest changelog heading all name the same release.
+ *
+ * Nothing checks that a release with behaviour changes carries an upgrade
+ * notice — that judgement is not mechanisable — but these three drifting apart
+ * is, and it is the cheap half of the same problem.
+ */
+preg_match( '/^ \* Version:\s+(\S+)$/m', $plugin_source, $header_version );
+preg_match( '/^Stable tag:\s+(\S+)$/m', $plugin_readme, $stable_tag );
+preg_match( '/^= (\d+\.\d+\.\d+) =$/m', $plugin_readme, $newest_entry );
+
+wpyeg_test_assert( ! empty( $header_version[1] ), 'The plugin header declares a version.' );
+wpyeg_test_assert(
+	isset( $stable_tag[1] ) && $header_version[1] === $stable_tag[1],
+	"readme.txt's Stable tag matches the plugin header version ({$header_version[1]})."
+);
+wpyeg_test_assert(
+	isset( $newest_entry[1] ) && $header_version[1] === $newest_entry[1],
+	"The newest changelog entry is for the version being shipped ({$header_version[1]})."
+);
 
 /*
  * Password policy role scoping.
@@ -1479,11 +1575,11 @@ foreach ( $public_filters as $filter ) {
  * the role gate, or an exempt account skips the one rule that costs nothing.
  */
 $make_user = static function ( array $roles ) {
-	$user              = new stdClass();
-	$user->ID          = 1;
-	$user->user_login  = 'jsmith';
-	$user->user_email  = 'jsmith@example.com';
-	$user->roles       = $roles;
+	$user             = new stdClass();
+	$user->ID         = 1;
+	$user->user_login = 'jsmith';
+	$user->user_email = 'jsmith@example.com';
+	$user->roles      = $roles;
 
 	return $user;
 };
@@ -1505,7 +1601,7 @@ unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_weak_roles'] );
 $source_of_validator = $plugin_source;
 $fn_start            = strpos( $source_of_validator, 'function wpyeg_defaults_validate_password(' );
 $fn_body             = substr( $source_of_validator, $fn_start, 3000 );
-$pwned_at            = strpos( $fn_body, 'wpyeg_password_is_pwned(' );
+$pwned_at            = strpos( $fn_body, 'wpyeg_defaults_password_is_pwned(' );
 $gate_at             = strpos( $fn_body, 'wpyeg_defaults_password_enforced_for_user(' );
 wpyeg_test_assert(
 	false !== $pwned_at && false !== $gate_at && $pwned_at < $gate_at,
@@ -1590,7 +1686,7 @@ define( 'WP_AUTO_UPDATE_CORE', 'minor' );
 $lock_core = wpyeg_defaults_config_lock( 'core_update_policy' );
 wpyeg_test_assert( false !== strpos( $lock_core, 'WP_AUTO_UPDATE_CORE' ), 'WP_AUTO_UPDATE_CORE takes precedence over the updater constants in the notice.' );
 
-$GLOBALS['wpyeg_test_hooks'] = array();
+$GLOBALS['wpyeg_test_hooks']  = array();
 $GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'all' );
 wpyeg_defaults_bootstrap();
 unset( $GLOBALS['wpyeg_test_option'] );
@@ -1650,8 +1746,8 @@ wpyeg_test_assert( null === wpyeg_test_find_hook( 'admin_notices' ), 'Turning th
  * this split the production branch could not be exercised at all.
  */
 $GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'wordpress@mysite.local';
-$GLOBALS['wpyeg_test_environment'] = 'production';
-$GLOBALS['wpyeg_test_can']         = true;
+$GLOBALS['wpyeg_test_environment']                   = 'production';
+$GLOBALS['wpyeg_test_can']                           = true;
 wpyeg_test_assert( true === wpyeg_defaults_should_warn_about_mail(), 'A risky address on a production site warns.' );
 
 $GLOBALS['wpyeg_test_environment'] = 'local';
@@ -1663,7 +1759,7 @@ wpyeg_test_assert( true === wpyeg_defaults_should_warn_about_mail(), 'Staging is
 $GLOBALS['wpyeg_test_can'] = false;
 wpyeg_test_assert( false === wpyeg_defaults_should_warn_about_mail(), 'Someone who cannot fix it is not shown it.' );
 
-$GLOBALS['wpyeg_test_can'] = true;
+$GLOBALS['wpyeg_test_can']                           = true;
 $GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'hello@realdomain.ca';
 wpyeg_test_assert( false === wpyeg_defaults_should_warn_about_mail(), 'A deliverable address on production says nothing.' );
 
