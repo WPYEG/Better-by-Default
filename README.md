@@ -15,11 +15,13 @@ Default settings are powerful things. Here they are opinionated filters sitting 
 Better-by-Default/
 ├── plugin/sane-defaults/  → the installable plugin (main file, readme.txt, README)
 ├── docs/                  → wordpress-default-settings.md — the full reference, every
-│                            default with its "why" and a code snippet
+│                            default with its "why" and a code snippet; plus
+│                            when-two-plugins-set-the-same-default.md
 ├── workshop/              → the meetup talk: PowerPoint, iA Presenter markdown,
 │                            a PDF handout, and the deck build script
 ├── tests/                 → plugin-policy.php — the policy suite, and the guard that
-│                            keeps the docs and the deck in step with the schema
+│                            keeps the docs and the deck in step with the schema;
+│                            class-wp-*.php are the two WordPress stubs it needs
 ├── bin/                   → build-zip.php — rebuilds dist/ reproducibly
 ├── dist/                  → sane-defaults.zip — a ready-to-install build
 ├── composer.json          → the lint/test/build scripts
@@ -47,29 +49,31 @@ On activation the documented defaults are seeded automatically. Then visit
 
 ## The defaults
 
-**On out of the box** (safe for nearly any site): restrict REST user discovery, lock down
-XML-RPC by category (pingbacks / remote publishing / multicall all off), require strong
-passwords (length + breach screening, not forced composition), limit `unfiltered_html` to
-administrators, send baseline security headers,
-set `X-Frame-Options: SAMEORIGIN`, disable AI connectors, disable comments / pingbacks /
-self-pingbacks, redirect public author archives and attachment pages, disable the emoji script,
-right-size login sessions in days (a 2-day regular login, 14 days when remembered, floored so
-ticking "Remember Me" can never shorten a session), and automatically install core
-maintenance/security releases while holding major releases for testing.
+**Which settings ship on, and what each one defaults to, lives in exactly one place:** the
+[Quick-Reference Table](docs/wordpress-default-settings.md#quick-reference-table) in the
+reference doc. Every row there is checked against `wpyeg_defaults_schema()` by `composer test`,
+so it cannot drift. This README used to restate the split in prose, and the prose was wrong for
+two settings for two releases — a list nothing checks is a list that goes stale.
 
-**Deliberately *not* locked down by default** (opinionated calls, explained in the reference):
-Application Passwords stay **available** — they're the safer, revocable integration credential,
-and disabling them pushes people to worse alternatives — and the login logo is left
-**untouched** (`keep_default`), because changing the login screen out of the box is intrusive.
+The shape of the split, which is the part worth reading here: anything safe on nearly any site
+is on, anything that visibly changes how the site behaves is off and opt-in. Login sessions are
+the one pair of settings that carry values rather than a yes/no — both in days, matching
+WordPress's own (a 2-day regular login, 14 days when remembered), floored so that ticking
+"Remember Me" can never *shorten* a session. Three other calls are deliberate exceptions worth
+knowing about.
 
-**Opt-in, off by default** (they change behaviour — turn on deliberately): require auth for all
-REST, prohibit Application Passwords, remove/replace the login logo, title-only admin search,
-hide the front-end admin bar, hide the editor's post-password option, force the classic editor,
-lowercase upload filenames, show the generated image sizes on the attachment screen, disable
-Remember Me, and throttle the Heartbeat API. Removing the
-version fingerprint is here too, for a different reason: it is
-obscurity rather than hardening — useful for trimming scanner noise, but it does not make an
-out-of-date site safer, so it is not presented as a security default.
+**Application Passwords stay available.** They're the safer, revocable integration credential,
+and disabling them pushes people toward a shared login or a third-party auth plugin — harder to
+isolate, harder to revoke, and they bypass 2FA the same way. Prohibiting them is opt-in.
+
+**The login screen is left untouched** (`keep_default`). Changing what someone sees at
+`wp-login.php` out of the box is intrusive, so removing, unlinking, or replacing the logo is a
+choice an administrator makes.
+
+**Removing the version fingerprint is off**, and not because it is risky. It is obscurity
+rather than hardening: it trims scanner noise, but it does not make an out-of-date site any
+safer, and the version still leaks from asset query strings and feeds. Worth opting into, not
+worth presenting as a security default.
 
 Three more live in `wp-config.php`, above the plugin layer, and are documented as manual steps:
 `DISALLOW_FILE_EDIT`, `AUTOSAVE_INTERVAL`, and `WP_POST_REVISIONS`.
@@ -102,7 +106,7 @@ code. (The `wpyeg_` option prefix is kept deliberately as the WPYEG org conventi
 ```bash
 composer install          # lint tooling (require-dev); vendor/ is gitignored
 composer test             # tests/plugin-policy.php — no WordPress needed
-composer lint             # phpcs against phpcs.xml (composer lint:fix to autofix)
+composer lint             # phpcs against phpcs.xml — warnings fail too (lint:fix autofixes)
 composer build            # rewrite dist/sane-defaults.zip from plugin/
 composer verify:dist      # check the committed zip matches the source, without rewriting
 composer build:deck       # rebuild workshop/Better-by-Default.pptx (needs node)
@@ -111,9 +115,10 @@ composer verify:pdf       # check the handout matches the deck (needs LibreOffic
 ```
 
 `composer test`, `verify:dist`, `verify:deck`, and `lint` run in CI on every push and pull
-request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The tests run against
-PHP 7.4, 8.1, and 8.4, so the `Requires PHP: 7.4` claim is tested rather than asserted.
-`verify:pdf` is deliberately excluded, for the reason given below.
+request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml). CI runs those composer
+scripts verbatim rather than its own variants, so a green local checkout means a green build.
+The tests run against PHP 7.4, 8.1, and 8.4, so the `Requires PHP: 7.4` claim is tested rather
+than asserted. `verify:pdf` is deliberately excluded, for the reason given below.
 
 `composer test` is the one that matters most, and not only for the policy assertions.
 The suite ends with a cross-artifact parity guard: every key in `wpyeg_defaults_schema()`

@@ -56,12 +56,13 @@ jobs:
       - name: Install lint tooling
         run: composer install --no-interaction --no-progress
 
-      # Errors fail the build. Warnings are printed but do not, because the
-      # plugin carries 31 long-standing array-alignment warnings that predate
-      # this workflow. Drop the runtime-set once those are cleared and warnings
-      # become blocking too.
+      # Warnings block too. They used to be exempted while a backlog of
+      # array-alignment warnings sat in the suite; that backlog is cleared, so
+      # the exemption is gone and this is exactly `composer lint`. Keep it that
+      # way — a local script that passes while CI fails, or the reverse, is a
+      # guard nobody trusts.
       - name: phpcs
-        run: vendor/bin/phpcs --standard=phpcs.xml --runtime-set ignore_warnings_on_exit 1
+        run: composer lint
 
   deck:
     name: Deck generator and committed deck agree

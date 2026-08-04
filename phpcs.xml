@@ -19,6 +19,7 @@
 	</rule>
 	<rule ref="WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents">
 		<exclude-pattern>bin/*</exclude-pattern>
+		<exclude-pattern>tests/*</exclude-pattern>
 	</rule>
 	<!--
 		verify-pdf.php shells out to LibreOffice and builds into a temporary

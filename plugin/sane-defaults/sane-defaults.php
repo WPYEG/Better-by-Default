@@ -13,13 +13,28 @@
  *
  * ---------------------------------------------------------------------------
  * WORKSHOP NOTE
- * Every policy below is gated behind an option (prefix: wpyeg_). The pattern is
- * always the same:
+ * Every policy below is gated behind an option (prefix: wpyeg_). The common
+ * shape, and the one to reach for first, is:
  *
  *     if ( wpyeg_defaults_enabled( 'some_key' ) ) { add_filter( ... ); }
  *
  * That single idea — "a default is just an opinionated filter behind a toggle"
- * — is the whole talk. Read the SETTINGS_SCHEMA array first; it's the map.
+ * — is the whole talk. Read wpyeg_defaults_schema() first; it's the map.
+ *
+ * Three variations appear below, each for a stated reason. Recognising why a
+ * policy needs one is most of the lesson:
+ *
+ *   1. Gate at bootstrap (above). The hook is only registered when the setting
+ *      is on, so a disabled policy costs one array lookup and nothing else.
+ *   2. Register always, decide inside. Needed when one hook serves several
+ *      settings (xmlrpc_methods) or when the answer depends on runtime
+ *      arguments the bootstrap cannot see (auth_cookie_expiration).
+ *   3. Compare a value rather than a yes/no. Select and number settings have no
+ *      "enabled" state — frame_options, login_logo_behavior and the session
+ *      lengths test what was chosen.
+ *
+ * Prefer shape 1. Reach for 2 or 3 only when 1 cannot express the policy, and
+ * say why in a comment at the site.
  * ---------------------------------------------------------------------------
  *
  * @package BetterByDefault
@@ -33,6 +48,13 @@ defined( 'ABSPATH' ) || exit;
  *
  * Type is 'toggle' (yes/no), 'select', or 'number'. Group is the fieldset it
  * renders under on the settings screen.
+ *
+ * Labels and help text are deliberately NOT wrapped in __(). The bootstrap
+ * reads this schema on plugins_loaded, and since WordPress 6.7 a translation
+ * call before init triggers a _doing_it_wrong notice about just-in-time
+ * loading. Everything this plugin prints runs after init — the settings screen,
+ * admin notices, validation errors — and every one of those strings is
+ * translated. The rule is the hook, not the string: after init, use __().
  */
 function wpyeg_defaults_schema() {
 	return array(
@@ -292,8 +314,7 @@ function wpyeg_defaults_schema() {
 			),
 		),
 
-		// --- Performance ------------------------------------------------
-		// --- Email ---------------------------------------------------------
+		// --- Email ----------------------------------------------------------
 		'mail_deliverability_notice'      => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
@@ -302,6 +323,7 @@ function wpyeg_defaults_schema() {
 			'help'    => 'WordPress sends mail from <code>wordpress@yourdomain</code> unless something changes it. On a domain that cannot actually send — a staging host, a <code>.local</code> address, a domain with no mail records — password resets and order receipts fail silently. This shows an admin notice when the address looks undeliverable. It never blocks or alters mail, and it stays quiet on local environments.',
 		),
 
+		// --- Performance ------------------------------------------------
 		'throttle_heartbeat'              => array(
 			'default' => 'no',
 			'type'    => 'toggle',
@@ -662,11 +684,30 @@ function wpyeg_defaults_bootstrap() {
 			}
 		);
 
-		/**
-		 * Seam for AI integrations core does not know about — hook this to
+		/*
+		 * Seam for AI integrations core does not know about — hook it to
 		 * unregister your own providers or hide their UI.
+		 *
+		 * Fired on init, not here. This bootstrap runs on plugins_loaded, and a
+		 * plugin that registers its hooks from inside its own plugins_loaded
+		 * callback — an extremely common shape — has not run yet if it loads
+		 * after this one, so it would never see the action. Worse, the providers
+		 * this seam exists to unregister are themselves registered on init, so
+		 * firing at plugin load would arrive before there was anything to remove.
+		 * Priority 20 puts it after the ordinary init registrations.
 		 */
-		do_action( 'wpyeg_disable_ai_connectors' );
+		add_action(
+			'init',
+			function () {
+				/**
+				 * Unregister AI providers core does not know about.
+				 *
+				 * Fires only when the disable_ai_connectors default is on.
+				 */
+				do_action( 'wpyeg_disable_ai_connectors' );
+			},
+			20
+		);
 	}
 
 	/* ----- Content and public surfaces ----- */
@@ -1112,12 +1153,13 @@ function wpyeg_defaults_hide_post_password_ui() {
 /**
  * Add a read-only panel listing the generated sizes for an attachment.
  *
- * @param \WP_Post $post Attachment post.
+ * Runs on add_meta_boxes_attachment, which passes the post — but registering a
+ * meta box does not need it, so the parameter is not accepted.
  */
-function wpyeg_defaults_media_sizes_meta_box( $post ) {
+function wpyeg_defaults_media_sizes_meta_box() {
 	add_meta_box(
 		'wpyeg-media-sizes',
-		'Generated Sizes',
+		__( 'Generated Sizes', 'sane-defaults' ),
 		'wpyeg_defaults_render_media_sizes',
 		null,
 		'side',
@@ -1134,7 +1176,7 @@ function wpyeg_defaults_render_media_sizes( $post ) {
 	$meta = wp_get_attachment_metadata( $post->ID );
 
 	if ( empty( $meta['sizes'] ) || ! is_array( $meta['sizes'] ) ) {
-		echo '<p>No generated sizes.</p>';
+		echo '<p>' . esc_html__( 'No generated sizes.', 'sane-defaults' ) . '</p>';
 		return;
 	}
 
@@ -1179,7 +1221,9 @@ function wpyeg_defaults_jetpack_warning( $key ) {
 		return '';
 	}
 
-	return '<strong>Jetpack is active on this site.</strong> It uses XML-RPC for its WordPress.com connection, so blocking the endpoint will break it. Leave this off unless connection and feature testing proves Jetpack no longer needs XML-RPC.';
+	// Rendered on the settings screen, which is well after init, so unlike the
+	// schema's help text this one is translated. See wpyeg_defaults_schema().
+	return __( '<strong>Jetpack is active on this site.</strong> It uses XML-RPC for its WordPress.com connection, so blocking the endpoint will break it. Leave this off unless connection and feature testing proves Jetpack no longer needs XML-RPC.', 'sane-defaults' );
 }
 
 /**
@@ -1634,7 +1678,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 	 * gate below deliberately sits after it — see that function's docblock for
 	 * why the order is the whole design.
 	 */
-	if ( wpyeg_password_is_pwned( $password ) ) {
+	if ( wpyeg_defaults_password_is_pwned( $password ) ) {
 		return new WP_Error(
 			'wpyeg_password_pwned',
 			__( '<strong>Error:</strong> Choose a password that has not appeared in a known data breach.', 'sane-defaults' )
@@ -1928,10 +1972,15 @@ function wpyeg_defaults_rest_password_context( $request ) {
  * an unreachable HIBP service does. This avoids locking everyone out of
  * password changes when the remote evidence is unavailable or invalid.
  *
+ * The function carries the wpyeg_defaults_ prefix every other function here
+ * uses; the filter it applies keeps the shorter wpyeg_ prefix all this plugin's
+ * public hooks use. They are two namespaces, not one inconsistency — renaming
+ * the filter would break every site already using it.
+ *
  * @param string $password Plain-text password to screen.
  * @return bool True when the password appears in a known breach.
  */
-function wpyeg_password_is_pwned( $password ) {
+function wpyeg_defaults_password_is_pwned( $password ) {
 	/*
 	 * An off switch for the one thing this plugin does that leaves the server.
 	 *
