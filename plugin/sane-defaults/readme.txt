@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -82,6 +82,13 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= 1.1.1 =
+* Security headers are compared rather than yielded to. "Set only if unset" sounded polite and was the wrong rule: whatever arrived first won, so a host's permissive `X-Frame-Options` silently beat a deliberately configured `DENY`. The configured value now replaces an existing one only when it is strictly stronger, and an unrecognised value — a deprecated `ALLOW-FROM`, say — is still left alone rather than guessed at.
+* `X-Content-Type-Options` is corrected in place. It has exactly one effective value, so an existing header of `set-by-the-cdn` was not a policy to respect, it was a header doing nothing. It is now set to `nosniff` whatever it said before.
+* Header names are matched case-insensitively. HTTP header names are case-insensitive and PHP array keys are not, so another plugin's `x-content-type-options` used to be invisible here and this plugin added a second, conflicting line. Corrections are now written back to the key that is already there.
+* `Referrer-Policy` still defers to an existing value — its tokens have no single strictness axis, so there is nothing to compare — but it defers case-insensitively now.
+* Breach screening can be switched off. The Have I Been Pwned lookup is the one thing this plugin does that leaves your server, and there was no way to decline it. It is already k-anonymous — five characters of a locally computed SHA-1, with a padded response — but "it is safe" is not the same as "you have no choice." Define `WPYEG_DISABLE_HIBP` in `wp-config.php` for a site-wide declaration, or filter `wpyeg_disable_hibp` for a per-password decision. With it off, no request is made and the check answers "not breached"; the length, blocklist, and personal-context rules still apply.
+
 = 1.1.0 =
 * New, ON by default: "Limit unfiltered HTML to administrators." Editors hold `unfiltered_html` on single-site installs, which is enough to save a raw script into a post. Administrators, and Super Admins on multisite, keep it. **This takes a capability away from existing Editors and Authors on upgrade** — turn the setting off if your workflow depends on it.
 * New, OFF by default: hide post-password protection, force the classic editor, lowercase upload filenames, and a read-only "Generated Sizes" panel on the attachment edit screen.
@@ -101,6 +108,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.1.1 =
+Security headers are now compared instead of yielded to. If something upstream — a host, a CDN, another plugin — already sends a weaker `X-Frame-Options` than the one configured here, the configured value now wins, where before the upstream one did. A meaningless `X-Content-Type-Options` is corrected to `nosniff`. Check your response headers after upgrading if another layer sets them. Breach screening can now be switched off with `WPYEG_DISABLE_HIBP`.
 
 = 1.1.0 =
 Adds a default that removes `unfiltered_html` from everyone below administrator. Editors and Authors who could save raw script into a post no longer can. Turn "Limit unfiltered HTML to administrators" off under Settings → Better by Default if your workflow needs it. Session lengths are now in days; the old hours field is gone.
