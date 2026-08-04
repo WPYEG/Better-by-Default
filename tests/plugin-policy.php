@@ -796,15 +796,53 @@ wpyeg_test_assert( 'nosniff' === $sent['X-Content-Type-Options'], 'nosniff ships
 wpyeg_test_assert( isset( $sent['Referrer-Policy'] ), 'Referrer-Policy ships on.' );
 wpyeg_test_assert( 'SAMEORIGIN' === $sent['X-Frame-Options'], 'Framing ships as SAMEORIGIN.' );
 
-// A host or CDN may already own these; do not fight that layer.
+// --- HIBP opt-out -----------------------------------------------------------
+// The lookup is k-anonymous, but an air-gapped site needs a switch, not an
+// argument. Both forms: the constant is an operator declaration, the filter
+// lets a plugin decide per password.
+// The assertion that matters is that *no request is made*: returning false is
+// also what an unreachable API does, so a false return proves nothing on its own.
+$GLOBALS['wpyeg_test_last_http_url'] = null;
+wpyeg_test_assert( false === wpyeg_password_is_pwned( 'a password nobody has' ), 'Screening answers "not breached" when the API returns nothing.' );
+wpyeg_test_assert( null !== $GLOBALS['wpyeg_test_last_http_url'], 'Baseline: screening normally does reach the API.' );
+
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_disable_hibp'] = true;
+$GLOBALS['wpyeg_test_last_http_url']                       = null;
+wpyeg_test_assert( false === wpyeg_password_is_pwned( 'a password nobody has' ), 'With screening off the answer is "not breached".' );
+wpyeg_test_assert( null === $GLOBALS['wpyeg_test_last_http_url'], 'And nothing leaves the server: the filter short-circuits before wp_remote_get.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_disable_hibp'] );
+
+// A host or CDN may already own these — but "already set" is not the same as
+// "stronger", and deferring to a weaker value lets it win purely by arriving
+// first. Compare instead of yielding.
 $preset = wpyeg_test_send_headers(
 	array(
 		'X-Frame-Options'        => 'DENY',
 		'X-Content-Type-Options' => 'set-by-the-cdn',
 	)
 );
-wpyeg_test_assert( 'DENY' === $preset['X-Frame-Options'], 'An X-Frame-Options set elsewhere is left alone.' );
-wpyeg_test_assert( 'set-by-the-cdn' === $preset['X-Content-Type-Options'], 'A nosniff header set elsewhere is left alone.' );
+wpyeg_test_assert( 'DENY' === $preset['X-Frame-Options'], 'A stronger X-Frame-Options is never downgraded to the configured SAMEORIGIN.' );
+wpyeg_test_assert( 'nosniff' === $preset['X-Content-Type-Options'], 'A meaningless X-Content-Type-Options is corrected, not deferred to: nosniff is the only value that does anything.' );
+
+// Case-insensitivity. HTTP header names are case-insensitive and PHP array keys
+// are not, so matching on the exact string emits a second, conflicting line.
+$cased = wpyeg_test_send_headers( array( 'x-content-type-options' => 'set-by-the-cdn' ) );
+wpyeg_test_assert( ! isset( $cased['X-Content-Type-Options'] ), 'A differently cased header is not duplicated under the canonical spelling.' );
+wpyeg_test_assert( 'nosniff' === $cased['x-content-type-options'], 'The correction is written back to the key that was already there.' );
+
+$cased_frame = wpyeg_test_send_headers( array( 'x-frame-options' => 'DENY' ) );
+wpyeg_test_assert( ! isset( $cased_frame['X-Frame-Options'] ), 'A differently cased X-Frame-Options is not duplicated either.' );
+
+// An existing value browsers do not honour is left alone rather than guessed at:
+// tightening a deprecated ALLOW-FROM would reverse its permissive intent.
+$unknown = wpyeg_test_send_headers( array( 'X-Frame-Options' => 'ALLOW-FROM https://example.com' ) );
+wpyeg_test_assert( 'ALLOW-FROM https://example.com' === $unknown['X-Frame-Options'], 'An unrecognised X-Frame-Options value is left untouched.' );
+
+// Referrer-Policy has no single strictness axis across its tokens, so an
+// existing policy is deferred to — case-insensitively.
+$referrer = wpyeg_test_send_headers( array( 'referrer-policy' => 'same-origin' ) );
+wpyeg_test_assert( 'same-origin' === $referrer['referrer-policy'], 'An existing Referrer-Policy is respected whatever its casing.' );
+wpyeg_test_assert( ! isset( $referrer['Referrer-Policy'] ), 'And is not duplicated.' );
 
 // The point of splitting them: framing can be handed back to the host without
 // also giving up nosniff, which the old single toggle made impossible.
