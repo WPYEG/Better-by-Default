@@ -788,6 +788,54 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
 	}
 };
 
+/*
+ * The checker must fail on the mistakes it exists to catch.
+ *
+ * Every heading this plugin ships is already correct, so the loops below pass
+ * whether the rule is enforced or quietly broken — a guard that cannot fail
+ * looks identical to one that never fires. Rather than break a heading by hand
+ * each time, run the checker over known-bad strings and require a failure.
+ *
+ * $assert_title_case reports through wpyeg_test_assert, which exits, so this
+ * re-implements the predicate and holds it to the same three rules. Keep the
+ * two in step: a rule added above needs a case here.
+ */
+$is_title_case = static function ( $heading ) use ( $title_case_small_words ) {
+	foreach ( explode( ' ', $heading ) as $position => $heading_word ) {
+		if ( '' === $heading_word ) {
+			continue;
+		}
+
+		if ( $position > 0 && in_array( strtolower( $heading_word ), $title_case_small_words, true ) ) {
+			if ( strtolower( $heading_word ) !== $heading_word ) {
+				return false;
+			}
+			continue;
+		}
+
+		foreach ( explode( '-', $heading_word ) as $heading_half ) {
+			if ( '' !== $heading_half && ucfirst( $heading_half ) !== $heading_half ) {
+				return false;
+			}
+		}
+	}
+
+	return true;
+};
+
+foreach ( array( 'Response Headers', 'Front-End Admin Bar', 'Comments and Pings', 'Accounts Per Step', 'REST API', 'XML-RPC' ) as $good_heading ) {
+	wpyeg_test_assert( $is_title_case( $good_heading ), "The heading checker accepts \"{$good_heading}\"." );
+}
+
+foreach ( array(
+	'Login logo'         => 'sentence case, the drift this guard was written for',
+	'Front-end Output'   => 'the second half of a hyphenated compound left lowercase',
+	'Comments And Pings' => 'a coordinating conjunction wrongly capitalised',
+	'response headers'   => 'no capitals at all',
+) as $bad_heading => $bad_reason ) {
+	wpyeg_test_assert( ! $is_title_case( $bad_heading ), "The heading checker rejects \"{$bad_heading}\" ({$bad_reason})." );
+}
+
 foreach ( wpyeg_defaults_groups() as $heading_key => $heading ) {
 	$assert_title_case( $heading, "group {$heading_key}" );
 }
