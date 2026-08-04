@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.1.3
+ * Version:           1.1.4
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -42,6 +42,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'rest',
 			'label'   => 'Restrict REST API user discovery',
 			'help'    => 'Hides <code>/wp/v2/users</code> from logged-out requests (stops username enumeration).',
 		),
@@ -49,6 +50,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'rest',
 			'label'   => 'Require auth for all REST requests',
 			'help'    => 'Blocks anonymous REST entirely. The logged-in block editor still works, but public blocks, embeds, search, and integrations may not.',
 		),
@@ -2194,26 +2196,42 @@ function wpyeg_defaults_mail_is_risky() {
 }
 
 /**
- * Warn administrators when a non-local site cannot plausibly send mail.
+ * Whether this request should carry the mail-deliverability warning.
  *
  * A notice, never an intervention. WordPress failing to deliver a password
  * reset is silent by design — wp_mail() returns false and nothing surfaces it —
  * so the entire value here is saying so out loud, once, to someone who can fix
- * it. Local environments are exempt because there the address is meant to be
- * undeliverable.
+ * it.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_should_warn_about_mail() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return false;
+	}
+
+	// A local environment is *meant* to have an undeliverable address. Warning
+	// there is how a notice trains people to dismiss notices.
+	if ( function_exists( 'wp_get_environment_type' ) && 'local' === wp_get_environment_type() ) {
+		return false;
+	}
+
+	return wpyeg_defaults_mail_is_risky();
+}
+
+/**
+ * Warn administrators when a non-local site cannot plausibly send mail.
+ *
+ * Prints only. Whether to print is wpyeg_defaults_should_warn_about_mail(),
+ * kept separate for the same reason as the attachment redirect above: a
+ * decision can be tested without standing up a request, and the environment
+ * gate is otherwise unreachable from a test — a local dev site reports
+ * 'local' and nothing in-process will convince it otherwise.
  *
  * @return void
  */
 function wpyeg_defaults_render_mail_config_notice() {
-	if ( ! current_user_can( 'manage_options' ) ) {
-		return;
-	}
-
-	if ( function_exists( 'wp_get_environment_type' ) && 'local' === wp_get_environment_type() ) {
-		return;
-	}
-
-	if ( ! wpyeg_defaults_mail_is_risky() ) {
+	if ( ! wpyeg_defaults_should_warn_about_mail() ) {
 		return;
 	}
 
@@ -2257,6 +2275,7 @@ function wpyeg_defaults_render_mail_config_notice() {
  */
 function wpyeg_defaults_section_labels() {
 	return array(
+		'rest'     => __( 'REST API', 'sane-defaults' ),
 		'xmlrpc'   => __( 'XML-RPC', 'sane-defaults' ),
 		'sessions' => __( 'Session length', 'sane-defaults' ),
 	);
