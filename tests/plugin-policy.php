@@ -749,7 +749,25 @@ $title_case_small_words = array( 'a', 'an', 'the', 'and', 'or', 'nor', 'but' );
  * @param string $source  Where it came from, for the failure message.
  * @return void
  */
-$assert_title_case = static function ( $heading, $source ) use ( $title_case_small_words ) {
+/**
+ * Every way a heading breaks the rule, as a list of reasons.
+ *
+ * Reports rather than asserts, and that shape is the point. The assertions and
+ * the self-test below both call this one function, so there is exactly one
+ * implementation of the rule. The earlier version asserted inline through
+ * wpyeg_test_assert(), which exits — so the self-test could not reuse it and
+ * carried a second copy of the logic, kept in step by a comment asking whoever
+ * edited one to remember the other. A guard whose correctness rests on
+ * remembering is the thing this suite exists to replace. Keel arrived at this
+ * shape first; it is better than what was here.
+ *
+ * @param string   $heading     Heading text.
+ * @param string[] $small_words Words that stay lowercase inside a title.
+ * @return string[] Problems found, empty when the heading is Title Case.
+ */
+function wpyeg_test_heading_case_errors( $heading, $small_words ) {
+	$problems = array();
+
 	foreach ( explode( ' ', $heading ) as $position => $heading_word ) {
 		if ( '' === $heading_word ) {
 			continue;
@@ -761,11 +779,10 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
 		 * "Comments And Pings" through, which is Title Case done wrong rather
 		 * than not done — Keel's guard caught that and this one did not.
 		 */
-		if ( $position > 0 && in_array( strtolower( $heading_word ), $title_case_small_words, true ) ) {
-			wpyeg_test_assert(
-				strtolower( $heading_word ) === $heading_word,
-				"Heading \"{$heading}\" ({$source}): the short word \"{$heading_word}\" stays lowercase inside a title."
-			);
+		if ( $position > 0 && in_array( strtolower( $heading_word ), $small_words, true ) ) {
+			if ( strtolower( $heading_word ) !== $heading_word ) {
+				$problems[] = "the short word \"{$heading_word}\" stays lowercase inside a title";
+			}
 			continue;
 		}
 
@@ -780,12 +797,22 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
 				continue;
 			}
 
-			wpyeg_test_assert(
-				ucfirst( $heading_half ) === $heading_half,
-				"Heading \"{$heading}\" ({$source}) is Title Case: \"{$heading_half}\" in \"{$heading_word}\" starts lowercase."
-			);
+			if ( ucfirst( $heading_half ) !== $heading_half ) {
+				$problems[] = "\"{$heading_half}\" in \"{$heading_word}\" starts lowercase";
+			}
 		}
 	}
+
+	return $problems;
+}
+
+$assert_title_case = static function ( $heading, $source ) use ( $title_case_small_words ) {
+	$problems = wpyeg_test_heading_case_errors( $heading, $title_case_small_words );
+
+	wpyeg_test_assert(
+		array() === $problems,
+		"Heading \"{$heading}\" ({$source}) is not Title Case: " . implode( '; ', $problems ) . '.'
+	);
 };
 
 /*
@@ -793,47 +820,45 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
  *
  * Every heading this plugin ships is already correct, so the loops below pass
  * whether the rule is enforced or quietly broken — a guard that cannot fail
- * looks identical to one that never fires. Rather than break a heading by hand
- * each time, run the checker over known-bad strings and require a failure.
+ * looks identical to one that never fires. So the checker is made to classify
+ * strings whose verdict is known, in both directions.
  *
- * $assert_title_case reports through wpyeg_test_assert, which exits, so this
- * re-implements the predicate and holds it to the same three rules. Keep the
- * two in step: a rule added above needs a case here.
+ * These fixtures are shared verbatim with the sibling plugins, and that is the
+ * whole mechanism: the three enforce one rule, and what keeps them from
+ * drifting apart again is that a disagreement surfaces as a failing case here
+ * rather than as copy nobody can move between repositories. Changing one list
+ * means changing three. A rule added to wpyeg_test_heading_case_errors() needs
+ * a case in both lists below, or this self-test silently under-covers it.
  */
-$is_title_case = static function ( $heading ) use ( $title_case_small_words ) {
-	foreach ( explode( ' ', $heading ) as $position => $heading_word ) {
-		if ( '' === $heading_word ) {
-			continue;
-		}
+$heading_case_accepts = array(
+	'Pingbacks On New Posts' => 'a preposition capitalizes',
+	'Accounts Per Step'      => 'so does "Per"',
+	'Front-End Admin Bar'    => 'both halves of a hyphenated compound',
+	'Comments and Pings'     => 'a coordinating conjunction stays lowercase',
+	'REST API'               => 'an all-caps acronym',
+	'XML-RPC'                => 'a hyphenated all-caps acronym',
+);
 
-		if ( $position > 0 && in_array( strtolower( $heading_word ), $title_case_small_words, true ) ) {
-			if ( strtolower( $heading_word ) !== $heading_word ) {
-				return false;
-			}
-			continue;
-		}
+$heading_case_rejects = array(
+	'Pingbacks on New Posts' => 'a lowercased preposition — the case that inverted when the rule changed',
+	'Front-end Admin Bar'    => 'the second half of a hyphenated compound',
+	'Comments And Pings'     => 'a capitalized conjunction',
+	'pingbacks on new posts' => 'no capitals at all',
+);
 
-		foreach ( explode( '-', $heading_word ) as $heading_half ) {
-			if ( '' !== $heading_half && ucfirst( $heading_half ) !== $heading_half ) {
-				return false;
-			}
-		}
-	}
-
-	return true;
-};
-
-foreach ( array( 'Response Headers', 'Front-End Admin Bar', 'Comments and Pings', 'Accounts Per Step', 'REST API', 'XML-RPC' ) as $good_heading ) {
-	wpyeg_test_assert( $is_title_case( $good_heading ), "The heading checker accepts \"{$good_heading}\"." );
+foreach ( $heading_case_accepts as $heading_case => $heading_reason ) {
+	$heading_problems = wpyeg_test_heading_case_errors( $heading_case, $title_case_small_words );
+	wpyeg_test_assert(
+		array() === $heading_problems,
+		"Self-test: \"{$heading_case}\" should be accepted ({$heading_reason}), but the checker reported: " . implode( '; ', $heading_problems ) . '.'
+	);
 }
 
-foreach ( array(
-	'Login logo'         => 'sentence case, the drift this guard was written for',
-	'Front-end Output'   => 'the second half of a hyphenated compound left lowercase',
-	'Comments And Pings' => 'a coordinating conjunction wrongly capitalised',
-	'response headers'   => 'no capitals at all',
-) as $bad_heading => $bad_reason ) {
-	wpyeg_test_assert( ! $is_title_case( $bad_heading ), "The heading checker rejects \"{$bad_heading}\" ({$bad_reason})." );
+foreach ( $heading_case_rejects as $heading_case => $heading_reason ) {
+	wpyeg_test_assert(
+		array() !== wpyeg_test_heading_case_errors( $heading_case, $title_case_small_words ),
+		"Self-test: \"{$heading_case}\" should be rejected ({$heading_reason}), but the checker accepted it."
+	);
 }
 
 foreach ( wpyeg_defaults_groups() as $heading_key => $heading ) {
