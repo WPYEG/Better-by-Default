@@ -855,6 +855,7 @@ $retired_claims = array(
 $accuracy_files = array(
 	dirname( __DIR__ ) . '/README.md',
 	dirname( __DIR__ ) . '/docs/wordpress-default-settings.md',
+	dirname( __DIR__ ) . '/docs/when-two-plugins-set-the-same-default.md',
 	dirname( __DIR__ ) . '/plugin/sane-defaults/README.md',
 	dirname( __DIR__ ) . '/plugin/sane-defaults/readme.txt',
 	dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php',

@@ -20,6 +20,14 @@ and depend on your own plugin's logic.
 
 ---
 
+> **Running this alongside another defaults plugin?** See
+> [When two plugins set the same default](when-two-plugins-set-the-same-default.md).
+> Two plugins setting the same value do not error — WordPress keeps whichever
+> answered last, and the loser's settings screen goes on showing a number the
+> site is not using.
+
+---
+
 ## 1. Security & Attack-Surface Reduction
 
 ### Restrict REST API User Discovery
