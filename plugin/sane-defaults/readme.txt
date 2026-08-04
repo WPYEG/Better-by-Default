@@ -124,6 +124,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Upgrade Notice ==
 
+= 1.1.2 =
+Password rules are now scoped by role, and Subscribers are exempt by default. An account whose roles are all in `wpyeg_weak_roles` (default `array( 'subscriber' )`) no longer faces the 15-character minimum, the blocklist, or the personal-context checks. Breach screening still applies to everyone. If you want the full policy for every role, filter `wpyeg_weak_roles` to an empty array.
+
 = 1.1.1 =
 Security headers are now compared instead of yielded to. If something upstream — a host, a CDN, another plugin — already sends a weaker `X-Frame-Options` than the one configured here, the configured value now wins, where before the upstream one did. A meaningless `X-Content-Type-Options` is corrected to `nosniff`. Check your response headers after upgrading if another layer sets them. Breach screening can now be switched off with `WPYEG_DISABLE_HIBP`.
 
