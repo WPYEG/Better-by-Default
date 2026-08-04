@@ -2021,6 +2021,130 @@ foreach ( $deck_slide_samples as $deck_slide ) {
 wpyeg_test_assert( $deck_samples_checked > 15, "The lint pass reached the slide samples ({$deck_samples_checked} checked)." );
 
 /*
+ * --- the Markdown exports have to keep up with the generator ---
+ *
+ * The deck exists twice: build_deck.js produces the .pptx, and the iA Presenter
+ * Markdown is the reading copy. Neither is generated from the other, and nothing
+ * kept them in step — so a sample corrected in the generator stayed wrong in the
+ * Markdown, twice, and both times a person noticed rather than a test.
+ *
+ * A strict equality check is the wrong instrument. The two are deliberately not
+ * identical: the Markdown carries presenter notes, section headings and fuller
+ * comment wording that never reach a slide, and forcing a match would mean
+ * flattening the reading copy to fit the deck. Twenty-five sample lines differ
+ * today and every one of them is intentional.
+ *
+ * So two narrower checks, aimed at the failure that actually happened.
+ */
+
+/*
+ * 1. Every PHP sample in the Markdown must parse, by the standard the slides are
+ * held to. This is what would have caught the arrow function with a block body
+ * still sitting in the export after the slide was fixed.
+ */
+$workshop_fence_count = 0;
+
+if ( preg_match_all( '/```(?:php)?\n(.*?)```/s', $workshop_source, $workshop_fences ) ) {
+	foreach ( $workshop_fences[1] as $workshop_fence ) {
+		$workshop_code = wpyeg_deck_sample_code( $workshop_fence );
+
+		// Presenter notes are bracketed prose, not code.
+		if ( '' === $workshop_code || '[' === substr( $workshop_code, 0, 1 ) ) {
+			continue;
+		}
+		if ( ! preg_match( '/\w\s*\(/', $workshop_code ) ) {
+			continue;
+		}
+
+		++$workshop_fence_count;
+
+		$workshop_error = wpyeg_deck_sample_error( $workshop_code );
+
+		if ( '' !== $workshop_error ) {
+			// Judge blocks separately, as the slide check does, for fences that
+			// place two contexts side by side.
+			$workshop_error = '';
+
+			foreach ( preg_split( '/\n\s*\n/', $workshop_fence ) as $workshop_block ) {
+				$workshop_block_code = wpyeg_deck_sample_code( $workshop_block );
+
+				if ( '' === $workshop_block_code ) {
+					continue;
+				}
+
+				$workshop_error = wpyeg_deck_sample_error( $workshop_block_code );
+
+				if ( '' !== $workshop_error ) {
+					break;
+				}
+			}
+		}
+
+		wpyeg_test_assert(
+			'' === $workshop_error,
+			'A PHP sample in the workshop Markdown does not parse (' . $workshop_error . '); sample begins: '
+				. trim( strtok( $workshop_code, "\n" ) )
+		);
+	}
+}
+
+wpyeg_test_assert( $workshop_fence_count > 10, "The Markdown scan reached the samples ({$workshop_fence_count} fences checked)." );
+
+/*
+ * 2. Patterns retired from the slides must not survive in the Markdown.
+ *
+ * This is the half a parser cannot see: these parse perfectly and are still
+ * wrong, which is why they sat in the export unnoticed after the slides were
+ * corrected. Add a row whenever a sample is fixed for a reason rather than for
+ * style — the list is meant to grow.
+ */
+$retired_samples = array(
+	'fn( $s ) => {'                             => 'an arrow function given a block body, which does not parse',
+	"add_action( 'init', fn )"                  => '`fn` used as a placeholder, a reserved word since PHP 7.4',
+	'if ( ! empty( $result ) ) return $result;' => "the REST gate treating core's nonceless `true` as authenticated",
+);
+
+/*
+ * Only the slide samples are searched, not the whole generator. The speaker
+ * notes deliberately quote two of these in order to name the trap — "the
+ * tempting line is ..." — and a check that could not tell a sample from prose
+ * would forbid teaching the mistake at all.
+ */
+$deck_sample_text = '';
+
+foreach ( $deck_slide_samples as $deck_retirement_slide ) {
+	$deck_sample_text .= implode( "\n", $deck_retirement_slide ) . "\n";
+}
+
+wpyeg_test_assert( '' !== trim( $deck_sample_text ), 'The retired-sample scan has the slide samples to search.' );
+
+foreach ( $retired_samples as $retired_sample => $retired_reason ) {
+	wpyeg_test_assert(
+		false === strpos( $deck_sample_text, $retired_sample ),
+		"A retired sample is back on a slide ({$retired_reason}): {$retired_sample}"
+	);
+
+	// The Markdown may quote a retired pattern in prose to name the trap; what
+	// it must not do is present it as a code sample.
+	$retired_survives = false;
+
+	if ( preg_match_all( '/```(?:php)?\n(.*?)```/s', $workshop_source, $workshop_retired_fences ) ) {
+		foreach ( $workshop_retired_fences[1] as $workshop_retired_fence ) {
+			if ( false !== strpos( $workshop_retired_fence, $retired_sample ) ) {
+				$retired_survives = true;
+				break;
+			}
+		}
+	}
+
+	wpyeg_test_assert(
+		! $retired_survives,
+		"A sample retired from the slides is still in the workshop Markdown ({$retired_reason}): {$retired_sample}"
+	);
+}
+
+
+/*
  * The setting count is prose, so the per-key row checks above never saw it. It
  * sat at 27 through two commits that took the schema to 31.
  */
