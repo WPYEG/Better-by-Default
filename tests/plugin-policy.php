@@ -992,6 +992,79 @@ wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_s
 wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_source, 'PMP-specific' ), 'BBD settings are not mislabeled as PMP-specific.' );
 wpyeg_test_assert( false === strpos( $deck_source, 'OPTION   ' ), 'Workshop chips identify schema keys rather than separate options.' );
 
+/*
+ * The setting count is prose, so the per-key row checks above never saw it. It
+ * sat at 27 through two commits that took the schema to 31.
+ */
+$setting_count = count( $schema );
+
+foreach ( array( 'workshop script' => $workshop_source, 'deck generator' => $deck_source ) as $count_label => $count_source ) {
+	wpyeg_test_assert( false !== strpos( $count_source, "We have {$setting_count} settings" ), "The {$count_label} states the current setting count." );
+	wpyeg_test_assert( false !== strpos( $count_source, "activates {$setting_count} sensible" ), "The {$count_label} opens with the current setting count." );
+}
+
+/*
+ * The rendered deck. Everything above reads build_deck.js; nothing read what it
+ * produces, which is how a corrected sentence sat in the generator for two days
+ * while Better-by-Default.pptx still carried the wrong one. A .pptx is a zip of
+ * XML, so pull the text runs out of the slides and the speaker notes and hold
+ * the artifact to the same standard as its sources.
+ *
+ * This is also the only check that exercises the generator. A key added to
+ * build_deck.js but never built into the deck fails here, and the only way to
+ * fix it is to run the generator — which is the one thing that proves the
+ * generator still runs at all. It did not, for one commit, and nothing noticed.
+ */
+
+/**
+ * Extract slide text and speaker notes from a .pptx.
+ *
+ * @param string $pptx_path Path to the presentation.
+ * @return string Every text run, one slide or notes page per line.
+ */
+function wpyeg_test_pptx_text( $pptx_path ) {
+	$zip = new ZipArchive();
+
+	if ( true !== $zip->open( $pptx_path ) ) {
+		return '';
+	}
+
+	$text = '';
+
+	for ( $i = 0; $i < $zip->numFiles; $i++ ) {
+		if ( ! preg_match( '#^ppt/(slides|notesSlides)/[^/]+\.xml$#', $zip->getNameIndex( $i ) ) ) {
+			continue;
+		}
+
+		preg_match_all( '#<a:t>(.*?)</a:t>#s', $zip->getFromIndex( $i ), $runs );
+		$text .= implode( ' ', $runs[1] ) . "\n";
+	}
+
+	$zip->close();
+
+	return $text;
+}
+
+$deck_artifact = $repo_root . '/workshop/Better-by-Default.pptx';
+
+if ( ! class_exists( 'ZipArchive' ) ) {
+	echo "Skipped the rendered-deck guard: this PHP build has no ZipArchive.\n";
+} else {
+	wpyeg_test_assert( is_readable( $deck_artifact ), 'The rendered deck is committed alongside its generator.' );
+
+	$deck_text = wpyeg_test_pptx_text( $deck_artifact );
+	wpyeg_test_assert( '' !== $deck_text, 'The rendered deck yields readable slide text.' );
+
+	foreach ( $schema as $key => $field ) {
+		wpyeg_test_assert( false !== strpos( $deck_text, $key ), "The rendered deck carries schema key {$key}." );
+	}
+
+	wpyeg_test_assert( false !== strpos( $deck_text, "We have {$setting_count} settings" ), 'The rendered deck states the current setting count.' );
+	wpyeg_test_assert( false === strpos( $deck_text, 'amplifier that batches thousands of login guesses' ), 'The rendered deck does not repeat the obsolete multicall claim.' );
+	wpyeg_test_assert( false === strpos( $deck_text, 'stopped testing credentials after the first failed login' ), 'The rendered deck carries the corrected multicall wording.' );
+	wpyeg_test_assert( false === strpos( $deck_text, 'Gate the whole endpoint off' ), 'The rendered deck does not misdescribe xmlrpc_enabled.' );
+}
+
 foreach ( array( 'README.md', 'plugin/sane-defaults/README.md', 'plugin/sane-defaults/readme.txt' ) as $readme_path ) {
 	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
 	$readme = file_get_contents( $repo_root . '/' . $readme_path );

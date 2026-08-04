@@ -97,21 +97,31 @@ composer test             # tests/plugin-policy.php — no WordPress needed
 composer lint             # phpcs against phpcs.xml (composer lint:fix to autofix)
 composer build            # rewrite dist/sane-defaults.zip from plugin/
 composer verify:dist      # check the committed zip matches the source, without rewriting
+composer build:deck       # rebuild workshop/Better-by-Default.pptx (needs node)
 ```
 
 `composer test` is the one that matters most, and not only for the policy assertions.
 The suite ends with a cross-artifact parity guard: every key in `wpyeg_defaults_schema()`
 must appear — with its default and group — in the reference doc, in both workshop scripts,
-and in the deck generator, and the two workshop scripts must be byte-identical. A setting
-cannot quietly drift out of the learner-facing material, because the tests fail first.
+and in the deck generator; the two workshop scripts must be byte-identical; and the setting
+count written out in prose must match the schema. A setting cannot quietly drift out of the
+learner-facing material, because the tests fail first.
 
-What the guard does **not** cover is the rendered deck. `Better-by-Default.pptx` and the PDF
-handout are build outputs, and nothing checks that they are current. Rebuild them whenever
-the generator or the script changes:
+The guard reaches the **rendered deck** too. `Better-by-Default.pptx` is a zip of XML, so the
+suite reads its slide text and speaker notes back out and holds them to the same standard as
+the sources. That is what catches a generator change that was never built — and it is the
+only check that exercises the generator at all, because the sole way to satisfy it is to run
+`composer build:deck`. Before that guard existed, `node build_deck.js` sat broken through a
+commit and the shipped deck was two corrections behind, with nothing to say so.
+
+Rebuilding the deck needs `pptxgenjs`, which is not vendored:
 
 ```bash
-cd workshop && npm install pptxgenjs && node build_deck.js
+cd workshop && npm install pptxgenjs
 ```
+
+The **PDF handout is not guarded and not automated.** Regenerate it from the rebuilt deck
+whenever the handout goes out:
 
 ```bash
 cd workshop && soffice --headless --convert-to pdf Better-by-Default.pptx
