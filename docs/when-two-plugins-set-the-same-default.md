@@ -121,6 +121,12 @@ Note that the two named callbacks sit at priority 50 and the anonymous one at
 **last** one to run is the one that counts — so registering earlier does not
 help you, it guarantees you lose.
 
+That output is from the original measurement and no longer reproduces: all three
+plugins register at 50 now, the third having been moved there because of what
+this page found. Kept as it was recorded, because the lesson is in the numbers
+being different, and a page that quietly edits its own evidence to match today
+is worth less than one that shows what it saw.
+
 If a line says only `closure`, the plugin registered an anonymous function and
 there is no name to print. `ReflectionFunction` will give you the file, which is
 usually enough to identify it:
@@ -155,9 +161,25 @@ when Remember Me is switched off, which is a policy whatever the numbers say.
 above prints `wpyeg_defaults_auth_cookie_expiration` and nobody has to run the
 reflection version to find out whose it is.
 
-Neither change makes a replacing filter compose — nothing can. They make this
-plugin abstain from the fights it has no stake in, and identifiable in the ones
-it does.
+**It registered at priority 10, which guaranteed losing the fights it did
+enter.** This one took a second pass to see, and it arrived from outside: a
+sibling plugin's source carried the argument, in a comment explaining why *it*
+used 50 — that a policy clamp has to be the last word, because at 10 anything
+registering at a default priority lands after it and quietly wins. That
+described this plugin exactly. Abstaining from a fight worth nothing achieves
+nothing if you also lose the one worth something, and for four releases a
+deliberately set session length here was decided by load order. It registers at
+50 now, matching both siblings — late enough to be the last word, low enough
+that a site wanting the final say can still take it on purpose.
+
+Worth noting how that was found, because it is the argument for reading the
+other implementations rather than only your own: the first two problems were
+visible in this plugin's own code, and the third was only visible next to
+somebody else's.
+
+None of the three makes a replacing filter compose — nothing can. They make this
+plugin abstain from the fights it has no stake in, identifiable in the ones it
+does, and able to win those.
 
 Useful hooks to try: `auth_cookie_expiration`, `login_headerurl`,
 `rest_authentication_errors`. Contrast them with `wp_headers` or
