@@ -57,7 +57,21 @@ defined( 'ABSPATH' ) || exit;
  * translated. The rule is the hook, not the string: after init, use __().
  */
 function wpyeg_defaults_schema() {
-	return array(
+	/*
+	 * Built once per request. Unlike the stored option — see wpyeg_defaults_get()
+	 * for why that one is deliberately uncached — this array is a literal in the
+	 * source, so nothing can change it between calls and a static cannot go
+	 * stale. It is read around fifty times on an ordinary request and once per
+	 * field again on the settings screen, all of it rebuilding the same
+	 * thirty-odd entries and their help text.
+	 */
+	static $schema = null;
+
+	if ( null !== $schema ) {
+		return $schema;
+	}
+
+	$schema = array(
 
 		// --- Security ---------------------------------------------------
 		'restrict_rest_user_discovery'    => array(
@@ -332,6 +346,8 @@ function wpyeg_defaults_schema() {
 			'help'    => 'Slows admin polling to 60s and drops it on the dashboard home.',
 		),
 	);
+
+	return $schema;
 }
 
 /** Human-friendly group titles for the settings screen. */
@@ -2383,9 +2399,8 @@ function wpyeg_defaults_render_mail_config_notice() {
 /**
  * Titles for sections that stack several related controls under one table row.
  *
- * A section is presentation only: it changes how a run of settings is drawn,
- * never what they do. Settings without one render exactly as before, which is
- * why adding this cost nothing anywhere else in the plugin.
+ * Every `section` named in the schema needs an entry here; see
+ * wpyeg_defaults_settings_rows() for how a run of them becomes one row.
  *
  * @return array Section slug => title.
  */
@@ -2397,14 +2412,221 @@ function wpyeg_defaults_section_labels() {
 	);
 }
 
+/**
+ * The DOM id for a setting's control.
+ *
+ * @param string $key Schema key.
+ * @return string
+ */
+function wpyeg_defaults_field_id( $key ) {
+	return 'wpyeg-defaults-' . str_replace( '_', '-', $key );
+}
+
+/**
+ * Group the schema into the rows the settings table draws.
+ *
+ * The screen has exactly two row shapes: one setting on its own, or a run of
+ * settings sharing a `section` stacked inside one row under a shared heading.
+ * Working that out here, once, is what keeps the rendering below free of the
+ * open/close bookkeeping it used to carry — a `$section_open` variable threaded
+ * through a foreach, three `if ( $stacked )` branches deciding which closing tag
+ * to emit, and a final "did a section run to the end of the group" check.
+ *
+ * A section is presentation only. It changes how a run of settings is drawn,
+ * never what they do.
+ *
+ * @return array Group key => list of rows, each `array( 'section' => slug|null, 'fields' => array of keys )`.
+ */
+function wpyeg_defaults_settings_rows() {
+	$rows = array();
+
+	foreach ( wpyeg_defaults_schema() as $key => $field ) {
+		$group   = $field['group'];
+		$section = isset( $field['section'] ) ? $field['section'] : null;
+
+		if ( ! isset( $rows[ $group ] ) ) {
+			$rows[ $group ] = array();
+		}
+
+		$last = $rows[ $group ] ? count( $rows[ $group ] ) - 1 : null;
+
+		// A section continues only while consecutive fields keep naming it, so a
+		// group can hold two runs of the same section without them merging.
+		if ( null !== $section && null !== $last && $section === $rows[ $group ][ $last ]['section'] ) {
+			$rows[ $group ][ $last ]['fields'][] = $key;
+			continue;
+		}
+
+		$rows[ $group ][] = array(
+			'section' => $section,
+			'fields'  => array( $key ),
+		);
+	}
+
+	return $rows;
+}
+
+/**
+ * Render one control: its input, whatever supersedes it, and its help text.
+ *
+ * Everything a control needs to say about itself lives here, so the row shapes
+ * above do not have to know which type they are drawing.
+ *
+ * @param string $key     Schema key.
+ * @param array  $field   Schema entry.
+ * @param bool   $stacked Whether the control sits inside a section fieldset.
+ * @return void
+ */
+function wpyeg_defaults_render_control( $key, $field, $stacked ) {
+	$name     = WPYEG_DEFAULTS_OPTION . '[' . $key . ']';
+	$value    = wpyeg_defaults_get( $key );
+	$field_id = wpyeg_defaults_field_id( $key );
+	$help_id  = $field_id . '-description';
+	$describe = empty( $field['help'] ) ? '' : ' aria-describedby="' . esc_attr( $help_id ) . '"';
+
+	// A wp-config.php constant may supersede this setting; if so the control is
+	// disabled and the reason shown next to it.
+	$lock   = wpyeg_defaults_config_lock( $key );
+	$locked = null !== $lock;
+
+	/*
+	 * A disabled control is not submitted, so a save under the constant would
+	 * read as "unset" and quietly overwrite the stored preference. Carry it in a
+	 * hidden field. For a toggle only 'yes' is carried, because sanitize treats
+	 * any non-empty submitted value as checked.
+	 */
+	if ( $locked && ( 'toggle' !== $field['type'] || 'yes' === $value ) ) {
+		printf( '<input type="hidden" name="%s" value="%s" />', esc_attr( $name ), esc_attr( 'toggle' === $field['type'] ? 'yes' : $value ) );
+	}
+
+	if ( 'toggle' === $field['type'] ) {
+		// The descriptive label sits next to the checkbox inside one clickable
+		// label, never a generic "Enabled".
+		printf(
+			'<label for="%1$s"><input type="checkbox" id="%1$s" name="%2$s" value="yes"%3$s%4$s%5$s /> %6$s</label>',
+			esc_attr( $field_id ),
+			esc_attr( $name ),
+			$describe, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_attr() above.
+			disabled( $locked, true, false ),
+			checked( 'yes', $value, false ),
+			esc_html( $field['label'] )
+		);
+	} else {
+		// Select and number fields keep a descriptive row label; a stacked one
+		// has no row header to name it, so it carries its own.
+		if ( $stacked ) {
+			printf( '<label for="%s">%s</label> ', esc_attr( $field_id ), esc_html( $field['label'] ) );
+		}
+
+		if ( 'select' === $field['type'] ) {
+			printf(
+				'<select id="%1$s" name="%2$s"%3$s%4$s>',
+				esc_attr( $field_id ),
+				esc_attr( $name ),
+				$describe, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_attr() above.
+				disabled( $locked, true, false )
+			);
+
+			foreach ( $field['choices'] as $choice => $choice_label ) {
+				printf(
+					'<option value="%s"%s>%s</option>',
+					esc_attr( $choice ),
+					selected( $choice, $value, false ),
+					esc_html( $choice_label )
+				);
+			}
+
+			echo '</select>';
+		} else {
+			printf(
+				'<input type="number" class="small-text" step="1" min="%1$s" id="%2$s" name="%3$s" value="%4$s"%5$s%6$s />',
+				esc_attr( isset( $field['min'] ) ? (int) $field['min'] : 0 ),
+				esc_attr( $field_id ),
+				esc_attr( $name ),
+				esc_attr( $value ),
+				$describe, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from esc_attr() above.
+				disabled( $locked, true, false )
+			);
+		}
+	}
+
+	if ( $locked ) {
+		echo '<p class="description">' . wp_kses( $lock, array( 'code' => array() ) ) . '</p>';
+	}
+
+	$jetpack_note = wpyeg_defaults_jetpack_warning( $key );
+
+	if ( '' !== $jetpack_note ) {
+		echo '<p class="description">' . wp_kses( $jetpack_note, wpyeg_defaults_help_allowed_html() ) . '</p>';
+	}
+
+	if ( ! empty( $field['help'] ) ) {
+		printf(
+			'<p id="%s" class="description">%s</p>',
+			esc_attr( $help_id ),
+			wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Sanitized by wp_kses().
+		);
+	}
+}
+
+/**
+ * Render one table row: either a single setting or a stacked section of them.
+ *
+ * @param array $row One entry from wpyeg_defaults_settings_rows().
+ * @return void
+ */
+function wpyeg_defaults_render_row( $row ) {
+	$schema = wpyeg_defaults_schema();
+
+	if ( null !== $row['section'] ) {
+		$labels = wpyeg_defaults_section_labels();
+		$title  = isset( $labels[ $row['section'] ] ) ? $labels[ $row['section'] ] : $row['section'];
+
+		printf(
+			'<tr><th scope="row">%1$s</th><td><fieldset><legend class="screen-reader-text"><span>%1$s</span></legend>',
+			esc_html( $title )
+		);
+
+		foreach ( $row['fields'] as $key ) {
+			echo '<div class="wpyeg-defaults-stacked">';
+			wpyeg_defaults_render_control( $key, $schema[ $key ], true );
+			echo '</div>';
+		}
+
+		echo '</fieldset></td></tr>';
+
+		return;
+	}
+
+	$key   = $row['fields'][0];
+	$field = $schema[ $key ];
+
+	// A toggle already carries its label beside the checkbox, so it spans both
+	// columns rather than repeating itself in a row header.
+	if ( 'toggle' === $field['type'] ) {
+		echo '<tr><td colspan="2">';
+		wpyeg_defaults_render_control( $key, $field, false );
+		echo '</td></tr>';
+
+		return;
+	}
+
+	printf(
+		'<tr><th scope="row"><label for="%s">%s</label></th><td>',
+		esc_attr( wpyeg_defaults_field_id( $key ) ),
+		esc_html( $field['label'] )
+	);
+	wpyeg_defaults_render_control( $key, $field, false );
+	echo '</td></tr>';
+}
+
 /** Render the settings page. */
 function wpyeg_defaults_render_settings_page() {
 	if ( ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
 
-	$schema = wpyeg_defaults_schema();
-	$groups = wpyeg_defaults_groups();
+	$rows = wpyeg_defaults_settings_rows();
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
@@ -2413,163 +2635,15 @@ function wpyeg_defaults_render_settings_page() {
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
 
-			<?php foreach ( $groups as $group_key => $group_label ) : ?>
+			<?php foreach ( wpyeg_defaults_groups() as $group_key => $group_label ) : ?>
 				<h2><?php echo esc_html( $group_label ); ?></h2>
 				<table class="form-table" role="presentation">
 					<tbody>
 					<?php
-					$section_open = null;
+					$group_rows = isset( $rows[ $group_key ] ) ? $rows[ $group_key ] : array();
 
-					foreach ( $schema as $key => $field ) :
-						if ( $field['group'] !== $group_key ) {
-							continue;
-						}
-
-						$section = isset( $field['section'] ) ? $field['section'] : null;
-
-						// Close an open section once the run of same-section fields ends.
-						if ( null !== $section_open && $section_open !== $section ) {
-							echo '</fieldset></td></tr>';
-							$section_open = null;
-						}
-
-						// Open one on the first field of a run.
-						if ( null !== $section && null === $section_open ) {
-							$section_labels = wpyeg_defaults_section_labels();
-							$section_title  = isset( $section_labels[ $section ] ) ? $section_labels[ $section ] : $section;
-							printf(
-								'<tr><th scope="row">%1$s</th><td><fieldset><legend class="screen-reader-text"><span>%1$s</span></legend>',
-								esc_html( $section_title )
-							);
-							$section_open = $section;
-						}
-
-						$stacked  = ( null !== $section );
-						$name     = WPYEG_DEFAULTS_OPTION . '[' . $key . ']';
-						$value    = wpyeg_defaults_get( $key );
-						$field_id = 'wpyeg-defaults-' . str_replace( '_', '-', $key );
-						$help_id  = $field_id . '-description';
-
-						// A wp-config.php constant may supersede this setting; if so the
-						// control is disabled and the reason shown next to it.
-						$lock   = wpyeg_defaults_config_lock( $key );
-						$locked = null !== $lock;
-						?>
-						<?php
-						if ( ! $stacked ) :
-							?>
-							<tr><?php endif; ?>
-							<?php if ( 'toggle' === $field['type'] ) : ?>
-								<?php
-								if ( $stacked ) :
-									?>
-									<div class="wpyeg-defaults-stacked">
-									<?php
-else :
-	?>
-									<td colspan="2"><?php endif; ?>
-									<?php // A disabled checkbox is not submitted; carry a 'yes' so a save under the constant does not silently flip the stored preference to 'no'. Only 'yes' is carried, because sanitize treats any non-empty POST value as checked. ?>
-									<?php if ( $locked && 'yes' === $value ) : ?>
-										<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="yes" />
-									<?php endif; ?>
-									<label for="<?php echo esc_attr( $field_id ); ?>">
-										<input type="checkbox"
-											id="<?php echo esc_attr( $field_id ); ?>"
-											name="<?php echo esc_attr( $name ); ?>"
-											value="yes"
-											<?php if ( ! empty( $field['help'] ) ) : ?>
-												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
-											<?php endif; ?>
-											<?php disabled( $locked ); ?>
-											<?php checked( 'yes', $value ); ?> />
-										<?php echo esc_html( $field['label'] ); ?>
-									</label>
-
-									<?php if ( $locked ) : ?>
-										<p class="description"><?php echo wp_kses( $lock, array( 'code' => array() ) ); ?></p>
-									<?php endif; ?>
-
-									<?php $jetpack_note = wpyeg_defaults_jetpack_warning( $key ); ?>
-									<?php if ( '' !== $jetpack_note ) : ?>
-										<p class="description"><?php echo wp_kses( $jetpack_note, wpyeg_defaults_help_allowed_html() ); ?></p>
-									<?php endif; ?>
-
-									<?php if ( ! empty( $field['help'] ) ) : ?>
-										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
-									<?php endif; ?>
-								<?php
-								if ( $stacked ) :
-									?>
-									</div>
-									<?php
-else :
-	?>
-									</td><?php endif; ?>
-							<?php else : ?>
-								<?php // Stacked non-toggles have no row header to name them, so they carry their own label. ?>
-								<?php if ( $stacked ) : ?>
-									<div class="wpyeg-defaults-stacked">
-										<label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
-								<?php else : ?>
-									<th scope="row">
-										<label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
-									</th>
-									<td>
-								<?php endif; ?>
-									<?php if ( 'select' === $field['type'] ) : ?>
-										<?php // A disabled select is not submitted; carry the current value so a save under the constant preserves the stored preference. ?>
-										<?php if ( $locked ) : ?>
-											<input type="hidden" name="<?php echo esc_attr( $name ); ?>" value="<?php echo esc_attr( $value ); ?>" />
-										<?php endif; ?>
-										<select
-											id="<?php echo esc_attr( $field_id ); ?>"
-											name="<?php echo esc_attr( $name ); ?>"
-											<?php if ( ! empty( $field['help'] ) ) : ?>
-												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
-											<?php endif; ?>
-											<?php disabled( $locked ); ?>>
-											<?php foreach ( $field['choices'] as $ck => $cl ) : ?>
-												<option value="<?php echo esc_attr( $ck ); ?>" <?php selected( $ck, $value ); ?>>
-													<?php echo esc_html( $cl ); ?>
-												</option>
-											<?php endforeach; ?>
-										</select>
-									<?php elseif ( 'number' === $field['type'] ) : ?>
-										<input type="number" min="<?php echo esc_attr( isset( $field['min'] ) ? (int) $field['min'] : 0 ); ?>" step="1"
-											id="<?php echo esc_attr( $field_id ); ?>"
-											name="<?php echo esc_attr( $name ); ?>"
-											value="<?php echo esc_attr( $value ); ?>"
-											<?php if ( ! empty( $field['help'] ) ) : ?>
-												aria-describedby="<?php echo esc_attr( $help_id ); ?>"
-											<?php endif; ?>
-											class="small-text" />
-									<?php endif; ?>
-
-									<?php if ( $locked ) : ?>
-										<p class="description"><?php echo wp_kses( $lock, array( 'code' => array() ) ); ?></p>
-									<?php endif; ?>
-
-									<?php if ( ! empty( $field['help'] ) ) : ?>
-										<p id="<?php echo esc_attr( $help_id ); ?>" class="description"><?php echo wp_kses( $field['help'], wpyeg_defaults_help_allowed_html() ); ?></p>
-									<?php endif; ?>
-								<?php
-								if ( $stacked ) :
-									?>
-									</div>
-									<?php
-else :
-	?>
-									</td><?php endif; ?>
-							<?php endif; ?>
-						<?php
-						if ( ! $stacked ) :
-							?>
-							</tr><?php endif; ?>
-					<?php endforeach; ?>
-					<?php
-					// A section that runs to the end of a group still needs closing.
-					if ( null !== $section_open ) {
-						echo '</fieldset></td></tr>';
+					foreach ( $group_rows as $row ) {
+						wpyeg_defaults_render_row( $row );
 					}
 					?>
 					</tbody>
