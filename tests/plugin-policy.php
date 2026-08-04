@@ -878,6 +878,7 @@ $heading_case_accepts = array(
 	'Out-of-the-Box Defaults'  => 'more than one of them',
 	'Opt-In Defaults'          => 'a function word at a compound EDGE still capitalises',
 	'In-House Tooling'         => 'and at the START, the mirror of that case',
+	'The Defaults Screen'      => 'a LEADING small word still capitalises',
 );
 
 $heading_case_rejects = array(
@@ -889,6 +890,7 @@ $heading_case_rejects = array(
 	'Out-Of-The-Box Defaults' => 'interior prepositions wrongly capitalised',
 	'Opt-in Defaults'         => 'a compound-edge function word left lowercase',
 	'in-House Tooling'        => 'a compound-start function word left lowercase',
+	'the Defaults Screen'     => 'a leading small word left lowercase',
 );
 
 foreach ( $heading_case_accepts as $heading_case => $heading_reason ) {
