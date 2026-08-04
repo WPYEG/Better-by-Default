@@ -722,15 +722,36 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
 			continue;
 		}
 
-		// A leading word always capitalises; a small word elsewhere never has to.
+		/*
+		 * A small word inside a title stays lowercase; a leading one still
+		 * capitalises. Checking only that big words are capitalised lets
+		 * "Pingbacks On New Posts" through, which is Title Case done wrong
+		 * rather than not done — Keel's guard caught that and this one did not.
+		 */
 		if ( $position > 0 && in_array( strtolower( $heading_word ), $title_case_small_words, true ) ) {
+			wpyeg_test_assert(
+				strtolower( $heading_word ) === $heading_word,
+				"Heading \"{$heading}\" ({$source}): the short word \"{$heading_word}\" stays lowercase inside a title."
+			);
 			continue;
 		}
 
-		wpyeg_test_assert(
-			ucfirst( $heading_word ) === $heading_word,
-			"Heading \"{$heading}\" ({$source}) is Title Case: \"{$heading_word}\" starts lowercase."
-		);
+		/*
+		 * Both halves of a hyphenated compound capitalise — "Front-End", not
+		 * "Front-end" — matching the "Admin and Front-End UX" group heading this
+		 * plugin already shipped, and the sibling plugins. Splitting on spaces
+		 * alone passes "Front-end" happily, since the F is uppercase.
+		 */
+		foreach ( explode( '-', $heading_word ) as $heading_half ) {
+			if ( '' === $heading_half ) {
+				continue;
+			}
+
+			wpyeg_test_assert(
+				ucfirst( $heading_half ) === $heading_half,
+				"Heading \"{$heading}\" ({$source}) is Title Case: \"{$heading_half}\" in \"{$heading_word}\" starts lowercase."
+			);
+		}
 	}
 };
 
@@ -751,13 +772,37 @@ foreach ( wpyeg_defaults_section_labels() as $heading_key => $heading ) {
  * headings while a guard over the arrays alone passed happily. Read the
  * rendered column instead of the sources that feed it.
  */
+$headings_from_section = 0;
+$headings_from_label   = 0;
+$section_titles        = wpyeg_defaults_section_labels();
+
 foreach ( $settings_rows[1] as $settings_row ) {
 	$rendered_heading = array();
 
-	if ( preg_match( '#<th[^>]*>(.*?)</th>#s', $settings_row, $rendered_heading ) ) {
-		$assert_title_case( trim( preg_replace( '#<[^>]+>#', '', $rendered_heading[1] ) ), 'rendered label column' );
+	if ( ! preg_match( '#<th[^>]*>(.*?)</th>#s', $settings_row, $rendered_heading ) ) {
+		continue;
+	}
+
+	$heading_text = trim( preg_replace( '#<[^>]+>#', '', $rendered_heading[1] ) );
+	$assert_title_case( $heading_text, 'rendered label column' );
+
+	if ( in_array( $heading_text, $section_titles, true ) ) {
+		++$headings_from_section;
+	} else {
+		++$headings_from_label;
 	}
 }
+
+/*
+ * Both sources are actually represented in what was just checked.
+ *
+ * Reading the rendered column covers section titles and schema labels alike —
+ * but only while both still appear. If a refactor moved every row to one
+ * source, the loop above would keep passing while covering half the screen's
+ * provenance. Assert the coverage, not just the result.
+ */
+wpyeg_test_assert( $headings_from_section > 0, 'Some row headings come from a section title, and were checked.' );
+wpyeg_test_assert( $headings_from_label > 0, 'Some row headings come from a schema label, and were checked.' );
 
 wpyeg_test_assert( false !== strpos( $plugin_source, "wp_kses( \$field['help'], wpyeg_defaults_help_allowed_html() )" ), 'Settings help is rendered through the narrow markup allowlist.' );
 
