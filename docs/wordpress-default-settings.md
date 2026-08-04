@@ -291,12 +291,20 @@ add_action( 'wp_before_admin_bar_render', function () {
     $wp_admin_bar->remove_node( 'comments' );
 } );
 
-// New content defaults to closed, and the comment feeds stop being advertised.
+// New content defaults to closed.
 add_filter( 'get_default_comment_status', function () {
     return 'closed';
 } );
+
+// Report zero. wp_count_comments() answers zero once the query filter below is
+// in place, but get_comments_number() reads the post's cached comment_count and
+// does not — so the theme prints "1 Comment" over a thread that renders nothing.
+add_filter( 'get_comments_number', '__return_zero', 20 );
+
+// Stop advertising the comment feeds, then stop serving them.
 add_filter( 'feed_links_show_comments_feed', '__return_false' );
 add_filter( 'feed_links_extra_show_post_comments_feed', '__return_false' );
+add_action( 'template_redirect', 'wpyeg_defaults_block_comment_feeds', 9 );
 
 // Answer comment queries as empty. Everything above covers the theme's comment
 // template; without this, /wp/v2/comments still serves every comment the site
@@ -306,7 +314,46 @@ add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 
 // Take the comment blocks out of the inserter: with comments off they can only
 // render nothing.
 add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
+
+// And stop the ones a block theme already placed in its post templates from
+// rendering. The inserter filter decides what an editor may add next; it has no
+// say over markup that is already in the template.
+add_filter( 'render_block', 'wpyeg_defaults_suppress_comment_blocks', 10, 2 );
 ```
+
+Returning an empty string from `render_block` rather than unregistering the block types is
+what keeps the default reversible: the blocks stay registered, the theme's template markup
+stays as its author wrote it, and turning the setting off brings the whole thing back with
+nothing to undo.
+
+The feed handler is where this stops being a list of filters:
+
+```php
+function wpyeg_defaults_block_comment_feeds() {
+    if ( ! is_comment_feed() ) {
+        return;   // set_404() clears is_feed(), so test before, never after.
+    }
+
+    global $wp_query;
+
+    if ( $wp_query instanceof WP_Query ) {
+        $wp_query->set_404();
+    }
+
+    remove_action( 'template_redirect', 'redirect_canonical' );
+
+    status_header( 404 );
+    nocache_headers();
+}
+```
+
+> **`redirect_canonical` does not bail on a 404.** It calls
+> `redirect_guess_404_permalink()`, and against the query this function has just emptied it
+> answers `/post-name/feed/` with a 301 to `/post-name/feed/feed/` — a clean 404 turned into
+> a redirect to a URL that has never existed, which is worse than the bug being fixed. Every
+> filter-level test still passes; only a real request catches it. That is the honest limit
+> of a filter behind a toggle: it is a claim about one hook, and what a visitor gets is the
+> sum of all of them.
 
 > **The `comment` type is not exempt, and that is the point.** It is tempting to let a
 > query that explicitly asks for comments run — code asking deliberately should get what
