@@ -991,6 +991,62 @@ function wpyeg_strip_asset_ver( $src ) {
 
 ---
 
+## 7. Filters
+
+Everything above is a toggle. These are the code-level hooks — no setting, no UI. They exist
+where a value is a judgement call that varies by site, and where adding a control would cost
+more screen than the choice is worth.
+
+Put them in a small plugin or an mu-plugin, not the theme, so they survive a theme switch.
+
+| Filter | Default | What it changes |
+| --- | --- | --- |
+| `wpyeg_minimum_password_length` | `15` | The length rule. Lower it and you are trading away the main defence, since there is no composition rule to fall back on. |
+| `wpyeg_weak_roles` | `array( 'subscriber' )` | Roles exempt from the length, blocklist and personal-context rules. **Never exempt from breach screening.** |
+| `wpyeg_password_blocklist` | six obvious strings | The offline fallback list, used when the breach API is unreachable. |
+| `wpyeg_disable_hibp` | `false` | Switches off the breach lookup. Also honoured as the `WPYEG_DISABLE_HIBP` constant. |
+| `wpyeg_hibp_max_response_bytes` | `131072` | Transport cap on a range response. Floored at 1 KB, so a filter cannot make every response look truncated. |
+| `wpyeg_password_is_pwned` | the lookup's verdict | The final say on whether a password counts as breached. Return `true` from a local blocklist and no request is made. |
+| `wpyeg_allowed_comment_types` | internal types only | Comment types that survive the teardown — Block Notes and similar, which are not public comments. |
+| `wpyeg_comment_blocks` | the core comment block list | Which editor blocks the comment teardown removes from the inserter. |
+| `wpyeg_keep_attachment_page` | `false` | Keeps a specific attachment page reachable instead of redirecting it. |
+| `wpyeg_feed_author_name` | `Site Contributor` | The name printed in feeds in place of the real author. |
+
+### Scoping the password policy by role
+
+`wpyeg_weak_roles` is the one worth explaining, because it is easy to implement as a hole.
+
+A 15-character minimum is right for an account that can publish or configure, and
+disproportionate for one that can only read — on a membership or commerce site it is signup
+friction that protects nothing. So subscriber-only accounts skip the length, blocklist and
+personal-context rules by default.
+
+Two things keep it from being a loophole:
+
+**Breach screening is never waived.** It runs *before* the role check, for every account.
+A password already published in a breach costs its owner nothing to avoid, whatever the
+account can do — and the accounts most likely to reuse a password from somewhere else are
+exactly the low-privilege ones. Get this order wrong and the one free rule becomes the one
+you waived for the people who needed it.
+
+**A user is exempt only if every role they hold is exempt.** Someone who is both a Subscriber
+and an Editor is an Editor for this purpose. An unknown or empty role set enforces too: when
+the code cannot tell who this is, the safe answer is the strict one.
+
+```php
+// Exempt authors as well as subscribers.
+add_filter( 'wpyeg_weak_roles', function ( $roles ) {
+    $roles[] = 'author';
+
+    return $roles;
+} );
+
+// Or enforce the full policy on everyone, whatever their role.
+add_filter( 'wpyeg_weak_roles', '__return_empty_array' );
+```
+
+---
+
 ## Quick-Reference Table
 
 | Setting | Setting key | Default | Schema group |

@@ -1351,4 +1351,66 @@ define( 'JETPACK__VERSION', '14.0' );
 wpyeg_test_assert( '' !== wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack active, the endpoint block carries a warning.' );
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'Even with Jetpack active the warning stays on its own setting.' );
 
+/*
+ * Every public filter is documented.
+ *
+ * The reference doc already tracks the schema; filters had no such guard, and
+ * five of the eight had drifted out of it entirely. A filter nobody can find is
+ * not an extension point.
+ */
+$plugin_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
+$filter_doc    = file_get_contents( dirname( __DIR__ ) . '/docs/wordpress-default-settings.md' );
+
+preg_match_all( "/apply_filters\(\s*'(wpyeg_[a-z_]+)'/", $plugin_source, $filter_matches );
+$public_filters = array_values( array_unique( $filter_matches[1] ) );
+
+wpyeg_test_assert( count( $public_filters ) > 0, 'Filter scan found at least one public filter.' );
+
+foreach ( $public_filters as $filter ) {
+	wpyeg_test_assert(
+		false !== strpos( $filter_doc, '`' . $filter . '`' ),
+		"Public filter {$filter} is documented in the reference doc."
+	);
+}
+
+/*
+ * Password policy role scoping.
+ *
+ * The ordering assertion is the important one: breach screening must run before
+ * the role gate, or an exempt account skips the one rule that costs nothing.
+ */
+$make_user = static function ( array $roles ) {
+	$user              = new stdClass();
+	$user->ID          = 1;
+	$user->user_login  = 'jsmith';
+	$user->user_email  = 'jsmith@example.com';
+	$user->roles       = $roles;
+
+	return $user;
+};
+
+wpyeg_test_assert( true === wpyeg_defaults_password_enforced_for_user( $make_user( array( 'administrator' ) ) ), 'A privileged role is enforced.' );
+wpyeg_test_assert( false === wpyeg_defaults_password_enforced_for_user( $make_user( array( 'subscriber' ) ) ), 'A subscriber-only account is exempt by default.' );
+wpyeg_test_assert( true === wpyeg_defaults_password_enforced_for_user( $make_user( array( 'subscriber', 'editor' ) ) ), 'Holding any non-exempt role enforces — exemption needs every role to be exempt.' );
+wpyeg_test_assert( true === wpyeg_defaults_password_enforced_for_user( $make_user( array() ) ), 'An empty role set enforces: unknown means strict.' );
+wpyeg_test_assert( true === wpyeg_defaults_password_enforced_for_user( null ), 'No user context at all enforces.' );
+
+// The gate is filterable, and can be emptied to enforce on everyone.
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_weak_roles'] = array( 'subscriber', 'author' );
+wpyeg_test_assert( false === wpyeg_defaults_password_enforced_for_user( $make_user( array( 'author' ) ) ), 'wpyeg_weak_roles can widen the exempt list.' );
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_weak_roles'] = array();
+wpyeg_test_assert( true === wpyeg_defaults_password_enforced_for_user( $make_user( array( 'subscriber' ) ) ), 'An empty exempt list enforces on everyone.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_weak_roles'] );
+
+// Breach screening is not role-scoped: it runs ahead of the gate.
+$source_of_validator = $plugin_source;
+$fn_start            = strpos( $source_of_validator, 'function wpyeg_defaults_validate_password(' );
+$fn_body             = substr( $source_of_validator, $fn_start, 3000 );
+$pwned_at            = strpos( $fn_body, 'wpyeg_password_is_pwned(' );
+$gate_at             = strpos( $fn_body, 'wpyeg_defaults_password_enforced_for_user(' );
+wpyeg_test_assert(
+	false !== $pwned_at && false !== $gate_at && $pwned_at < $gate_at,
+	'Breach screening runs before the role gate, so an exempt account is still screened.'
+);
+
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );
