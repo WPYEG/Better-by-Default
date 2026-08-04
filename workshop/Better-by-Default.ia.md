@@ -412,16 +412,27 @@ Search the admin post list on a big site and WordPress reads every word of every
 	`disable_remember_me` / `session_regular_days` / `remember_me_days` · default **no / 2 / 14**
 
 ```php
-add_filter( 'auth_cookie_expiration',
-  function ( $exp, $uid, $remember ) {
-    $regular = 2 * DAY_IN_SECONDS;
-    return $remember
-      ? 14 * DAY_IN_SECONDS
-      : $regular;
-  }, 10, 3 );
+function session_length( $exp, $uid, $remember ) {
+  return $remember
+    ? 14 * DAY_IN_SECONDS
+    : 2 * DAY_IN_SECONDS;
+}
+
+// Only when we differ from core's own 2 / 14.
+if ( policy_is_custom() )
+  add_filter( 'auth_cookie_expiration',
+    'session_length', 10, 3 );
 ```
 
-A normal login lasts 2 days; ticking "Remember Me" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the "Remember Me" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) One filter covers all of it. WordPress ships handy time constants like `DAY_IN_SECONDS`, so you never need to do the math.
+A normal login lasts 2 days; ticking "Remember Me" extends it to 14. Both lengths are in days, and the remembered one can never be shorter than the regular one. Shorten either, or hide the "Remember Me" checkbox entirely so every login uses the regular length. (Good idea for shared machines.) WordPress ships handy time constants like `DAY_IN_SECONDS`, so you never need to do the math.
+
+Now look at the two lines that are *not* about session length, because they are the most portable thing in this deck. This callback ignores the `$exp` it was handed and returns its own number. A filter that **adds to** its input composes — several plugins can each contribute a header to `wp_headers` and all of them survive. A filter that **replaces** its input does not: WordPress runs all of them and keeps whichever answered last, the others do nothing at all, and every losing plugin's settings screen goes on displaying a number the site is not using. No error, nothing logged, nothing on Site Health.
+
+Nothing in the API tells you which kind you are writing. Both are `add_filter()`. The difference is entirely in what your callback does with the argument it was given, and it decides whether your plugin can coexist with another one or silently fights it.
+
+You cannot make a number filter additive. What you can do is decline the fights you have no stake in — our defaults *are* WordPress's own 2 and 14, so on a site that has not changed them we would be registering only to assert the answer core already gives. Hence the `if`. And the callback has a name rather than being anonymous, because `$wp_filter` can only report a callback that has one; an anonymous one shows up as `closure` in exactly the diagnostic you would run to work out who won.
+
+When you write a filter callback, ask: *if a second plugin did exactly this, would both still work?* If the answer is no, you are setting policy, and only one plugin on the site can win.
 
 ---
 
