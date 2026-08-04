@@ -81,6 +81,24 @@ settings screen and the bootstrap that wires each *enabled* policy to its WordPr
 Adding a new default is one array entry plus one `if`-block in bootstrap; no new settings-page
 code. (The `wpyeg_` option prefix is kept deliberately as the WPYEG org convention.)
 
+### Spelling
+
+Canadian, throughout — prose, comments, and the strings the plugin puts on screen.
+This is a teaching plugin for an Edmonton meetup, so it is written the way its
+audience writes: behaviour, colour, favour, centre, defence, licence (the noun).
+The `-ize` and `-izer` endings stay as they are; those are Canadian too.
+
+Two things are not prose and never change: **identifiers** — variables, option
+keys, hook names, CSS properties, anything WordPress or a browser reads
+(`login_logo_behavior`, `background_color`, `text-align: center`) — and **proper
+nouns**, including specification titles and other projects' feature names.
+
+Bigger plugins in this family split it differently, keeping source strings in
+`en_US` to match WordPress core and shipping Canadian as an `en_CA` catalogue.
+That is the right call for anything a stranger might translate. Here it would add
+a build step to a file meant to be read start to finish, so it is deliberately
+not done.
+
 ## Workshop materials
 
 The [`workshop/`](workshop/) folder holds the full talk: `Better-by-Default.pptx`, an iA
