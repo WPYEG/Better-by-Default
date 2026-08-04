@@ -349,11 +349,35 @@ wpyeg_test_assert(
 	'Help text permits only attribute-free code markup and href-only reference links.'
 );
 wpyeg_test_assert( false !== strpos( $schema['xmlrpc_allow_pingbacks']['help'], '<code>pingback.ping</code>' ), 'Machine-facing XML-RPC identifiers use code markup.' );
-wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'NIST SP 800-63B-4 § 3.1.1.2' ), 'External guidance names the specific publication and section.' );
-wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver' ), 'External guidance links to its authoritative source section.' );
-wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange' ), 'The breach-screening explanation links to the authoritative HIBP range API documentation.' );
-wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'first five characters' ), 'The breach-screening explanation states exactly what leaves the site.' );
-wpyeg_test_assert( false !== strpos( $schema['require_strong_passwords']['help'], 'password and full hash never leave the site' ), 'The breach-screening explanation states the privacy boundary.' );
+/*
+ * The protocol detail moved out of the field help and into the reference doc
+ * and readme.txt — see "Where password copy goes" in the feature matrix. The
+ * assertions moved with it. A moved sentence with a deleted test is how a
+ * disclosure quietly disappears on the next edit.
+ */
+$wpyeg_password_reference = file_get_contents( dirname( __DIR__ ) . '/docs/wordpress-default-settings.md' );
+$wpyeg_plugin_readme      = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/readme.txt' );
+
+wpyeg_test_assert( false !== strpos( $wpyeg_password_reference, 'NIST SP 800-63B-4 § 3.1.1.2' ), 'External guidance names the specific publication and section.' );
+wpyeg_test_assert( false !== strpos( $wpyeg_password_reference, 'https://pages.nist.gov/800-63-4/sp800-63b/authenticators/#passwordver' ), 'External guidance links to its authoritative source section.' );
+wpyeg_test_assert( false !== strpos( $wpyeg_password_reference, 'https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange' ), 'The breach-screening explanation links to the authoritative HIBP range API documentation.' );
+wpyeg_test_assert( false !== strpos( $wpyeg_password_reference, 'first five characters' ), 'The breach-screening explanation states exactly what leaves the site.' );
+wpyeg_test_assert( false !== strpos( $wpyeg_password_reference, 'full hash ever leaves the site' ), 'The breach-screening explanation states the privacy boundary.' );
+
+// readme.txt is what Plugin Review actually reads for the external-services
+// disclosure. It carried a fuller version than the field ever did; pin it so a
+// tidy-up cannot quietly remove the thing compliance depends on.
+wpyeg_test_assert( false !== strpos( $wpyeg_plugin_readme, 'first five characters' ), 'readme.txt discloses what the breach check sends.' );
+wpyeg_test_assert( false !== strpos( $wpyeg_plugin_readme, 'WPYEG_DISABLE_HIBP' ), 'readme.txt names the opt-out constant.' );
+
+/*
+ * And the field help states the rule only. The word budget is the convention
+ * made testable: this string oscillated six times in a day across three plugins
+ * because "add one clarifying sentence" is always locally defensible.
+ */
+$wpyeg_field_help_words = str_word_count( preg_replace( '/<[^>]*>/', '', $schema['require_strong_passwords']['help'] ) );
+wpyeg_test_assert( $wpyeg_field_help_words >= 40 && $wpyeg_field_help_words <= 55, "Password field help states the rule in 40-55 words (currently {$wpyeg_field_help_words})." );
+wpyeg_test_assert( false === strpos( $schema['require_strong_passwords']['help'], 'haveibeenpwned.com' ), 'The protocol detail stays out of the field help; the reference doc and readme carry it.' );
 wpyeg_test_assert( false === strpos( $schema['login_logo_behavior']['help'], 'trust leak' ), 'Login-logo guidance does not overstate an external destination as a trust leak.' );
 wpyeg_test_assert( false !== strpos( $schema['login_logo_behavior']['help'], 'organizationally consistent' ), 'Login-logo guidance describes the actual branding and destination benefit.' );
 

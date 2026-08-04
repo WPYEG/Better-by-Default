@@ -180,6 +180,23 @@ add_filter( 'wp_is_application_passwords_available', function ( $available ) {
   **length and breached-password screening** over forced composition rules. The publication
   prohibits upper/lower/number/symbol composition requirements.
 
+**What the breach check sends.** The password is hashed locally with SHA-1 and only the
+**first five characters** of that hash go to the [HIBP Pwned Passwords range
+API](https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange). The remaining 35 are
+compared against the returned suffixes on your own server, so neither the password nor its
+full hash ever leaves the site. The response is padded, so its size does not reveal how many
+real matches came back. SHA-1 is only the lookup format the API uses — WordPress still owns
+password storage and its own hashing.
+
+An outage, a truncated response, or malformed range data all **fail open**: the check answers
+"not breached" and the password is allowed. A breach-data outage never blocks a password
+change. Switch the lookup off entirely with the `WPYEG_DISABLE_HIBP` constant or the
+`wpyeg_disable_hibp` filter; the length, blocklist and personal-context rules still apply.
+
+This is the detail that used to live in the settings field. It is here, and in `readme.txt`
+for the wordpress.org external-services disclosure, because a third copy in a narrow admin
+column is not compliance — it is one more thing to keep in step.
+
 ```php
 add_action( 'user_profile_update_errors', 'wpyeg_enforce_strong_password', 10, 3 );
 add_action( 'validate_password_reset', function ( $errors, $user ) {
