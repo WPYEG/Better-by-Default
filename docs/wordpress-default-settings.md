@@ -761,11 +761,20 @@ function wpyeg_auth_cookie_expiration( $expiration, $user_id, $remember ) {
 }
 
 // Register it only when these settings say something WordPress does not already
-// do — see below for why that condition is the interesting part.
+// do — see below for why that condition is the interesting part. Priority 50,
+// not 10, for the other half of the same reason.
 if ( wpyeg_defaults_session_policy_is_custom() ) {
-    add_filter( 'auth_cookie_expiration', 'wpyeg_auth_cookie_expiration', 10, 3 );
+    add_filter( 'auth_cookie_expiration', 'wpyeg_auth_cookie_expiration', 50, 3 );
 }
 ```
+
+> **Why 50 and not the default 10.** Declining a fight worth nothing is only half a policy. On
+> a replacing filter the *last* callback to run is the one that counts, so registering early
+> does not merely fail to help — it guarantees losing to anything at a default priority. A
+> session length someone deliberately set, silently overridden by whichever plugin happened to
+> load later, is exactly the outcome that setting it was meant to prevent. 50 also leaves
+> headroom above, so a site that wants the last word can take it deliberately rather than by
+> load order.
 
 > **Why the `if`, and why a named function.** This is a *replacing* filter: the callback returns
 > its own number and discards `$expiration`. Two plugins registering one do not compose —

@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.2.1
+ * Version:           1.2.2
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -27,14 +27,21 @@
  *   1. Gate at bootstrap (above). The hook is only registered when the setting
  *      is on, so a disabled policy costs one array lookup and nothing else.
  *   2. Register always, decide inside. Needed when one hook serves several
- *      settings (xmlrpc_methods) or when the answer depends on runtime
- *      arguments the bootstrap cannot see (auth_cookie_expiration).
+ *      settings, so no single toggle governs whether it should run at all
+ *      (xmlrpc_methods answers to four).
  *   3. Compare a value rather than a yes/no. Select and number settings have no
  *      "enabled" state — frame_options, login_logo_behavior and the session
  *      lengths test what was chosen.
  *
  * Prefer shape 1. Reach for 2 or 3 only when 1 cannot express the policy, and
  * say why in a comment at the site.
+ *
+ * auth_cookie_expiration used to be the example for shape 2 and is now shape 3,
+ * which is worth more than the correction. Its callback needs the $remember
+ * argument the bootstrap cannot see, so "decide inside" looked forced. But the
+ * question of what a login's length should BE is not the question of whether
+ * this plugin should answer it at all, and the second one is answerable at
+ * bootstrap. Needing a runtime argument does not oblige you to register.
  * ---------------------------------------------------------------------------
  *
  * @package BetterByDefault
@@ -1018,11 +1025,26 @@ function wpyeg_defaults_bootstrap() {
 	 * these settings actually say something WordPress does not already do.
 	 */
 	if ( wpyeg_defaults_session_policy_is_custom() ) {
-		// A named function, not a closure, for the same reason: it is the one
-		// hook here likely to be contested, and `wp_filter` can only name a
-		// callback that has a name. A plugin nobody can identify in $wp_filter
-		// is a plugin nobody can diagnose.
-		add_filter( 'auth_cookie_expiration', 'wpyeg_defaults_auth_cookie_expiration', 10, 3 );
+		/*
+		 * Priority 50, not the default 10, and the reasoning is the other half of
+		 * the paragraph above. Declining a fight worth nothing is only half a
+		 * policy; the other half is winning the one that is worth something. On a
+		 * replacing filter the LAST callback to run is the one that counts, so
+		 * registering early does not merely fail to help — it guarantees losing to
+		 * anything at a default priority. A session length someone deliberately
+		 * set, silently overridden by whichever plugin happened to load later, is
+		 * precisely the outcome setting it was meant to prevent.
+		 *
+		 * 50 leaves headroom in both directions: a site that wants the last word
+		 * over this can still register above it, which is a decision it makes
+		 * rather than one load order makes for it.
+		 *
+		 * A named function, not a closure, for a related reason: this is the one
+		 * hook here likely to be contested, and `wp_filter` can only name a
+		 * callback that has a name. A plugin nobody can identify in $wp_filter is
+		 * a plugin nobody can diagnose.
+		 */
+		add_filter( 'auth_cookie_expiration', 'wpyeg_defaults_auth_cookie_expiration', 50, 3 );
 	}
 
 	/* ----- Branding ----- */
