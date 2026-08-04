@@ -780,6 +780,14 @@ function wpyeg_defaults_bootstrap() {
 		// every <dc:creator> element, so the login names this default exists to
 		// hide were still published — just one URL over.
 		add_filter( 'the_author', 'wpyeg_defaults_mask_feed_author' );
+
+		// Two more routes do the same thing, and neither is called an author
+		// archive. oEmbed returns author_name and author_url for every post,
+		// the URL carrying the nicename; core's users sitemap is a list of
+		// author archive URLs by construction. Both measured live with the
+		// redirect working correctly.
+		add_filter( 'oembed_response_data', 'wpyeg_defaults_strip_oembed_author' );
+		add_filter( 'wp_sitemaps_add_provider', 'wpyeg_defaults_drop_users_sitemap', 10, 2 );
 	}
 
 	if ( wpyeg_defaults_enabled( 'redirect_attachment_pages' ) ) {
@@ -2520,4 +2528,50 @@ function wpyeg_defaults_mask_feed_author( $author ) {
  */
 function wpyeg_defaults_remove_emoji_tinymce_plugin( $plugins ) {
 	return is_array( $plugins ) ? array_values( array_diff( $plugins, array( 'wpemoji' ) ) ) : array();
+}
+
+/**
+ * Remove author identity from oEmbed responses.
+ *
+ * `oembed/1.0/embed` returns `author_name` and `author_url` for every post, and
+ * the URL carries the account's nicename. Redirecting `/author/` archives does
+ * nothing about it, so a site that had hidden its authors was still handing out
+ * login names through a route nobody thinks of as a user endpoint.
+ *
+ * Measured on a live install before the fix: with `disable_author_archives` on
+ * and `/author/admin/` answering 301, oEmbed still returned `admin` and
+ * `http://example.test/author/admin/`.
+ *
+ * Title, provider and embed markup are left alone, so embeds on other sites
+ * keep working — this hides the name, it does not break the embed.
+ *
+ * @param mixed $data oEmbed response data.
+ * @return mixed
+ */
+function wpyeg_defaults_strip_oembed_author( $data ) {
+	if ( ! is_array( $data ) ) {
+		return $data;
+	}
+
+	unset( $data['author_name'], $data['author_url'] );
+
+	return $data;
+}
+
+/**
+ * Drop core's users sitemap when author archives are hidden.
+ *
+ * `wp-sitemap-users-1.xml` lists every author's archive URL by nicename. With
+ * the archives redirected those URLs go nowhere, but the sitemap is still a
+ * published list of account names — an enumeration source by construction, and
+ * one search engines are explicitly invited to read.
+ *
+ * Only the users provider is dropped; posts, pages and taxonomies stay listed.
+ *
+ * @param mixed  $provider Sitemap provider instance, or false.
+ * @param string $name     Provider name.
+ * @return mixed
+ */
+function wpyeg_defaults_drop_users_sitemap( $provider, $name ) {
+	return ( 'users' === $name ) ? false : $provider;
 }
