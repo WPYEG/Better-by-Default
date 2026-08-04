@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.2.0
+ * Version:           1.2.1
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -126,6 +126,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'credentials',
 			'label'   => 'Prohibit Application Passwords',
 			'help'    => 'OFF (default) keeps them available — separate, revocable integration credentials for REST and XML-RPC. They inherit the owning user\'s access and bypass interactive 2FA, so use a least-privileged account.',
 		),
@@ -133,6 +134,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'credentials',
 			'label'   => 'Require strong passwords',
 			'help'    => 'Server-side rule: 15+ characters, screened against known breaches, checked against a small blocklist, and not built from your username or the name part of your email. No forced uppercase, number, or symbol rules. The readme describes exactly what the breach check sends.',
 		),
@@ -140,6 +142,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'capabilities',
 			'label'   => 'Limit unfiltered HTML to administrators',
 			'help'    => 'Editors hold <code>unfiltered_html</code> on single-site installs, which is enough to save a raw <code>&lt;script&gt;</code> into a post. This removes it from everyone except administrators (and Super Admins on multisite).',
 		),
@@ -147,6 +150,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'disclosure',
 			'label'   => 'Remove WordPress version fingerprint',
 			'help'    => 'Strips the generator meta tag. Obscurity, not hardening: it trims scanner noise but does not make an out-of-date site any safer, and the version still leaks from asset query strings and feeds. Off by default — patch instead. Turn on if you want the noise reduction.',
 		),
@@ -154,6 +158,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'headers',
 			'label'   => 'Send baseline security headers',
 			'help'    => '<code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code>. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
 		),
@@ -161,6 +166,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'SAMEORIGIN',
 			'type'    => 'select',
 			'group'   => 'security',
+			'section' => 'headers',
 			'label'   => 'X-Frame-Options (clickjacking)',
 			'help'    => 'Controls who may embed this site in an iframe. <code>SAMEORIGIN</code> blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — a client intranet, a partner site, or a preview/proofing tool — usually as a silent blank frame. Leave unchanged if your host or CDN already sets <code>X-Frame-Options</code>, or if the site is meant to be embedded elsewhere.',
 			'choices' => array(
@@ -173,6 +179,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'security',
+			'section' => 'ai',
 			'label'   => 'Disable AI connectors',
 			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the <code>wp_supports_ai</code> gate and closes the core Connectors screen. Also fires <code>wpyeg_disable_ai_connectors</code> for AI integrations core does not know about.',
 		),
@@ -182,7 +189,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'minor',
 			'type'    => 'select',
 			'group'   => 'updates',
-			'label'   => 'Automatic WordPress core updates',
+			'label'   => 'Automatic WordPress Core Updates',
 			'help'    => 'Maintenance and security releases install automatically by default. Major releases should be tested and deployed within 30 days. An explicit <code>wp-config.php</code> policy takes precedence.',
 			'choices' => array(
 				'minor'   => 'Maintenance/security releases only — recommended',
@@ -196,6 +203,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'comments',
 			'label'   => 'Disable comments, trackbacks and pingbacks',
 			'help'    => 'Closes comments everywhere, hides existing threads, removes the admin menu.',
 		),
@@ -203,6 +211,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'comments',
 			'label'   => 'Default new posts to pings closed',
 			'help'    => 'Sets the "allow pingbacks" default to off for newly created content.',
 		),
@@ -210,6 +219,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'comments',
 			'label'   => 'Disable self-pingbacks',
 			'help'    => 'Stops internal links from generating pingback noise.',
 		),
@@ -217,6 +227,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'thin_pages',
 			'label'   => 'Disable public author archives',
 			'help'    => 'Redirects <code>/author/{slug}/</code> to home (another enumeration + thin-content fix).',
 		),
@@ -224,6 +235,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'thin_pages',
 			'label'   => 'Redirect attachment pages',
 			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides <code>attachment.php</code> or <code>image.php</code>, since that theme meant to render them. Core has its own switch since 6.4 (<code>wp_attachment_pages_enabled</code>); this prefers the parent post over the bare file.',
 		),
@@ -231,6 +243,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'frontend',
 			'label'   => 'Disable emoji script',
 			'help'    => 'Removes the emoji detection script + inline CSS from every page.',
 		),
@@ -239,6 +252,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'editor',
 			'label'   => 'Hide post-password protection',
 			'help'    => 'Hides the "Password protected" visibility option in the editor. Post passwords are weak and full-page caches bypass them. Cosmetic and non-destructive: it changes no data, and a post that already has a password keeps its field so it stays editable.',
 		),
@@ -246,6 +260,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'content',
+			'section' => 'editor',
 			'label'   => 'Force the classic editor',
 			'help'    => 'Restores the pre-block editing experience for posts, pages, and custom post types, plus the classic Widgets screen. Front-end display of existing block content is unaffected.',
 		),
@@ -255,6 +270,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'ux',
+			'section' => 'admin_search',
 			'label'   => 'Title-only admin search',
 			'help'    => 'Speeds up admin list-table search on big sites by matching titles only.',
 		),
@@ -262,7 +278,7 @@ function wpyeg_defaults_schema() {
 			'default' => '',
 			'type'    => 'select',
 			'group'   => 'ux',
-			'label'   => 'Front-end admin bar',
+			'label'   => 'Front-End Admin Bar',
 			'help'    => 'The WordPress toolbar shown across the top of the site for logged-in users. Hide it for non-admins, or for everyone.',
 			'choices' => array(
 				''                => 'Leave unchanged (WordPress default)',
@@ -275,6 +291,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'ux',
+			'section' => 'media',
 			'label'   => 'Lowercase upload filenames',
 			'help'    => 'Lowercases new upload filenames, so a case-sensitive server and a case-insensitive one agree about what a file is called. Only new uploads are affected.',
 		),
@@ -282,6 +299,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'ux',
+			'section' => 'media',
 			'label'   => 'Show generated image sizes',
 			'help'    => 'Adds a read-only panel to the attachment edit screen listing the resized files WordPress generated, with their dimensions. Useful for confirming what exists without a media-management plugin.',
 		),
@@ -291,6 +309,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'login',
+			'section' => 'sessions',
 			'label'   => 'Disable "Remember Me"',
 			'help'    => 'Removes the "Remember Me" checkbox from the login form, so every login uses the regular session length below. Good for shared/kiosk machines.',
 		),
@@ -318,7 +337,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'keep_default',
 			'type'    => 'select',
 			'group'   => 'branding',
-			'label'   => 'Login logo',
+			'label'   => 'Login Logo',
 			'help'    => 'The default logo links to wordpress.org. Left untouched by default, since changing the login screen out of the box is intrusive. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site; those choices point the header link at your home page.',
 			'choices' => array(
 				'keep_default' => 'Keep the WordPress logo and wp.org link (WordPress default)',
@@ -333,6 +352,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'email',
+			'section' => 'deliverability',
 			'label'   => 'Warn when the site\'s From address looks undeliverable',
 			'help'    => 'WordPress sends mail from <code>wordpress@yourdomain</code> unless something changes it. On a domain that cannot actually send — a staging host, a <code>.local</code> address, a domain with no mail records — password resets and order receipts fail silently. This shows an admin notice when the address looks undeliverable. It never blocks or alters mail, and it stays quiet on local environments.',
 		),
@@ -342,6 +362,7 @@ function wpyeg_defaults_schema() {
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'performance',
+			'section' => 'heartbeat',
 			'label'   => 'Throttle the Heartbeat API',
 			'help'    => 'Slows admin polling to 60s and drops it on the dashboard home.',
 		),
@@ -2405,10 +2426,45 @@ function wpyeg_defaults_render_mail_config_notice() {
  * @return array Section slug => title.
  */
 function wpyeg_defaults_section_labels() {
+	/*
+	 * Every setting belongs to a section, so every row has a left-hand heading.
+	 * Before this, a toggle drew as a full-width row with an empty left column
+	 * and only the four select and number fields had one — twenty bare rows
+	 * interleaved with seven labelled ones, which read as ragged rather than as
+	 * a deliberate shape.
+	 *
+	 * The title names the *category*; the text beside a checkbox stays the
+	 * specific claim ("Capabilities" over "Limit unfiltered HTML to
+	 * administrators"), so a section holding one setting still says something
+	 * its control does not. That is the shape core's own Discussion screen uses.
+	 *
+	 * Titles are Title Case, matching the group headings above them ("Admin and
+	 * Front-End UX") and the sibling plugins' settings screens. Short
+	 * conjunctions, articles and prepositions stay lowercase unless they lead.
+	 * Sentence case in the left column and Title Case in the heading directly
+	 * over it is the kind of mixed convention nobody decides on — it just
+	 * happens, one setting at a time.
+	 */
 	return array(
-		'rest'     => __( 'REST API', 'sane-defaults' ),
-		'xmlrpc'   => __( 'XML-RPC', 'sane-defaults' ),
-		'sessions' => __( 'Session length', 'sane-defaults' ),
+		'rest'           => __( 'REST API', 'sane-defaults' ),
+		'xmlrpc'         => __( 'XML-RPC', 'sane-defaults' ),
+		'credentials'    => __( 'Passwords and Credentials', 'sane-defaults' ),
+		'capabilities'   => __( 'Capabilities', 'sane-defaults' ),
+		'disclosure'     => __( 'Version Disclosure', 'sane-defaults' ),
+		'headers'        => __( 'Response Headers', 'sane-defaults' ),
+		'ai'             => __( 'AI Features', 'sane-defaults' ),
+		'comments'       => __( 'Comments and Pings', 'sane-defaults' ),
+		'thin_pages'     => __( 'Thin Public Pages', 'sane-defaults' ),
+		'frontend'       => __( 'Front-End Output', 'sane-defaults' ),
+		'editor'         => __( 'Editor', 'sane-defaults' ),
+		'admin_search'   => __( 'Admin Search', 'sane-defaults' ),
+		'media'          => __( 'Media', 'sane-defaults' ),
+		// Not "Session length" any more: the section now carries the Remember Me
+		// toggle as well, and those three settings are one policy — which is why
+		// wpyeg_defaults_session_policy_is_custom() weighs them together.
+		'sessions'       => __( 'Sessions', 'sane-defaults' ),
+		'deliverability' => __( 'Deliverability', 'sane-defaults' ),
+		'heartbeat'      => __( 'Admin Polling', 'sane-defaults' ),
 	);
 }
 

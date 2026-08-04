@@ -671,7 +671,94 @@ wpyeg_test_assert( substr_count( $settings_markup, '<tr>' ) === substr_count( $s
 
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
 $plugin_source = file_get_contents( dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php' );
-wpyeg_test_assert( false !== strpos( $settings_markup, '<td colspan="2">' ), 'Toggle controls and their descriptive labels span the settings row.' );
+
+/*
+ * Every row has a left-hand heading.
+ *
+ * Toggles used to draw as a full-width `<td colspan="2">` with an empty left
+ * column, so twenty bare rows sat interleaved with the seven that had one. The
+ * assertion here used to require exactly that markup — it was describing the
+ * ragged screen rather than a property worth keeping. Every setting names a
+ * section now, and this is the invariant that keeps it true: no row without a
+ * `<th>`, and no `<th>` left empty.
+ */
+wpyeg_test_assert( false === strpos( $settings_markup, 'colspan' ), 'No settings row spans the label column instead of using it.' );
+
+preg_match_all( '#<tr>(.*?)</tr>#s', $settings_markup, $settings_rows );
+
+foreach ( $settings_rows[1] as $settings_row ) {
+	$row_heading = array();
+	preg_match( '#<th[^>]*>(.*?)</th>#s', $settings_row, $row_heading );
+	$heading_text = isset( $row_heading[1] ) ? trim( preg_replace( '#<[^>]+>#', '', $row_heading[1] ) ) : '';
+	$row_control  = array();
+	preg_match( '#name="wpyeg_better_by_default\[([a-z_]+)\]#', $settings_row, $row_control );
+	$row_label = isset( $row_control[1] ) ? $row_control[1] : 'unknown';
+
+	wpyeg_test_assert( '' !== $heading_text, "Settings row for {$row_label} carries a heading in the label column." );
+}
+
+/*
+ * Left-column headings are Title Case.
+ *
+ * The group headings above them always were ("Admin and Front-End UX"), and the
+ * sibling plugins' screens are too. Sentence case in the left column under a
+ * Title Case heading is the sort of mixed convention nobody decides on — it
+ * accumulates one setting at a time, which is why it is worth a guard rather
+ * than a note. Short conjunctions, articles and prepositions stay lowercase
+ * unless they lead; acronyms and hyphenated compounds are left alone.
+ */
+$title_case_small_words = array( 'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'the', 'to', 'up', 'via' );
+
+/**
+ * Assert one heading is Title Case.
+ *
+ * @param string $heading Heading text.
+ * @param string $source  Where it came from, for the failure message.
+ * @return void
+ */
+$assert_title_case = static function ( $heading, $source ) use ( $title_case_small_words ) {
+	foreach ( explode( ' ', $heading ) as $position => $heading_word ) {
+		if ( '' === $heading_word ) {
+			continue;
+		}
+
+		// A leading word always capitalises; a small word elsewhere never has to.
+		if ( $position > 0 && in_array( strtolower( $heading_word ), $title_case_small_words, true ) ) {
+			continue;
+		}
+
+		wpyeg_test_assert(
+			ucfirst( $heading_word ) === $heading_word,
+			"Heading \"{$heading}\" ({$source}) is Title Case: \"{$heading_word}\" starts lowercase."
+		);
+	}
+};
+
+foreach ( wpyeg_defaults_groups() as $heading_key => $heading ) {
+	$assert_title_case( $heading, "group {$heading_key}" );
+}
+
+foreach ( wpyeg_defaults_section_labels() as $heading_key => $heading ) {
+	$assert_title_case( $heading, "section {$heading_key}" );
+}
+
+/*
+ * And every heading that actually reaches the screen.
+ *
+ * Checking those two arrays is not enough. A select or number field with no
+ * section draws its row header from its schema *label*, not from a section
+ * title — so three of them sat in sentence case under Title Case group
+ * headings while a guard over the arrays alone passed happily. Read the
+ * rendered column instead of the sources that feed it.
+ */
+foreach ( $settings_rows[1] as $settings_row ) {
+	$rendered_heading = array();
+
+	if ( preg_match( '#<th[^>]*>(.*?)</th>#s', $settings_row, $rendered_heading ) ) {
+		$assert_title_case( trim( preg_replace( '#<[^>]+>#', '', $rendered_heading[1] ) ), 'rendered label column' );
+	}
+}
+
 wpyeg_test_assert( false !== strpos( $plugin_source, "wp_kses( \$field['help'], wpyeg_defaults_help_allowed_html() )" ), 'Settings help is rendered through the narrow markup allowlist.' );
 
 // The explicit update policy is stable across the installation-age defaults
