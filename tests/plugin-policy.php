@@ -998,7 +998,12 @@ wpyeg_test_assert( false === strpos( $deck_source, 'OPTION   ' ), 'Workshop chip
  */
 $setting_count = count( $schema );
 
-foreach ( array( 'workshop script' => $workshop_source, 'deck generator' => $deck_source ) as $count_label => $count_source ) {
+$counted_sources = array(
+	'workshop script' => $workshop_source,
+	'deck generator'  => $deck_source,
+);
+
+foreach ( $counted_sources as $count_label => $count_source ) {
 	wpyeg_test_assert( false !== strpos( $count_source, "We have {$setting_count} settings" ), "The {$count_label} states the current setting count." );
 	wpyeg_test_assert( false !== strpos( $count_source, "activates {$setting_count} sensible" ), "The {$count_label} opens with the current setting count." );
 }
@@ -1029,9 +1034,10 @@ function wpyeg_test_pptx_text( $pptx_path ) {
 		return '';
 	}
 
-	$text = '';
+	$text        = '';
+	$entry_count = count( $zip );
 
-	for ( $i = 0; $i < $zip->numFiles; $i++ ) {
+	for ( $i = 0; $i < $entry_count; $i++ ) {
 		if ( ! preg_match( '#^ppt/(slides|notesSlides)/[^/]+\.xml$#', $zip->getNameIndex( $i ) ) ) {
 			continue;
 		}
@@ -1082,7 +1088,9 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 	$zip         = new ZipArchive();
 
 	if ( true === $zip->open( $deck_artifact ) ) {
-		for ( $i = 0; $i < $zip->numFiles; $i++ ) {
+		$entry_count = count( $zip );
+
+		for ( $i = 0; $i < $entry_count; $i++ ) {
 			if ( preg_match( '#^ppt/slides/slide[0-9]+\.xml$#', $zip->getNameIndex( $i ) ) ) {
 				++$slide_count;
 			}

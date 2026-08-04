@@ -21,6 +21,27 @@
 		<exclude-pattern>bin/*</exclude-pattern>
 	</rule>
 	<!--
+		verify-pdf.php shells out to LibreOffice and builds into a temporary
+		directory it then removes. WP_Filesystem and wp_delete_file() are not
+		available to a script that runs outside WordPress, and the whole point
+		of this one is to invoke an external converter.
+	-->
+	<rule ref="WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec">
+		<exclude-pattern>bin/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec">
+		<exclude-pattern>bin/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_mkdir">
+		<exclude-pattern>bin/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_rmdir">
+		<exclude-pattern>bin/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.WP.AlternativeFunctions.unlink_unlink">
+		<exclude-pattern>bin/*</exclude-pattern>
+	</rule>
+	<!--
 		The plugin is deliberately one readable file — that is the teaching
 		point, and the README, the workshop deck, and the mu-plugin instructions
 		all rely on it. Both of these sniffs want it split up: one demands the

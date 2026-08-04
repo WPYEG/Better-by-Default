@@ -16,7 +16,8 @@
     "test": "php tests/plugin-policy.php",
     "build": "php bin/build-zip.php",
     "build:deck": "cd workshop && node build_deck.js",
-    "verify:dist": "php bin/build-zip.php --check"
+    "verify:dist": "php bin/build-zip.php --check",
+    "verify:pdf": "php bin/verify-pdf.php"
   },
   "config": {
     "allow-plugins": {
