@@ -877,6 +877,7 @@ $heading_case_accepts = array(
 	'State-of-the-Art Tooling' => 'so do interior prepositions',
 	'Out-of-the-Box Defaults'  => 'more than one of them',
 	'Opt-In Defaults'          => 'a function word at a compound EDGE still capitalises',
+	'In-House Tooling'         => 'and at the START, the mirror of that case',
 );
 
 $heading_case_rejects = array(
@@ -887,6 +888,7 @@ $heading_case_rejects = array(
 	'Cut-And-Dried Policy'    => 'an interior conjunction wrongly capitalised',
 	'Out-Of-The-Box Defaults' => 'interior prepositions wrongly capitalised',
 	'Opt-in Defaults'         => 'a compound-edge function word left lowercase',
+	'in-House Tooling'        => 'a compound-start function word left lowercase',
 );
 
 foreach ( $heading_case_accepts as $heading_case => $heading_reason ) {
