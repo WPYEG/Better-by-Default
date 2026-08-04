@@ -906,6 +906,73 @@ foreach ( $heading_case_rejects as $heading_case => $heading_reason ) {
 	);
 }
 
+/*
+ * Every entry in the interior list is its own dimension.
+ *
+ * The fixtures above pin the three positions a segment can occupy, which is
+ * the whole of that dimension. They say almost nothing about the list itself:
+ * deleting sixteen of these nineteen words left the entire suite green, because
+ * only "the", "and" and "of" happen to appear in a fixture, and only
+ * incidentally. A list nothing exercises is a list anyone can quietly shorten.
+ *
+ * So exercise each word in both directions, in interior position where the
+ * exemption applies.
+ *
+ * The expected words are written out HERE rather than read from
+ * $title_case_interior_words, and that is the whole point of the completeness
+ * check below. Generating the cases from the list under test measures nothing:
+ * delete a word and the loop simply stops generating its case, so the test
+ * agrees with whatever the list currently says instead of with what it should
+ * say. Keel hit exactly that and caught it; this is the corrected shape.
+ */
+$expected_interior_words = array(
+	'a',
+	'an',
+	'the',
+	'and',
+	'or',
+	'nor',
+	'but',
+	'of',
+	'in',
+	'on',
+	'to',
+	'at',
+	'by',
+	'for',
+	'with',
+	'from',
+	'per',
+	'via',
+	'as',
+);
+
+$interior_unexpected = array_diff( $title_case_interior_words, $expected_interior_words );
+$interior_missing    = array_diff( $expected_interior_words, $title_case_interior_words );
+
+wpyeg_test_assert(
+	array() === $interior_unexpected,
+	'The interior list holds no word this test does not know about: ' . implode( ', ', $interior_unexpected )
+);
+wpyeg_test_assert(
+	array() === $interior_missing,
+	'The interior list still holds every word this test expects: ' . implode( ', ', $interior_missing )
+);
+
+foreach ( $expected_interior_words as $interior_word ) {
+	$compound_ok  = 'Best-' . $interior_word . '-Class Tooling';
+	$compound_bad = 'Best-' . ucfirst( $interior_word ) . '-Class Tooling';
+
+	wpyeg_test_assert(
+		array() === wpyeg_test_heading_case_errors( $compound_ok, $title_case_small_words, $title_case_interior_words ),
+		"Self-test: \"{$compound_ok}\" should be accepted — \"{$interior_word}\" is an interior function word."
+	);
+	wpyeg_test_assert(
+		array() !== wpyeg_test_heading_case_errors( $compound_bad, $title_case_small_words, $title_case_interior_words ),
+		"Self-test: \"{$compound_bad}\" should be rejected — an interior \"{$interior_word}\" stays lowercase."
+	);
+}
+
 foreach ( wpyeg_defaults_groups() as $heading_key => $heading ) {
 	$assert_title_case( $heading, "group {$heading_key}" );
 }
