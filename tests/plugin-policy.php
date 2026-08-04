@@ -154,6 +154,30 @@ function apply_filters( $hook, $value ) {
 }
 
 /**
+ * Capability test double.
+ *
+ * @param string $capability Capability being checked.
+ * @return bool
+ */
+function current_user_can( $capability ) {
+	unset( $capability );
+	return isset( $GLOBALS['wpyeg_test_can'] ) ? (bool) $GLOBALS['wpyeg_test_can'] : true;
+}
+
+/**
+ * Environment-type test double.
+ *
+ * The reason the decision this feeds is a separate function: a real local site
+ * reports 'local' and no in-process override changes that, so the production
+ * branch is only reachable with a stub.
+ *
+ * @return string
+ */
+function wp_get_environment_type() {
+	return isset( $GLOBALS['wpyeg_test_environment'] ) ? $GLOBALS['wpyeg_test_environment'] : 'production';
+}
+
+/**
  * URL-parsing test double.
  *
  * @param string $url       URL to parse.
@@ -1617,5 +1641,31 @@ $GLOBALS['wpyeg_test_hooks']  = array();
 wpyeg_defaults_bootstrap();
 unset( $GLOBALS['wpyeg_test_option'] );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'admin_notices' ), 'Turning the notice off unhooks it entirely.' );
+
+/*
+ * The mail warning's three gates, each reachable now that the decision is its
+ * own function. The environment one is the reason it is: a local development
+ * site reports 'local' and nothing in-process talks it out of that, so before
+ * this split the production branch could not be exercised at all.
+ */
+$GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'wordpress@mysite.local';
+$GLOBALS['wpyeg_test_environment'] = 'production';
+$GLOBALS['wpyeg_test_can']         = true;
+wpyeg_test_assert( true === wpyeg_defaults_should_warn_about_mail(), 'A risky address on a production site warns.' );
+
+$GLOBALS['wpyeg_test_environment'] = 'local';
+wpyeg_test_assert( false === wpyeg_defaults_should_warn_about_mail(), 'The same address on a local site stays silent, because there it is correct.' );
+
+$GLOBALS['wpyeg_test_environment'] = 'staging';
+wpyeg_test_assert( true === wpyeg_defaults_should_warn_about_mail(), 'Staging is not local: a staging site that cannot send mail is worth saying so.' );
+
+$GLOBALS['wpyeg_test_can'] = false;
+wpyeg_test_assert( false === wpyeg_defaults_should_warn_about_mail(), 'Someone who cannot fix it is not shown it.' );
+
+$GLOBALS['wpyeg_test_can'] = true;
+$GLOBALS['wpyeg_test_filter_values']['wp_mail_from'] = 'hello@realdomain.ca';
+wpyeg_test_assert( false === wpyeg_defaults_should_warn_about_mail(), 'A deliverable address on production says nothing.' );
+
+unset( $GLOBALS['wpyeg_test_filter_values']['wp_mail_from'], $GLOBALS['wpyeg_test_environment'], $GLOBALS['wpyeg_test_can'] );
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

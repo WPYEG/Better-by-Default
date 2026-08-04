@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.0.2
 Requires PHP: 7.4
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -90,6 +90,10 @@ Yes, and you do not have to justify it. It is the only thing this plugin does th
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.1.4 =
+* The two REST settings stack under a "REST API" row, matching the XML-RPC and session groupings added in 1.1.3.
+* Internal: the mail-deliverability warning splits its decision from its rendering, so every branch — including the local-environment exemption — is reachable from a test. No behaviour change.
 
 = 1.1.3 =
 * New, ON by default: a warning when the site's From address looks undeliverable. WordPress sends mail from `wordpress@yourdomain` unless something changes it, and on a domain that cannot send — a staging host, a `.local` address — password resets fail silently, because `wp_mail()` returns false and nothing surfaces it. This shows an admin notice, never blocks or alters mail, and stays quiet on local environments where an undeliverable address is correct.
