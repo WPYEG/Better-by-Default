@@ -540,6 +540,20 @@ function wpyeg_defaults_bootstrap() {
 		add_filter( 'rest_authentication_errors', 'wpyeg_defaults_require_rest_auth', PHP_INT_MAX );
 
 		/*
+		 * oEmbed stays reachable past the gate so other sites can still embed
+		 * this one — but it must not answer with what the gate was closed to
+		 * protect. Left alone it returns author_name and an author_url carrying
+		 * the account nicename, to exactly the anonymous caller who has just
+		 * been refused /wp/v2/users.
+		 *
+		 * The same filter runs for hidden author archives (below). Registering
+		 * it twice is harmless — it unsets keys that are already gone — and the
+		 * two reasons are genuinely independent: one is about the archive, this
+		 * one is about the gate.
+		 */
+		add_filter( 'oembed_response_data', 'wpyeg_defaults_strip_oembed_author' );
+
+		/*
 		 * Closing a door and taking down the sign are two separate jobs. With the
 		 * filter above in place every anonymous request gets a 401, and the page
 		 * carries on advertising the endpoint anyway — core prints the discovery
@@ -1954,20 +1968,88 @@ function wpyeg_defaults_validate_rest_password( $prepared_user, $request ) {
 }
 
 /**
- * Require an authenticated user for every REST request.
+ * REST route prefixes that stay reachable when anonymous REST is closed.
+ *
+ * The oEmbed route is the carve-out worth making. It is served over REST, so
+ * closing REST closes it — and the consequence lands on *other people's* sites: every
+ * post of yours they have embedded degrades to a bare link, silently, with
+ * nothing here to show it happened.
+ *
+ * Measuring the field found nobody handling this. Of the four plugins that close
+ * REST outright, none allowlists oembed/1.0. The trade was always defensible;
+ * being unable to opt out of it was not.
+ *
+ * The carve-out is only safe because of what sits in front of it. oEmbed returns
+ * author_name and an author_url carrying the account nicename, so opening this
+ * route without that fix would reopen the username enumeration the users-endpoint
+ * removal exists to close. wpyeg_defaults_strip_oembed_author() is therefore
+ * registered by this gate as well as by hidden author archives — the two reasons
+ * are independent, and registering the same filter twice is harmless because it
+ * unsets keys that are already gone.
+ *
+ * @return string[] Route prefixes, each with a leading slash.
+ */
+function wpyeg_defaults_public_rest_routes() {
+	/**
+	 * REST route prefixes that stay reachable when anonymous REST is closed.
+	 *
+	 * @param string[] $routes Route prefixes, each with a leading slash.
+	 */
+	return (array) apply_filters( 'wpyeg_public_rest_routes', array( '/oembed/1.0' ) );
+}
+
+/**
+ * Whether the route being requested is one of the public carve-outs.
+ *
+ * `rest_authentication_errors` fires before dispatch, so the route is not on the
+ * server object yet — but `rest_api_loaded()` has already parsed it into the
+ * query vars, which is where this reads it. REQUEST_URI is deliberately not
+ * used: it carries whatever the client sent, traversal included, and a gate that
+ * trusts it can be walked around.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_rest_route_is_public() {
+	$route = isset( $GLOBALS['wp']->query_vars['rest_route'] ) ? (string) $GLOBALS['wp']->query_vars['rest_route'] : '';
+
+	if ( '' === $route ) {
+		return false;
+	}
+
+	$route = '/' . ltrim( $route, '/' );
+
+	foreach ( wpyeg_defaults_public_rest_routes() as $prefix ) {
+		$prefix = '/' . trim( (string) $prefix, '/' );
+
+		// Match on a path boundary, so /oembed/1.0 does not also admit a route
+		// called /oembed/1.0-internal.
+		if ( $route === $prefix || 0 === strpos( $route, $prefix . '/' ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
+ * Require an authenticated user for every REST request except the carve-outs.
  *
  * Registered at PHP_INT_MAX on purpose. Core resolves Application Password auth
  * at priority 90 and cookie auth at 100, and rest_cookie_check_errors() returns
  * true after calling wp_set_current_user( 0 ) when a cookie carries no
- * X-WP-Nonce. Deciding before core has finished — or treating any truthy
- * $result as success — would read that true as "authenticated" and let the
- * request dispatch as user 0. Only an existing WP_Error short-circuits.
+ * X-WP-Nonce. Deciding before core has finished — or treating any truthy $result
+ * as success — would read that true as "authenticated" and let the request
+ * dispatch as user 0. Only an existing WP_Error short-circuits.
  *
  * @param WP_Error|true|null $result Authentication result so far.
  * @return WP_Error|true|null
  */
 function wpyeg_defaults_require_rest_auth( $result ) {
 	if ( is_wp_error( $result ) ) {
+		return $result;
+	}
+
+	if ( wpyeg_defaults_rest_route_is_public() ) {
 		return $result;
 	}
 
