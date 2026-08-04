@@ -742,6 +742,20 @@ foreach ( $settings_rows[1] as $settings_row ) {
  */
 $title_case_small_words = array( 'a', 'an', 'the', 'and', 'or', 'nor', 'but' );
 
+/*
+ * Function words that stay lowercase INSIDE a hyphenated compound.
+ *
+ * Wider than $title_case_small_words, and deliberately so. A preposition
+ * capitalises as a standalone word — "Accounts Per Step" — and lowercases
+ * inside a compound — "Out-of-the-Box". Those are two conventions, not one
+ * applied inconsistently, and collapsing them is what made the previous rule
+ * unable to spell "State-of-the-Art" at all.
+ */
+$title_case_interior_words = array_merge(
+	$title_case_small_words,
+	array( 'of', 'in', 'on', 'to', 'at', 'by', 'for', 'with', 'from', 'per', 'via', 'as' )
+);
+
 /**
  * Assert one heading is Title Case.
  *
@@ -761,11 +775,12 @@ $title_case_small_words = array( 'a', 'an', 'the', 'and', 'or', 'nor', 'but' );
  * remembering is the thing this suite exists to replace. Keel arrived at this
  * shape first; it is better than what was here.
  *
- * @param string   $heading     Heading text.
- * @param string[] $small_words Words that stay lowercase inside a title.
+ * @param string   $heading        Heading text.
+ * @param string[] $small_words    Words that stay lowercase as standalone words.
+ * @param string[] $interior_words Words that stay lowercase inside a compound.
  * @return string[] Problems found, empty when the heading is Title Case.
  */
-function wpyeg_test_heading_case_errors( $heading, $small_words ) {
+function wpyeg_test_heading_case_errors( $heading, $small_words, $interior_words ) {
 	$problems = array();
 
 	foreach ( explode( ' ', $heading ) as $position => $heading_word ) {
@@ -787,13 +802,34 @@ function wpyeg_test_heading_case_errors( $heading, $small_words ) {
 		}
 
 		/*
-		 * Both halves of a hyphenated compound capitalise — "Front-End", not
-		 * "Front-end" — matching the "Admin and Front-End UX" group heading this
-		 * plugin already shipped, and the sibling plugins. Splitting on spaces
-		 * alone passes "Front-end" happily, since the F is uppercase.
+		 * Inside a hyphenated compound the FIRST and LAST segments capitalise —
+		 * "Front-End", not "Front-end" — while an interior function word stays
+		 * down: "Cut-and-Dried", "State-of-the-Art", "Out-of-the-Box".
+		 *
+		 * The interior list is wider than $small_words on purpose. Prepositions
+		 * capitalise as standalone words ("Accounts Per Step") and lowercase
+		 * inside a compound ("Out-of-the-Box"), because those are two different
+		 * conventions rather than one applied inconsistently. Requiring every
+		 * segment to capitalise — the rule that was here — cannot spell any of
+		 * the three examples above, and forces "Out-Of-The-Box".
+		 *
+		 * Splitting on spaces alone passes "Front-end" happily, since the F is
+		 * uppercase, which is why this loop exists at all.
 		 */
-		foreach ( explode( '-', $heading_word ) as $heading_half ) {
+		$heading_halves = explode( '-', $heading_word );
+		$last_half      = count( $heading_halves ) - 1;
+
+		foreach ( $heading_halves as $half_position => $heading_half ) {
 			if ( '' === $heading_half ) {
+				continue;
+			}
+
+			$is_interior = ( $half_position > 0 && $half_position < $last_half );
+
+			if ( $is_interior && in_array( strtolower( $heading_half ), $interior_words, true ) ) {
+				if ( strtolower( $heading_half ) !== $heading_half ) {
+					$problems[] = "\"{$heading_half}\" inside \"{$heading_word}\" stays lowercase";
+				}
 				continue;
 			}
 
@@ -806,8 +842,8 @@ function wpyeg_test_heading_case_errors( $heading, $small_words ) {
 	return $problems;
 }
 
-$assert_title_case = static function ( $heading, $source ) use ( $title_case_small_words ) {
-	$problems = wpyeg_test_heading_case_errors( $heading, $title_case_small_words );
+$assert_title_case = static function ( $heading, $source ) use ( $title_case_small_words, $title_case_interior_words ) {
+	$problems = wpyeg_test_heading_case_errors( $heading, $title_case_small_words, $title_case_interior_words );
 
 	wpyeg_test_assert(
 		array() === $problems,
@@ -831,23 +867,28 @@ $assert_title_case = static function ( $heading, $source ) use ( $title_case_sma
  * a case in both lists below, or this self-test silently under-covers it.
  */
 $heading_case_accepts = array(
-	'Pingbacks On New Posts' => 'a preposition capitalizes',
-	'Accounts Per Step'      => 'so does "Per"',
-	'Front-End Admin Bar'    => 'both halves of a hyphenated compound',
-	'Comments and Pings'     => 'a coordinating conjunction stays lowercase',
-	'REST API'               => 'an all-caps acronym',
-	'XML-RPC'                => 'a hyphenated all-caps acronym',
+	'Pingbacks On New Posts'   => 'a preposition capitalizes',
+	'Accounts Per Step'        => 'so does "Per"',
+	'Front-End Admin Bar'      => 'both halves of a hyphenated compound',
+	'Comments and Pings'       => 'a coordinating conjunction stays lowercase',
+	'REST API'                 => 'an all-caps acronym',
+	'XML-RPC'                  => 'a hyphenated all-caps acronym',
+	'Cut-and-Dried Policy'     => 'an interior conjunction in a compound stays down',
+	'State-of-the-Art Tooling' => 'so do interior prepositions',
+	'Out-of-the-Box Defaults'  => 'more than one of them',
 );
 
 $heading_case_rejects = array(
-	'Pingbacks on New Posts' => 'a lowercased preposition — the case that inverted when the rule changed',
-	'Front-end Admin Bar'    => 'the second half of a hyphenated compound',
-	'Comments And Pings'     => 'a capitalized conjunction',
-	'pingbacks on new posts' => 'no capitals at all',
+	'Pingbacks on New Posts'  => 'a lowercased preposition — the case that inverted when the rule changed',
+	'Front-end Admin Bar'     => 'the second half of a hyphenated compound',
+	'Comments And Pings'      => 'a capitalized conjunction',
+	'pingbacks on new posts'  => 'no capitals at all',
+	'Cut-And-Dried Policy'    => 'an interior conjunction wrongly capitalised',
+	'Out-Of-The-Box Defaults' => 'interior prepositions wrongly capitalised',
 );
 
 foreach ( $heading_case_accepts as $heading_case => $heading_reason ) {
-	$heading_problems = wpyeg_test_heading_case_errors( $heading_case, $title_case_small_words );
+	$heading_problems = wpyeg_test_heading_case_errors( $heading_case, $title_case_small_words, $title_case_interior_words );
 	wpyeg_test_assert(
 		array() === $heading_problems,
 		"Self-test: \"{$heading_case}\" should be accepted ({$heading_reason}), but the checker reported: " . implode( '; ', $heading_problems ) . '.'
@@ -856,7 +897,7 @@ foreach ( $heading_case_accepts as $heading_case => $heading_reason ) {
 
 foreach ( $heading_case_rejects as $heading_case => $heading_reason ) {
 	wpyeg_test_assert(
-		array() !== wpyeg_test_heading_case_errors( $heading_case, $title_case_small_words ),
+		array() !== wpyeg_test_heading_case_errors( $heading_case, $title_case_small_words, $title_case_interior_words ),
 		"Self-test: \"{$heading_case}\" should be rejected ({$heading_reason}), but the checker accepted it."
 	);
 }
