@@ -251,7 +251,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     { g: "7", t: "Performance", d: "Trim the fat" },
     { g: "8", t: "Email", d: "Say so when the site cannot send mail" },
   ];
-  // Seven cards: 4 across, 2 down. The last slot stays empty.
+  // Eight cards: 4 across, 2 down, both rows full.
   const cw = 2.72, ch = 2.15, gx = 0.6, gy = 1.7, gapx = 0.42, gapy = 0.5;
   cats.forEach((c, i) => {
     const col = i % 4, row = Math.floor(i / 4);
@@ -262,7 +262,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     s.addText(c.d, { x: x + 0.35, y: y + 1.52, w: cw - 0.55, h: 0.6, fontFace: BODY, fontSize: 12.5, color: SLATE, margin: 0, valign: "top" });
   });
   footer(s, 6);
-  s.addNotes("We'll spend most of our time on security and content, then move quickly through updates, UX, login, branding, and performance, and we'll end up with a plugin that covers them all.");
+  s.addNotes("We'll spend most of our time on security and content, then move more quickly through updates, admin UX, login, branding, performance and email — all eight, and we end with a plugin that covers them all.\n\nCount the cards against the sections as we go. This deck promised eight categories and presented seven for weeks: updates was on this slide, in the schema, and in the shipped plugin, and had no slide of its own. Nobody noticed, because every artifact was internally consistent about it — the gap only existed BETWEEN them.");
 })();
 
 /* =================================================================== */
@@ -471,10 +471,26 @@ codeSlide(14, "SECURITY · 7 of 7",
 /* =================================================================== */
 /* SECTION 2 — CONTENT                                                 */
 /* =================================================================== */
+codeSlide(15, "UPDATES",
+  "Decide who patches WordPress",
+  "Core ships maintenance and security releases automatically already. The question this default answers is not whether to allow that — it is whether YOU are deciding, or whether your host quietly decided for you and never said.",
+  "core_update_policy", "minor",
+  [
+    { t: "// Two filters, because core asks two questions.", k: "c" },
+    { t: "add_filter( 'allow_minor_auto_core_updates', $f );", k: "" },
+    { t: "add_filter( 'allow_major_auto_core_updates', $g );", k: "h" },
+    { t: "", k: "" },
+    { t: "// 'inherit' hands the value straight back — the", k: "c" },
+    { t: "// setting that chooses NOT to have an opinion.", k: "c" },
+    { t: "if ( 'inherit' === $policy ) { return $enabled; }", k: "h" },
+    { t: "", k: "" },
+    { t: "return in_array( $policy, [ 'minor', 'all' ], true );", k: "" },
+  ]).addNotes("This is the only category on the agenda that is a SELECT rather than a switch, and that is the lesson.\n\nCore already installs maintenance and security releases on its own. So a toggle would be the wrong shape: the real choice is four-way — maintenance only, every stable release, none, or leave it alone. Squashing that into on/off would have forced us to pick a meaning for 'off' that half the audience would read the other way.\n\nCore asks TWO questions, not one — allow_minor_auto_core_updates and allow_major_auto_core_updates — and one setting answers both. 'minor' says yes to the first and no to the second. 'all' says yes to both. 'manual' says no twice.\n\nThe interesting branch is 'inherit'. It returns the value core handed us, unchanged. A setting whose job is to have no opinion looks like a wasted option until you remember who else is in the room: managed hosts set an update policy for you, and so do other plugins. Without 'inherit' this plugin would silently overrule a host that had already made a considered decision — the same fight the session-length slide walks away from, for the same reason. Registering a filter is a claim that you know better than whoever else registered one.\n\nAnd the reason this belongs at the END of the security section rather than in a corner labelled housekeeping: every other default in Section One removes something an attacker can reach. This one keeps the thing patched. Reducing surface and applying patches are the same job from two directions, and a site that does the first while quietly falling behind on the second is not actually safer.");
+
 divider("2", "SECTION TWO", "Content &\nPublic Surfaces", "Close the spam funnels and the thin pages Google (and bots) love to crawl.")
   .addNotes("These reduce channels for spam and clean up the thin, duplicate URLs that bots and search engines get lost in.");
 
-codeSlide(16, "CONTENT · 1 of 4",
+codeSlide(17, "CONTENT · 1 of 4",
   "Disable comments, trackbacks & pingbacks",
   "For many sites, comments are a spam magnet with little upside. Here we close them everywhere, hide existing threads, and drop the admin menu.",
   "disable_comments / disable_pingbacks / disable_self_pingbacks", "yes each",
@@ -496,7 +512,7 @@ codeSlide(16, "CONTENT · 1 of 4",
   "Closing comments is four jobs, not one: the template, the data, the editor, and the page. comments_open and comments_array answer the theme's comment template. comments_pre_query answers everything else — /wp/v2/comments most of all, which otherwise serves every comment the site has ever had. allowed_block_types_all takes the comment blocks out of the inserter, but the inserter only decides what an editor can add NEXT, and a block theme has already put those blocks in its post template. That markup needs render_block to return an empty string, or every post prints a \"Comments\" heading over an empty wrapper and the site reads as broken rather than as one that deliberately has no comments. get_comments_number is the same gap one layer down: wp_count_comments() answers zero once the query filter is in place, but the theme's heading reads the post's cached comment_count and cheerfully prints \"1 Comment\" above a thread that renders nothing.\n\n" +
   "Returning an empty string rather than unregistering the block types is what keeps this reversible. The blocks stay registered, the theme's markup stays as its author wrote it, and turning the setting off brings the whole thing back with nothing to undo.");
 
-codeSlide(17, "CONTENT · 2 of 4",
+codeSlide(18, "CONTENT · 2 of 4",
   "A clean 404 needs redirect_canonical gone",
   "Dropping the feed link stops the feed being advertised, not served. Answering it takes a 404 — and the 404 takes one more removal that no filter-level test will ever catch.",
   "disable_comments", "yes",
@@ -519,7 +535,7 @@ codeSlide(17, "CONTENT · 2 of 4",
   "And redirect_canonical has to go with it — this is the part worth remembering. It does not bail on a 404. It calls redirect_guess_404_permalink(), and against the query we have just emptied it answers /post-name/feed/ with a 301 to /post-name/feed/feed/. Leaving it hooked turns a clean 404 into a redirect to a URL that has never existed, which is worse than the bug we set out to fix.\n\n" +
   "EVERY FILTER-LEVEL TEST STILL PASSES. ONLY A REAL REQUEST CATCHES IT. That is the honest limit of the pattern this whole talk is built on: a filter behind a toggle is a claim about one hook, and what a visitor actually gets is the sum of all of them. The recursion trap in limit_unfiltered_html_to_admins is the same lesson from the other direction — a user_has_cap filter that asks a capability question calls itself, so it has to decide from $user->roles and the already-resolved $allcaps and never ask. Test the request, not just the hook.");
 
-codeSlide(18, "CONTENT · 3 of 4",
+codeSlide(19, "CONTENT · 3 of 4",
   "Redirect author & attachment pages",
   "Author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. Both dilute SEO and are targets for trouble. Same hook, two conditions.",
   "disable_author_archives / redirect_attachment_pages", "yes / yes",
@@ -535,7 +551,7 @@ codeSlide(18, "CONTENT · 3 of 4",
     { t: "} );", k: "" },
   ]).addNotes("Like the REST user routes, author archives expose the authors' usernames in the URL, and attachment pages are near-empty media wrappers. template_redirect fires before a template loads - the perfect place to bounce the unwanted requests. Same hook, two conditions.\n\nTwo details on the attachment half, because the obvious version is subtly wrong. Unattached media has no parent - and that is most of the Media Library - so a naive else-home_url() points every one of those at your homepage, which search engines read as a soft 404. Fall back to the FILE instead, which is what core does. And skip the redirect entirely when the theme ships attachment.php or image.php: that theme built those pages deliberately (the photography case), and quietly bouncing past it deletes someone's feature.\n\nCore moved here too: WordPress 6.4 added wp_attachment_pages_enabled, off for new installs. So this default is not adding the redirect so much as choosing a better destination than the bare file.");
 
-codeSlide(19, "CONTENT · 4 of 4",
+codeSlide(20, "CONTENT · 4 of 4",
   "Disable the emoji script",
   "WordPress core injects an emoji-detection script and inline CSS on every page load, plus a DNS-prefetch hint. Modern browsers render emoji natively, so this is pure dead weight.",
   "disable_emojis", "yes",
@@ -557,7 +573,7 @@ codeSlide(19, "CONTENT · 4 of 4",
 divider("3", "SECTION THREE", "Admin UX &\nLogin Sessions", "Small quality-of-life defaults: a calmer dashboard and sensible session policy.")
   .addNotes("Now the quality-of-life defaults. These are more about your daily user experience and session safety than raw hardening.");
 
-codeSlide(21, "ADMIN UX",
+codeSlide(22, "ADMIN UX",
   "Faster search, quieter admin bar",
   "Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster.",
   "title_only_admin_search / frontend_admin_bar_behavior", "no / ''",
@@ -574,7 +590,7 @@ codeSlide(21, "ADMIN UX",
     { t: "  current_user_can('manage_options') ? $s : false );", k: "h" },
   ], 11).addNotes("Search the admin post list on a big site and WordPress reads every word of every post — like finding a book by reading the whole library. Title-only search checks just the spines, and it's far faster. The craft is in the *how*: post_search_columns (WP 6.2+) narrows the columns instead of rewriting the whole SQL clause, so core's term parsing and the logged-out password guard stay intact. Scope the filter; don't bulldoze the query.");
 
-codeSlide(22, "LOGIN & SESSIONS",
+codeSlide(23, "LOGIN & SESSIONS",
   "Right-size the login session",
   "A normal login lasts 2 days; “Remember Me” extends it to 14. Both are in days, and the remembered one can never be shorter. Now look at the registration: this callback throws away the value it was handed, so two plugins setting it cannot both win — and at core's own 2 / 14 we have nothing to say, so we stay out of it.",
   "disable_remember_me / session_regular_days / remember_me_days", "no / 2 / 14",
@@ -598,7 +614,7 @@ codeSlide(22, "LOGIN & SESSIONS",
 divider("4", "SECTION FOUR", "Branding, Performance\n& Email", "Brand the login screen, throttle one polling API, and end on the only default that changes nothing at all.")
   .addNotes("We brand the login screen, throttle one polling API, and end on the only default in the plugin that changes nothing at all.");
 
-codeSlide(24, "BRANDING",
+codeSlide(25, "BRANDING",
   "Own the login screen",
   "The default WordPress logo sends users to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents an unexpected external destination. BBD leaves it unchanged unless you opt in.",
   "login_logo_behavior", "keep_default (keep / remove / unlink / replace)",
@@ -613,7 +629,7 @@ codeSlide(24, "BRANDING",
     { t: "            get_bloginfo( 'name' ) );", k: "h" },
   ], 12).addNotes("The login page is a WordPress site's staff entrance, and the default WordPress \"W\" on wp-login.php links to wordpress.org. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site. Changing a site's login screen out of the box is intrusive, though, so the default is to LEAVE IT ALONE. Any opt-in change points the link home. Swap in a background-image to use the site's own logo.");
 
-codeSlide(25, "PERFORMANCE · opt-in",
+codeSlide(26, "PERFORMANCE · opt-in",
   "Throttle Heartbeat — and a default we deleted",
   "Throttle Heartbeat to ease up on weak shared hosting. The more interesting half is the toggle that used to be here: WordPress 6.3 gave scripts a per-script loading strategy, so our blanket defer filter had to go.",
   "throttle_heartbeat", "no (opt-in)",
@@ -628,7 +644,7 @@ codeSlide(25, "PERFORMANCE · opt-in",
     { t: "  array( 'strategy' => 'defer' ) );", k: "h" },
   ]).addNotes("The Heartbeat API polls admin-ajax every 15-60s. Throttle it to ease up on weak shared hosting.\n\nThe more interesting half of this slide is the toggle that USED to be here. We shipped a \"defer front-end scripts\" default that hooked script_loader_tag and string-replaced ' src=' with ' defer src=' on every handle. It had to skip jQuery core, and it still broke anything expecting a particular execution order — because a blanket filter cannot know which scripts are safe to defer.\n\nWordPress 6.3 added a per-script loading strategy, so core now answers this precisely, at the point of enqueue, where the person who wrote the script decides. Keeping our version would have meant teaching a workaround for a problem the platform already solved. Deleting a default is a legitimate result.");
 
-codeSlide(26, "EMAIL",
+codeSlide(27, "EMAIL",
   "Say so when the site cannot send mail",
   "WordPress sends from wordpress@yourdomain unless something changes it. On a domain that cannot send, password resets fail silently — wp_mail() returns false and nothing surfaces it. This warns, and that is all it does.",
   "mail_deliverability_notice", "yes",
@@ -675,7 +691,7 @@ codeSlide(26, "EMAIL",
     s.addText(c.t, { x: x + 0.95, y: 4.95, w: 2.75, h: 0.65, fontFace: HEAD, fontSize: 15, bold: true, color: INK, margin: 0, valign: "middle" });
     s.addText(c.d, { x: x + 0.28, y: 5.62, w: 3.35, h: 0.7, fontFace: BODY, fontSize: 12.5, color: SLATE, margin: 0, valign: "top" });
   });
-  footer(s, 24);
+  footer(s, 25);
   s.addNotes("Some defaults live in wp-config.php, above the plugin layer, because they must load before plugins do. They can't be options — so document them as manual steps in your onboarding checklist and put them in your standard wp-config template.");
 })();
 
@@ -740,7 +756,7 @@ codeSlide(26, "EMAIL",
     { text: "prefer the terminal?   ", options: { color: WHEAT, bold: true } },
     { text: "wp plugin install ./sane-defaults.zip --activate", options: { color: CGOLD } },
   ], { x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 13, valign: "middle", margin: 0 });
-  footer(s, 26);
+  footer(s, 27);
   s.addNotes("Do this live if there's a sandbox. The /wp-json/wp/v2/users check is the crowd-pleaser — before/after is instantly visible. For the terminal crowd, the WP-CLI one-liner installs and activates from the zip in one shot; swap the local path for a URL if the zip is hosted.");
 })();
 

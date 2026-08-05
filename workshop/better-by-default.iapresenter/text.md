@@ -278,6 +278,32 @@ Put this beside the comment-feed 404 and you have the pattern's two failure mode
 
 ---
 
+## Decide who patches WordPress
+
+	`core_update_policy` · default **minor**
+
+```php
+// Two filters, because core asks two questions.
+add_filter( 'allow_minor_auto_core_updates', $f );
+add_filter( 'allow_major_auto_core_updates', $g );
+
+// 'inherit' hands the value straight back — the
+// setting that chooses NOT to have an opinion.
+if ( 'inherit' === $policy ) { return $enabled; }
+
+return in_array( $policy, [ 'minor', 'all' ], true );
+```
+
+This is the only category on the agenda that is a **select** rather than a switch, and that is the lesson. Core already installs maintenance and security releases on its own, so a toggle would be the wrong shape: the real choice is four-way — maintenance only, every stable release, none, or leave it alone. Squashing that into on/off would have forced us to pick a meaning for "off" that half the room would read the other way.
+
+Core asks *two* questions, not one — `allow_minor_auto_core_updates` and `allow_major_auto_core_updates` — and one setting answers both. `minor` says yes to the first and no to the second; `all` says yes to both; `manual` says no twice.
+
+The interesting branch is `inherit`. It returns the value core handed us, unchanged. A setting whose job is to have no opinion looks like a wasted option until you remember who else is in the room: managed hosts set an update policy for you, and so do other plugins. Without `inherit` this plugin would silently overrule a host that had already made a considered decision — the same fight the session-length default walks away from, for the same reason. **Registering a filter is a claim that you know better than whoever else registered one.**
+
+And the reason this sits at the end of the security section rather than in a corner marked housekeeping: every other default in Section 1 removes something an attacker can reach. This one keeps the thing patched. Reducing surface and applying patches are the same job from two directions, and a site that does the first while quietly falling behind on the second is not actually safer.
+
+---
+
 # Section 2 — Content & Public Surfaces
 
 These reduce channels for spam and clean up the thin, duplicate URLs that bots and search engines get lost in.
