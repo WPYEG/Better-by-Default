@@ -175,7 +175,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'headers',
 			'label'   => 'X-Frame-Options (clickjacking)',
-			'help'    => 'Controls who may embed this site in an iframe. <code>SAMEORIGIN</code> blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — a client intranet, a partner site, or a preview/proofing tool — usually as a silent blank frame. Leave unchanged if your host or CDN already sets <code>X-Frame-Options</code>, or if the site is meant to be embedded elsewhere.',
+			'help'    => 'Controls who may embed this site in an iframe. <code>SAMEORIGIN</code> blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — an intranet dashboard, a screenshot or visual-review service, a kiosk or signage screen — usually as a silent blank frame. Leave unchanged if your host or CDN already sets <code>X-Frame-Options</code>, or if the site is meant to be embedded elsewhere.',
 			'choices' => array(
 				'SAMEORIGIN' => 'SAMEORIGIN — only this site may frame it',
 				'DENY'       => 'DENY — nobody may frame it',
@@ -1831,9 +1831,17 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 		return true;
 	}
 
-	// NIST SP 800-63B-4 § 3.1.1.2: favour length and screening over forced composition.
-	// rules (upper/lower/number/symbol), which push users toward predictable
-	// patterns like Password1! without adding entropy.
+	/*
+	 * NIST SP 800-63B-4 § 3.1.1.2: favour length and screening over forced
+	 * composition rules, which push users toward predictable shapes like
+	 * Password1!.
+	 *
+	 * "Without adding entropy" is what this comment used to say, and it concedes
+	 * the argument. Demanding a symbol does enlarge the alphabet, so on paper it
+	 * adds entropy; what it fails to add is guessing resistance, because people
+	 * satisfy the rule the same few ways. Entropy is also the term NIST stopped
+	 * using for user-chosen secrets — it does not appear in § 3.1.1.2 at all.
+	 */
 	$minimum = (int) apply_filters( 'wpyeg_minimum_password_length', 15 );
 
 	// Count characters, not bytes: strlen() would read eight emoji as 32 and
@@ -2798,7 +2806,7 @@ function wpyeg_defaults_render_settings_page() {
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
-		<p><?php esc_html_e( 'Each switch below is one opinionated default. Flip what you want; the rest of WordPress is untouched.', 'sane-defaults' ); ?></p>
+		<p><?php esc_html_e( 'Each switch below is one opinionated default, and they are independent: turning one on does not turn on anything else, and a switch left off means this plugin does not apply that default at all.', 'sane-defaults' ); ?></p>
 
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
