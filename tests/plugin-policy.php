@@ -1896,6 +1896,40 @@ $GLOBALS['wpyeg_test_http']       = array(
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A malformed range response fails open instead of trusting partial data.' );
 wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A malformed range response is never cached.' );
 
+/*
+ * A 200 whose body is empty is the shape the sibling plugin's review reported:
+ * a well-formed reply carrying no rows, whose "not breached" answer gets cached,
+ * letting a hostile or compromised upstream hold a whole prefix open until the
+ * entry expires.
+ *
+ * The empty case above pairs an empty body with a 503, so it exercises the
+ * non-200 branch and never reaches the emptiness check. This one is a 200, which
+ * is the only way to get there.
+ */
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http']       = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => '',
+);
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An empty 200 fails open.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'An empty 200 is never cached, so one bad reply cannot hold a prefix open.' );
+
+/*
+ * TLS verification is what keeps the hostile-upstream case requiring a real
+ * compromise rather than a hostile network. Nothing passes sslverify today, so
+ * WordPress's default of true stands; this fails if anyone ever passes false.
+ */
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http']       = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => "{$hibp_suffix}:9\r\n",
+);
+wpyeg_defaults_password_is_pwned( $hibp_password );
+wpyeg_test_assert(
+	! array_key_exists( 'sslverify', $GLOBALS['wpyeg_test_last_http_args'] ) || false !== $GLOBALS['wpyeg_test_last_http_args']['sslverify'],
+	'The breach lookup never disables TLS verification.'
+);
+
 // The range response is cached per prefix, so a second call makes no request.
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
@@ -2695,7 +2729,18 @@ foreach ( $public_filters as $filter ) {
  */
 preg_match( '/^ \* Version:\s+(\S+)$/m', $plugin_source, $header_version );
 preg_match( '/^Stable tag:\s+(\S+)$/m', $plugin_readme, $stable_tag );
-preg_match( '/^= (\d+\.\d+\.\d+) =$/m', $plugin_readme, $newest_entry );
+
+/*
+ * Anchored to the Changelog section rather than searched from the top of the
+ * file. Today the Changelog precedes the Upgrade Notice, so the first numeric
+ * heading in the file happens to be the newest release — but that is section
+ * ordering doing the work, not the assertion. Move Upgrade Notice above
+ * Changelog and this would quietly start checking a different section while
+ * still passing.
+ */
+$changelog_at = strpos( $plugin_readme, '== Changelog ==' );
+wpyeg_test_assert( false !== $changelog_at, 'readme.txt has a Changelog section.' );
+preg_match( '/^= (\d+\.\d+\.\d+) =$/m', substr( $plugin_readme, $changelog_at ), $newest_entry );
 
 wpyeg_test_assert( ! empty( $header_version[1] ), 'The plugin header declares a version.' );
 wpyeg_test_assert(
@@ -2706,6 +2751,32 @@ wpyeg_test_assert(
 	isset( $newest_entry[1] ) && $header_version[1] === $newest_entry[1],
 	"The newest changelog entry is for the version being shipped ({$header_version[1]})."
 );
+
+/*
+ * The floors, in both places.
+ *
+ * `Requires at least` and `Requires PHP` live in the plugin header and again in
+ * readme.txt, and nothing compared them — they agree by luck rather than by
+ * guard, which is the state the Stable tag assertion above exists to prevent.
+ *
+ * Which copy matters depends on where the plugin came from. WordPress reads the
+ * *header* to decide whether to activate; wordpress.org reads *readme.txt* to
+ * decide whether to offer the plugin and its updates. A readme floor lower than
+ * the header's offers an update to a site that then cannot run it; a higher one
+ * hides the plugin from sites that could. Neither shows up on the install the
+ * suite runs on.
+ */
+foreach ( array( 'Requires at least', 'Requires PHP' ) as $wpyeg_floor ) {
+	preg_match( '/^ \* ' . preg_quote( $wpyeg_floor, '/' ) . ':\s+(\S+)$/m', $plugin_source, $wpyeg_header_floor );
+	preg_match( '/^' . preg_quote( $wpyeg_floor, '/' ) . ':\s+(\S+)$/m', $plugin_readme, $wpyeg_readme_floor );
+
+	wpyeg_test_assert( ! empty( $wpyeg_header_floor[1] ), "The plugin header declares {$wpyeg_floor}." );
+	wpyeg_test_assert( ! empty( $wpyeg_readme_floor[1] ), "readme.txt declares {$wpyeg_floor}." );
+	wpyeg_test_assert(
+		$wpyeg_header_floor[1] === $wpyeg_readme_floor[1],
+		"{$wpyeg_floor} agrees: the header says {$wpyeg_header_floor[1]}, readme.txt says {$wpyeg_readme_floor[1]}."
+	);
+}
 
 /*
  * Password policy role scoping.
