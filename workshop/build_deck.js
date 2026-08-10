@@ -357,7 +357,8 @@ codeSlide(10, "SECURITY · 3 of 7",
     { t: "// each category off → remove its methods", k: "c" },
     { t: "add_filter( 'xmlrpc_methods', function ( $m ) {", k: "" },
     { t: "  if ( ! allow( 'pingbacks' ) )", k: "" },
-    { t: "    unset( $m['pingback.ping'] );", k: "h" },
+    { t: "    unset( $m['pingback.ping'],", k: "h" },
+    { t: "           $m['pingback.extensions.getPingbacks'] );", k: "h" },
     { t: "  if ( ! allow( 'remote_publishing' ) )", k: "" },
     { t: "    // drop wp.* metaWeblog.* mt.* blogger.*", k: "c" },
     { t: "  return $m;", k: "" },
@@ -368,7 +369,7 @@ codeSlide(10, "SECURITY · 3 of 7",
     { t: "add_filter( 'wp_xmlrpc_server_class', $refuse );", k: "h" },
   ], 11).addNotes(
   "XML-RPC is a legitimate but aging API. (Mad love to Dave Winer!) It's not a backdoor or an emergency. It is an old switchboard where every method is a phone line. Rather than rip out a connection that Jetpack or a publishing client may need, we unplug unused lines by category. Four switches, all off by default:\n\n" +
-  "1. Pingbacks — drop pingback.ping, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second, and fetches the claimed source URL. Keep it if you're a crusty punk who loves the IndieWeb and everything before Facebook turned everything to shit, ca. 2005.\n" +
+  "1. Pingbacks — drop pingback.ping *and* pingback.extensions.getPingbacks, the clearest live nuisance and reflection-DDoS surface. A valid call performs database work, waits a second (core really does sleep( 1 ), to let the pinging post finish publishing), and then fetches the claimed source URL — which is the whole trick: a request that costs the attacker nothing costs you a database write, a pause and an outbound fetch to a URL they chose. BBD also strips the X-Pingback response header, because a site that has removed the method while still advertising where to send one is still telling every scanner it accepts pingbacks.\n" +
   "2. Remote publishing — drop the credential-authenticated blogging methods (wp.*, metaWeblog.*, mt.*, blogger.*), another password-guessing entrance when legacy clients are not needed. This also flips xmlrpc_enabled off and removes the RSD discovery link.\n" +
   "3. system.multicall — refuse a general batching wrapper with little established modern use. WordPress 4.4 prevented it from being used as a password-guessing multiplier, so the old 'thousands of guesses' story is obsolete. (To this day, people say XML-RPC is some kind of open, free credential verification oracle — NOT TRUE.) Multicall can still batch other work, including pingbacks, but it does not enable pingback abuse.\n" +
   "4. Block the endpoint — the blunt hammer: xmlrpc.php returns 403 for everything. Prefer doing this at the CDN, WAF, or web server so the request never consumes PHP.\n\n" +
