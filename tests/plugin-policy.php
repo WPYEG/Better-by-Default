@@ -1459,6 +1459,30 @@ function wpyeg_test_find_hook( $hook ) {
  * repo's own key name its functions, options and documents, and would be
  * meaningless elsewhere.
  */
+/**
+ * Strip lines that deliberately quote a retired phrase in order to explain it.
+ *
+ * This is a teaching repository, so it necessarily contains the wording it has
+ * retired — the password comment quotes "Without adding entropy" to say why that
+ * framing concedes the argument. A substring scan cannot tell a lesson from a
+ * relapse, so a line carrying `better-by-default-retired-ok` is skipped and
+ * nothing else is, which keeps the exemption deliberate and visible in review.
+ *
+ * @param string $text Copy to scan.
+ * @return string
+ */
+function wpyeg_strip_retired_exemptions( $text ) {
+	$kept = array();
+
+	foreach ( preg_split( '/\r\n|\n/', (string) $text ) as $line ) {
+		if ( false === stripos( $line, 'better-by-default-retired-ok' ) ) {
+			$kept[] = $line;
+		}
+	}
+
+	return implode( "\n", $kept );
+}
+
 $retired_fixture_path = dirname( __DIR__ ) . '/tests/fixtures/retired-copy.json';
 wpyeg_test_assert( is_file( $retired_fixture_path ), 'The shared retired-copy fixture exists.' );
 
@@ -1497,7 +1521,7 @@ foreach ( $accuracy_files as $accuracy_file ) {
 
 	foreach ( $retired_claims as $retired_claim => $claim_description ) {
 		wpyeg_test_assert(
-			false === strpos( $accuracy_copy, $retired_claim ),
+			false === stripos( wpyeg_strip_retired_exemptions( $accuracy_copy ), $retired_claim ),
 			basename( $accuracy_file ) . ' does not repeat ' . $claim_description . '.'
 		);
 	}
@@ -2451,7 +2475,7 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 	// shipped last time.
 	foreach ( $retired_claims as $retired_claim => $claim_description ) {
 		wpyeg_test_assert(
-			false === strpos( $deck_text, $retired_claim ),
+			false === stripos( wpyeg_strip_retired_exemptions( $deck_text ), $retired_claim ),
 			'The rendered deck does not repeat ' . $claim_description . '.'
 		);
 	}
