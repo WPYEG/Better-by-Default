@@ -914,10 +914,11 @@ and `Referrer-Policy` keeps full URLs from leaking to other sites.
 
 Note what is *not* in this group. `X-Frame-Options` is a separate setting
 (`frame_options`, default `SAMEORIGIN`) because it is the only one of the three that can
-break a working site: blocking cross-origin framing also blocks *legitimate* embedding — a
-client intranet, a partner site, a preview or proofing tool — and it usually fails as a silent
-blank frame. Bundling it with `nosniff` would mean a site that needs to be embeddable has to
-give up `nosniff` as well. Set it to *leave unchanged* when a host or CDN already sends it.
+break a working site: blocking cross-origin framing also blocks *legitimate* embedding — an
+intranet dashboard, a screenshot or visual-review service, a kiosk or signage screen — and it
+usually fails as a silent blank frame. Bundling it with `nosniff` would mean a site that
+needs to be embeddable has to give up `nosniff` as well. Set it to *leave unchanged* when a
+host or CDN already sends it.
 
 **Deferring to an existing header is the wrong default, and this is the part worth studying.**
 The obvious rule is "set it only if nothing else has" — it sounds polite, and it means whatever
