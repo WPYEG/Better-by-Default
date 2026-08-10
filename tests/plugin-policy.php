@@ -1961,6 +1961,49 @@ $deck_source = file_get_contents( $repo_root . '/workshop/build_deck.js' );
 // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixtures.
 $plugin_readme = file_get_contents( $repo_root . '/plugin/sane-defaults/readme.txt' );
 
+/*
+ * --- the workshop teaches the teardown the plugin actually performs ---
+ *
+ * The deck's XML-RPC code sample showed `unset( $m['pingback.ping'] )` and
+ * stopped, while the plugin has always also unset
+ * `pingback.extensions.getPingbacks` and stripped the `X-Pingback` header. Both
+ * artifacts were internally consistent — the sample was real code, the plugin was
+ * correct — and the gap lived between them, in a deck whose headline finding is
+ * that most plugins get pingback teardown wrong.
+ *
+ * A workshop attendee copying the sample would have written the incomplete
+ * version this talk exists to warn them about.
+ */
+preg_match_all( "/unset\(\s*\\\$methods\[\s*'([^']+)'\s*\](?:\s*,\s*\\\$methods\[\s*'([^']+)'\s*\])*/", $deck_source_plugin = file_get_contents( $repo_root . '/plugin/sane-defaults/sane-defaults.php' ), $unset_matches ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+
+$taught = array();
+foreach ( array( 'pingback.ping', 'pingback.extensions.getPingbacks' ) as $method ) {
+	if ( false !== strpos( $deck_source_plugin, "'" . $method . "'" ) ) {
+		$taught[] = $method;
+	}
+}
+
+wpyeg_test_assert(
+	count( $taught ) >= 2,
+	'The plugin unsets both pingback methods (found ' . count( $taught ) . ').'
+);
+
+foreach ( $taught as $method ) {
+	wpyeg_test_assert(
+		false !== strpos( $workshop_source, $method ),
+		"The workshop names {$method}, which the plugin removes — a sample that teaches half a teardown teaches the bug this talk is about."
+	);
+	wpyeg_test_assert(
+		false !== strpos( $presenter_source, $method ),
+		"The presenter source names {$method} too."
+	);
+}
+
+wpyeg_test_assert(
+	false !== strpos( $deck_source_plugin, "'X-Pingback'" ) && false !== strpos( $workshop_source, 'X-Pingback' ),
+	'The workshop mentions the X-Pingback header strip, which the plugin performs — removing the method while still advertising it leaves discovery intact.'
+);
+
 $group_labels = array(
 	'security'    => 'Security',
 	'updates'     => 'Updates',
