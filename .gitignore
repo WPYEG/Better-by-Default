@@ -53,3 +53,6 @@ wp-config.php
 # (pptxgenjs); vendor/ lands at the root after composer install.
 node_modules/
 /vendor/
+
+# macOS Finder metadata. Committed once by a careless `git add -A`.
+.DS_Store
