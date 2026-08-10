@@ -1444,18 +1444,39 @@ function wpyeg_test_find_hook( $hook ) {
  * unset", which is exactly right and must keep passing. Pick the phrase that
  * cannot survive an honest rewrite.
  */
-$retired_claims = array(
-	'amplifier that batches thousands of login guesses' => 'the obsolete multicall claim',
-	'Gate the whole endpoint off'                       => 'the xmlrpc_enabled misdescription',
-	'Only fill in what nothing else has set'            => 'the "set only if unset" header rule the reference doc kept teaching after 1.1.1 replaced it',
-	'all three check whether the'                       => 'the claim that this plugin only writes a header nobody else has set',
-	"wrap.closest('p').style.display"                   => 'the login_footer script the Remember Me default deliberately does not use',
-	'wpyeg_is_pwned('                                   => 'a breach-check function this plugin has never shipped',
-	'hide_for_non_admins'                               => 'the misspelled admin-bar choice value',
-	'stopped testing credentials after the first failed login' => 'the pre-correction multicall wording',
-	'only fill in what nothing else set'                => 'the replaced "set only if unset" header rule',
-	'Note the isset() guards'                           => 'the replaced isset()-guard header note',
-	'we should not fight that layer'                    => 'deference to an upstream header that is now compared against',
+
+/*
+ * The retired-claims list is not here any more.
+ *
+ * It lives in tests/fixtures/retired-copy.json, a fixture shared with Keel (and
+ * available to Pixel), because these plugins say the same things about the same
+ * WordPress behaviours and therefore retire the same wrong claims. Each repo used
+ * to keep its own list, so retiring a phrase here did not retire it there — which
+ * is how an author-identity leak lived in two plugins while the fix sat in the
+ * third.
+ *
+ * `shared` is enforced by every repo carrying the file. The entries under this
+ * repo's own key name its functions, options and documents, and would be
+ * meaningless elsewhere.
+ */
+$retired_fixture_path = dirname( __DIR__ ) . '/tests/fixtures/retired-copy.json';
+wpyeg_test_assert( is_file( $retired_fixture_path ), 'The shared retired-copy fixture exists.' );
+
+// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+$retired_fixture = json_decode( file_get_contents( $retired_fixture_path ), true );
+wpyeg_test_assert(
+	is_array( $retired_fixture ) && isset( $retired_fixture['shared'] ),
+	'The shared retired-copy fixture parses and has a shared section.'
+);
+
+$retired_claims = array();
+foreach ( array_merge( $retired_fixture['shared'], $retired_fixture['better-by-default'] ) as $retired_entry ) {
+	$retired_claims[ $retired_entry['phrase'] ] = $retired_entry['why'];
+}
+
+wpyeg_test_assert(
+	count( $retired_claims ) >= count( $retired_fixture['shared'] ),
+	'The fixture yielded phrases to scan for (' . count( $retired_claims ) . ').'
 );
 
 $accuracy_files = array(
@@ -1996,6 +2017,21 @@ foreach ( $taught as $method ) {
 	wpyeg_test_assert(
 		false !== strpos( $presenter_source, $method ),
 		"The presenter source names {$method} too."
+	);
+
+	/*
+	 * And the generator, which is the artifact people actually see.
+	 *
+	 * The first version of this guard checked the two markdown sources and not
+	 * build_deck.js, so the fix for the half teardown landed in the prose while
+	 * the slides went on showing `unset( $m['pingback.ping'] );` alone — the
+	 * exact defect the fix was for, surviving in the one place it is projected on
+	 * a wall. Three artifacts, and checking two of them proved nothing about the
+	 * third.
+	 */
+	wpyeg_test_assert(
+		false !== strpos( $deck_source, $method ),
+		"build_deck.js names {$method} — the slides are what the room sees, and a sample fixed only in prose is not fixed."
 	);
 }
 
