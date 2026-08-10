@@ -1836,7 +1836,7 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 	 * composition rules, which push users toward predictable shapes like
 	 * Password1!.
 	 *
-	 * "Without adding entropy" is what this comment used to say, and it concedes
+	 * "Without adding entropy" is what this comment used to say, and it concedes  better-by-default-retired-ok
 	 * the argument. Demanding a symbol does enlarge the alphabet, so on paper it
 	 * adds entropy; what it fails to add is guessing resistance, because people
 	 * satisfy the rule the same few ways. Entropy is also the term NIST stopped
