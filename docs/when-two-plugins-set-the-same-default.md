@@ -218,15 +218,33 @@ If you want the automated version, the design worth copying is:
   hook — at which point another plugin holding it is not a collision, it is the
   only plugin doing the job. Reporting it anyway sends somebody to deactivate
   the plugin providing the behaviour.
-- **Know what reflection cannot see.** A plugin that turns something off by
-  registering one of WordPress's own callbacks leaves nothing to attribute:
-  `__return_false` resolves to `wp-includes` and is indistinguishable from core
-  doing it. That is the ordinary way the disable-something category is written —
-  Classic Editor in its default configuration registers
+- **Know what reflection cannot see, and resist filling the gap.** A plugin that
+  turns something off by registering one of WordPress's own callbacks leaves
+  nothing to attribute: `__return_false` resolves to `wp-includes` and is
+  indistinguishable from core doing it. That is the ordinary way the
+  disable-something category is written — Classic Editor in its default
+  configuration registers
   `add_filter( 'use_block_editor_for_post_type', '__return_false', 100 )` — so a
   reflection-only check is blind to a good part of the field it is looking at. A
   clear result means nothing attributable was found, not that nothing is
   contesting the hook, and it is worth saying so wherever the result is shown.
+
+  A sibling plugin tried to close that gap and withdrew it, which is the more
+  useful half of the story. The idea was to require two independent things
+  before naming a plugin unproven: an untraceable callback on the hook at
+  runtime, and an active plugin whose *source* declares a filter on that same
+  hook. It reads as conservative and is not. The runtime half is satisfied
+  before any third party is involved — by the checking plugin's own
+  `__return_false` registrations, and by core's, since `comments_open` always
+  carries `_close_comments_for_old_post`. That leaves one weak signal doing the
+  work of two, and a source mention is very weak: a plugin that declares the
+  filter in a mode the site is not using matches exactly like one that is
+  fighting you. Measured, two multi-feature plugins were named across five hooks
+  while registering nothing on any of them. Excluding your own callbacks does
+  not rescue it, because core's are indistinguishable from a third party's use
+  of the same core function, and nothing recovers who called `add_filter`.
+  Naming a plugin that is doing nothing, beside advice to deactivate it, is
+  worse than admitting the blind spot.
 
 ## The uncomfortable conclusion
 
