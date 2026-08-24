@@ -264,9 +264,13 @@ If you want the automated version, the design worth copying is:
   - Side effects persist. A `try/finally` restores the hook registry and nothing
     else — database writes, mail, HTTP requests, globals and object state all
     survive the rollback.
-  - `exit()` or `wp_redirect()` in a foreign callback ends the request. That is
-    not catchable by `Throwable` or anything else, and it white-screens an admin
-    page with no error attributable to anyone.
+  - `exit()` in a foreign callback ends the request, and nothing catches it —
+    not `Throwable`, and not the `finally` that restores the hook registry, which
+    does not run either. Only `register_shutdown_function` fires. So the registry
+    is left in its swapped state and an admin page white-screens with no error
+    attributable to anyone. (`wp_redirect()` alone returns rather than
+    terminating; it is the conventional `wp_redirect(); exit;` that does this,
+    and by `admin_notices` the headers have gone out anyway.)
   - The arguments are invented. Passing `null` where a `WP_Post` is contracted
     throws before the callback finishes, but may not throw before it has done
     something; passing a real user or post ID is worse, because then the foreign
