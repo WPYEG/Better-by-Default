@@ -127,6 +127,11 @@ this page found. Kept as it was recorded, because the lesson is in the numbers
 being different, and a page that quietly edits its own evidence to match today
 is worth less than one that shows what it saw.
 
+A line reading `__return_false` is the awkward case, and it is not rare. That is
+a *core* function, so it names nothing about who registered it — several plugins
+can appear on one hook as several identical lines. Priority is the only thing
+distinguishing them, and reflection will not help: the file is `wp-includes`.
+
 If a line says only `closure`, the plugin registered an anonymous function and
 there is no name to print. `ReflectionFunction` will give you the file, which is
 usually enough to identify it:
@@ -208,6 +213,20 @@ If you want the automated version, the design worth copying is:
   well-behaved plugin on the site, and a check that cries wolf gets ignored.
 - **Do not tell the user which plugin to keep.** That is a judgement about the
   site, and a plugin that answered it would be arguing for its own retention.
+- **Only report a hook you are registered on yourself.** Every default in a
+  plugin like this is switchable, and a setting that is off leaves you off the
+  hook — at which point another plugin holding it is not a collision, it is the
+  only plugin doing the job. Reporting it anyway sends somebody to deactivate
+  the plugin providing the behaviour.
+- **Know what reflection cannot see.** A plugin that turns something off by
+  registering one of WordPress's own callbacks leaves nothing to attribute:
+  `__return_false` resolves to `wp-includes` and is indistinguishable from core
+  doing it. That is the ordinary way the disable-something category is written —
+  Classic Editor in its default configuration registers
+  `add_filter( 'use_block_editor_for_post_type', '__return_false', 100 )` — so a
+  reflection-only check is blind to a good part of the field it is looking at. A
+  clear result means nothing attributable was found, not that nothing is
+  contesting the hook, and it is worth saying so wherever the result is shown.
 
 ## The uncomfortable conclusion
 
