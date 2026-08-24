@@ -2513,6 +2513,32 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 
 	wpyeg_test_assert( $slide_count > 0, 'The rendered deck reports a slide count.' );
 	wpyeg_test_assert( $slide_count === $page_count, "The PDF handout has one page per slide (deck {$slide_count}, handout {$page_count})." );
+
+	/*
+	 * And the markdown carries the same number of slides as the rendered deck.
+	 *
+	 * This is the join nothing was testing. build_deck.js does not read the
+	 * markdown — it builds the deck in JavaScript, and Better-by-Default.ia.md is
+	 * a parallel copy kept in step by hand, which the generator's own header asks
+	 * for and nothing enforced. So a slide added to the markdown alone passed
+	 * every check: the deck matched build_deck.js, the handout matched the deck,
+	 * and the two markdown copies matched each other. Three consistent pairs and
+	 * a deck five slides short of the source.
+	 *
+	 * Count rather than titles. The two sources say the same things in different
+	 * escaping — curly quotes, em dashes, backticks, embedded newlines — so
+	 * comparing text produces failures about punctuation. A count catches the
+	 * drift that actually happens, which is a slide added to one source and not
+	 * the other.
+	 */
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+	$md_slides = preg_match_all( '/^---$/m', file_get_contents( $repo_root . '/workshop/Better-by-Default.ia.md' ) ) + 1;
+
+	wpyeg_test_assert(
+		$md_slides === $slide_count,
+		"The iA Presenter markdown has one slide per rendered slide (markdown {$md_slides}, deck {$slide_count}). "
+			. 'build_deck.js does not read the markdown; both are edited by hand.'
+	);
 }
 
 /*
