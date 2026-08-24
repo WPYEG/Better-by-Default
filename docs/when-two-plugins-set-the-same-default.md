@@ -229,8 +229,12 @@ If you want the automated version, the design worth copying is:
   clear result means nothing attributable was found, not that nothing is
   contesting the hook, and it is worth saying so wherever the result is shown.
 
-  A sibling plugin tried to close that gap and withdrew it, which is the more
-  useful half of the story. The idea was to require two independent things
+  A sibling plugin tried to close that gap twice and withdrew both attempts,
+  which is the more useful half of the story. There are two obvious moves once
+  you accept that reflection cannot see these plugins, and the field has now
+  tried each.
+
+  **The first was to read the source.** Require two independent things
   before naming a plugin unproven: an untraceable callback on the hook at
   runtime, and an active plugin whose *source* declares a filter on that same
   hook. It reads as conservative and is not. The runtime half is satisfied
@@ -245,6 +249,44 @@ If you want the automated version, the design worth copying is:
   of the same core function, and nothing recovers who called `add_filter`.
   Naming a plugin that is doing nothing, beside advice to deactivate it, is
   worse than admitting the blind spot.
+
+  **The second was to run the filter and measure what came out.** This is the
+  one to be careful about, because it is the rigorous-sounding choice: it needs
+  no attribution at all, it observes the site's real behaviour instead of
+  inferring from a registry, and it answers the question exactly. Clone the hook,
+  keep your callback and one rival, call `apply_filters()`, compare the result
+  against your own value, and you know whether that plugin actually changes the
+  outcome.
+
+  It shipped and was withdrawn a day later. Running a filter runs somebody
+  else's code, and a filter callback is only pure by convention:
+
+  - Side effects persist. A `try/finally` restores the hook registry and nothing
+    else — database writes, mail, HTTP requests, globals and object state all
+    survive the rollback.
+  - `exit()` or `wp_redirect()` in a foreign callback ends the request. That is
+    not catchable by `Throwable` or anything else, and it white-screens an admin
+    page with no error attributable to anyone.
+  - The arguments are invented. Passing `null` where a `WP_Post` is contracted
+    throws before the callback finishes, but may not throw before it has done
+    something; passing a real user or post ID is worse, because then the foreign
+    code operates on a real entity during an unrelated request.
+  - The answer is not the site's answer. You-plus-one-rival is not the callback
+    stack the site actually runs, so two rivals that cancel or compound each
+    other are measured as neither.
+
+  A check that reports collisions must not cause them, and no amount of care
+  inside the harness makes it transactional — WordPress has no boundary to roll
+  a filter call back across.
+
+  Both attempts fail the same way underneath: they try to recover information
+  WordPress did not record. Nothing stores which plugin called `add_filter()`,
+  and everything downstream of that absence is a guess or a gamble.
+
+  **What worked instead was admitting three states rather than two.** Report the
+  hooks you can prove, stay silent where you can prove nothing, and add a third
+  category — informational, not actionable — for hooks where something is present
+  that you cannot judge. It says less, and everything it says is true.
 
 ## The uncomfortable conclusion
 
