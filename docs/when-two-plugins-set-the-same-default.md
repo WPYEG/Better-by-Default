@@ -8,6 +8,13 @@ This is what actually happens, measured rather than guessed — three sibling
 plugins activated together on one throwaway install, all three doing
 substantially the same work.
 
+The short version: nothing breaks. No fatal errors, no clobbered settings, no
+warnings in a log. One plugin's setting silently stops applying, its settings
+screen goes on displaying the value it thinks it set, and the site uses somebody
+else's. This page shows which kinds of setting behave that way and which are safe
+to share, how to check any site by hand in about a minute, and what two attempts
+at automating that check got wrong.
+
 ## What did not break
 
 Worth saying first, because it is the failure everyone expects and it did not
