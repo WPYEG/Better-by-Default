@@ -225,6 +225,12 @@ If you want the automated version, the design worth copying is:
   hook — at which point another plugin holding it is not a collision, it is the
   only plugin doing the job. Reporting it anyway sends somebody to deactivate
   the plugin providing the behaviour.
+- **Measure the outcome, not the culprit, where you can.** Attribution answers
+  "who is overriding me", which WordPress did not record. Whether your setting
+  is taking effect is a different question, and the site answers it for free
+  every time it runs the filter — observe at `PHP_INT_MAX` and compare against
+  what your setting asks for. It sees the plugins reflection cannot, because it
+  does not care who they are. See the third attempt below.
 - **Know what reflection cannot see, and resist filling the gap.** A plugin that
   turns something off by registering one of WordPress's own callbacks leaves
   nothing to attribute: `__return_false` resolves to `wp-includes` and is
@@ -236,10 +242,11 @@ If you want the automated version, the design worth copying is:
   clear result means nothing attributable was found, not that nothing is
   contesting the hook, and it is worth saying so wherever the result is shown.
 
-  A sibling plugin tried to close that gap twice and withdrew both attempts,
-  which is the more useful half of the story. There are two obvious moves once
-  you accept that reflection cannot see these plugins, and the field has now
-  tried each.
+  A sibling plugin has made three attempts on that gap, and the two it withdrew
+  are the more useful half of the story. There are two obvious moves once you
+  accept that reflection cannot see these plugins, and the field has now tried
+  each; both came back out. The third one works, and it works by giving up on
+  the premise the other two share.
 
   **The first was to read the source.** Require two independent things
   before naming a plugin unproven: an untraceable callback on the hook at
@@ -290,14 +297,44 @@ If you want the automated version, the design worth copying is:
   inside the harness makes it transactional — WordPress has no boundary to roll
   a filter call back across.
 
-  Both attempts fail the same way underneath: they try to recover information
+  Both failures are the same failure underneath: they try to recover information
   WordPress did not record. Nothing stores which plugin called `add_filter()`,
   and everything downstream of that absence is a guess or a gamble.
 
-  **What worked instead was admitting three states rather than two.** Report the
-  hooks you can prove, stay silent where you can prove nothing, and add a third
-  category — informational, not actionable — for hooks where something is present
-  that you cannot judge. It says less, and everything it says is true.
+  **The third attempt stopped trying to.** Ask what the filter produced instead
+  of who produced it. Register on the hook at `PHP_INT_MAX`, and when WordPress
+  runs it *of its own accord*, compare the value the chain settled on against
+  the value your own setting asks for. If they disagree, something on this site
+  is deciding that setting and it is not you. Nothing is invoked, no arguments
+  are invented, and no callback runs that was not already going to run — the
+  whole distinction from the second attempt is that observing a filter WordPress
+  is already running is not the same as calling one.
+
+  It does not name anybody, and it does not need to. "Your setting is not taking
+  effect" is the half an operator can act on; the remedy — look at the active
+  plugins — is the same whoever it turns out to be. Measured against Disable
+  XML-RPC, which registers `add_filter( 'xmlrpc_enabled', '__return_false' )`
+  and is invisible to attribution by construction, the divergence is detected.
+
+  Two things about it are easy to get wrong, and both were:
+
+  - **The observer cannot be gated to admin requests.** `xmlrpc_enabled` never
+    fires on an admin page load; it fires in `xmlrpc.php`. The hook fires where
+    it fires, so the observation has to be recorded there and read back later on
+    the screen that reports it. A check that only looks while somebody is on the
+    settings screen sees nothing.
+  - **A finding with nobody to name must not be graded as passing.** The status
+    was computed from the attributable overlaps alone, so a site whose only
+    finding was an untraceable override got a green badge over a paragraph
+    saying a setting was not taking effect. Those two conditions coincide rather
+    than being rare together: an override nobody can name is precisely the case
+    with no overlap to report.
+
+  Alongside it, the reporting that made the rest honest: three states rather
+  than two. Report the hooks you can prove, stay silent where you can prove
+  nothing, and add a third category — informational, not actionable — for hooks
+  where something is present that you cannot judge. It says less, and everything
+  it says is true.
 
 ## The uncomfortable conclusion
 
