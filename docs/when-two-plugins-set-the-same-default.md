@@ -228,9 +228,11 @@ If you want the automated version, the design worth copying is:
 - **Measure the outcome, not the culprit, where you can.** Attribution answers
   "who is overriding me", which WordPress did not record. Whether your setting
   is taking effect is a different question, and the site answers it for free
-  every time it runs the filter — observe at `PHP_INT_MAX` and compare against
-  what your setting asks for. It sees the plugins reflection cannot, because it
-  does not care who they are. See the third attempt below.
+  every time it runs the filter — observe as late as WordPress permits and
+  compare against what your setting asks for. A callback at `PHP_INT_MAX` sees
+  the value at its own turn; a callback registered later at that same priority
+  can still change it. Within that limit, it sees the plugins reflection cannot,
+  because it does not care who they are. See the third attempt below.
 - **Know what reflection cannot see, and resist filling the gap.** A plugin that
   turns something off by registering one of WordPress's own callbacks leaves
   nothing to attribute: `__return_false` resolves to `wp-includes` and is
@@ -245,8 +247,8 @@ If you want the automated version, the design worth copying is:
   A sibling plugin has made three attempts on that gap, and the two it withdrew
   are the more useful half of the story. There are two obvious moves once you
   accept that reflection cannot see these plugins, and the field has now tried
-  each; both came back out. The third one works, and it works by giving up on
-  the premise the other two share.
+  each; both came back out. The third one is useful within a narrower, stated
+  limit, and it works by giving up on the premise the other two share.
 
   **The first was to read the source.** Require two independent things
   before naming a plugin unproven: an untraceable callback on the hook at
@@ -303,12 +305,19 @@ If you want the automated version, the design worth copying is:
 
   **The third attempt stopped trying to.** Ask what the filter produced instead
   of who produced it. Register on the hook at `PHP_INT_MAX`, and when WordPress
-  runs it *of its own accord*, compare the value the chain settled on against
+  runs it *of its own accord*, compare the value at the observer's turn against
   the value your own setting asks for. If they disagree, something on this site
   is deciding that setting and it is not you. Nothing is invoked, no arguments
   are invented, and no callback runs that was not already going to run — the
   whole distinction from the second attempt is that observing a filter WordPress
   is already running is not the same as calling one.
+
+  `PHP_INT_MAX` means latest possible *priority*, not guaranteed last callback.
+  WordPress runs callbacks sharing a priority in registration order, so a
+  callback added at `PHP_INT_MAX` after the observer can still change the final
+  result. The observation is therefore best-effort: reliable evidence of a
+  divergence it sees, but not proof that no later same-priority divergence
+  occurred.
 
   It does not name anybody, and it does not need to. "Your setting is not taking
   effect" is the half an operator can act on; the remedy — look at the active
