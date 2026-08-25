@@ -707,10 +707,14 @@ Here is the whole rule, and it is worth more than any tool. When your code is ha
 ## Check any site in about a minute.
 
 	- WordPress keeps every registered callback in one place.
-	- Ask it who is on the hook you care about.
-	- More than one name, on a replacing filter, means somebody is losing.
+	- Ask it who is on the hook you care about — guarding for nobody being there.
+	- Several entries means the hook is shared. Whether anyone loses depends on the callbacks.
 
-You do not need a plugin for this, and that is why we are not shipping one. There is a `wp eval` snippet in the reference doc that prints every callback registered on a given filter, with its priority. Run it against `auth_cookie_expiration` on a real site. If more than one line comes back, one of those plugins is not doing what its settings screen claims. Try `wp_headers` too, for contrast — several entries there are perfectly healthy.
+You do not need a plugin for this, and that is why we are not shipping one. There is a `wp eval` snippet in the reference doc that prints every callback registered on a given filter, with its priority.
+
+Two things to say out loud, because the obvious reading of the output is wrong. An empty result is the normal case on a clean install: this plugin does not register that filter at all while the lengths are still WordPress's own, which is the fix we made earlier in the deck. Guard for the hook being absent or the example errors on the very plugin it is demonstrating.
+
+And several entries means the hook is shared, not that somebody is losing. A callback can pass its input through, or act only under a condition that is not met today. The count tells you where to look; the callbacks tell you what is happening.
 
 ---
 
@@ -724,13 +728,15 @@ Two sibling plugins tried to build the checker, and both attempts shipped and we
 
 ---
 
-## Defaults plugins are alternatives, not complements.
+## Where they contest a setting, defaults plugins are alternatives.
 
-	- Two installed together give you one plugin's behaviour.
+	- Two plugins replacing the same value give you one plugin's behaviour.
 	- And two settings screens, one of which is lying.
-	- Pick the one whose choices you agree with. Turn the other off.
+	- Confirm the overlap first. Then pick the one whose choices you agree with.
 
-If two plugins are competing to set the same defaults, the answer is not to make them cooperate. It is to run one of them. This is also the honest sales pitch for the plugin we just built: not that it does more than the others, but that you can read all of it in an afternoon and know exactly what it decided on your behalf.
+Say the qualifier out loud, because the slide before this one contradicts the unqualified version. Two defaults plugins are only alternatives where they contest the same replacing filter. Additive hooks compose — three plugins set security headers on that test install and all three landed. Two plugins whose settings do not overlap are simply two plugins, and telling somebody to deactivate one before a contested setting is confirmed costs them something for nothing.
+
+Where there is a contest, the answer is not to make them cooperate. It is to run one of them. That is also the honest sales pitch for the plugin we just built: not that it does more than the others, but that you can read all of it in an afternoon and know exactly what it decided on your behalf.
 
 ---
 

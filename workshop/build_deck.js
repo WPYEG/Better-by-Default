@@ -964,18 +964,17 @@ collisionSlide(
   });
   codePanel(s, 0.6, 2.3, 12.1, 2.5, [
     { t: "// run this inside: wp eval '...'", k: "c" },
-    { t: "global $wp_filter;", k: "" },
-    { t: "foreach ( $wp_filter['auth_cookie_expiration']->callbacks as $prio => $cbs ) {", k: "h" },
-    { t: "    foreach ( $cbs as $cb ) {", k: "" },
-    { t: "        printf( \"%-6s %s\\n\", $prio, print_r( $cb['function'], true ) );", k: "" },
-    { t: "    }", k: "" },
-    { t: "}   // more than one line on a replacing filter means somebody is losing", k: "c" },
+    { t: "global $wp_filter; $hook = 'auth_cookie_expiration';", k: "" },
+    { t: "if ( empty( $wp_filter[ $hook ] ) ) { echo \"nobody is filtering it\\n\"; return; }", k: "h" },
+    { t: "foreach ( $wp_filter[ $hook ]->callbacks as $prio => $cbs ) {", k: "" },
+    { t: "    foreach ( $cbs as $id => $cb ) { printf( \"%-6s %s\\n\", $prio, $id ); }", k: "" },
+    { t: "}   // each line is one callback; several means shared, not settled", k: "c" },
   ], 12.5);
-  s.addText("Try it on wp_headers too, for contrast \u2014 several entries there are perfectly healthy.", {
+  s.addText("Several entries means they share the hook. Whether anyone is losing depends on what the callbacks do \u2014 go and read them.", {
     x: 0.6, y: 5.05, w: 11.9, h: 0.6, fontFace: BODY, fontSize: 15, color: SLATE, italic: true, margin: 0,
   });
   footer(s, 35);
-  s.addNotes("You do not need a plugin for this, and that is exactly why we are not shipping one. Run this against auth_cookie_expiration on a real site. If more than one line comes back, one of those plugins is not doing what its settings screen claims.\n\nThe same snippet works on any hook, including hooks nobody has thought to write a checker for. That is the advantage of understanding the rule over installing a tool.");
+  s.addNotes("You do not need a plugin for this, and that is exactly why we are not shipping one. The same snippet works on any hook, including ones nobody has thought to write a checker for.\n\nTwo things to say out loud, because the obvious reading of the output is wrong. First, an EMPTY result is the normal case on a clean install \u2014 this plugin does not register that filter at all while the lengths are still WordPress's own, which is the fix we made earlier in the deck. Guard for the hook being absent or the example errors on the very plugin it is demonstrating.\n\nSecond, several entries means the hook is SHARED, not that somebody is losing. A callback can pass its input through, or act only under a condition that is not met today. The count tells you where to look; the callbacks tell you what is happening. Printing the callback id rather than print_r() keeps it one line each, which makes the count honest.");
 })();
 
 /* =================================================================== */
@@ -999,17 +998,17 @@ collisionSlide(
 (() => {
   const s = p.addSlide();
   s.background = { color: STEEL };
-  s.addText("Defaults plugins are alternatives,\nnot complements.", {
-    x: 0.8, y: 1.5, w: 11.7, h: 2.2, fontFace: HEAD, fontSize: 40, bold: true, color: WHITE, lineSpacingMultiple: 1.05, margin: 0,
+  s.addText("Where they contest a setting,\ndefaults plugins are alternatives.", {
+    x: 0.8, y: 1.5, w: 11.7, h: 2.2, fontFace: HEAD, fontSize: 38, bold: true, color: WHITE, lineSpacingMultiple: 1.05, margin: 0,
   });
-  s.addText("Two installed together give you one plugin's behaviour, and two settings screens \u2014 only one of which is telling the truth.", {
-    x: 0.8, y: 3.9, w: 11.5, h: 1.0, fontFace: BODY, fontSize: 19, color: SKY, italic: true, margin: 0, valign: "top",
+  s.addText("Two plugins replacing the same value give you one plugin's behaviour and two settings screens \u2014 only one of which is telling the truth.", {
+    x: 0.8, y: 3.85, w: 11.5, h: 1.1, fontFace: BODY, fontSize: 19, color: SKY, italic: true, margin: 0, valign: "top",
   });
-  s.addText("Pick the one whose choices you agree with. Turn the other off.", {
-    x: 0.8, y: 5.0, w: 11.5, h: 0.8, fontFace: BODY, fontSize: 18, color: WHEAT, bold: true, margin: 0,
+  s.addText("Confirm the overlap first. Then pick the one whose choices you agree with.", {
+    x: 0.8, y: 5.05, w: 11.5, h: 0.8, fontFace: BODY, fontSize: 18, color: WHEAT, bold: true, margin: 0,
   });
   footer(s, 37);
-  s.addNotes("If two plugins are competing to set the same defaults, the answer is not to make them cooperate. It is to run one of them.\n\nThis is also the honest pitch for the plugin we just built. Not that it does more than the others \u2014 it does less. But you can read all of it in an afternoon and know exactly what it decided on your behalf.");
+  s.addNotes("Say the qualifier out loud, because the slide before this one contradicts the unqualified version. Two defaults plugins are only alternatives WHERE THEY CONTEST THE SAME REPLACING FILTER. Additive hooks compose \u2014 three plugins set security headers on that test install and all three landed. Two plugins with settings that do not overlap at all are simply two plugins. Telling somebody to deactivate one before you have confirmed a contested setting is advice that costs them something for nothing.\n\nWhere there IS a contest, the answer is not to make them cooperate. It is to run one of them.\n\nAnd that is the honest pitch for the plugin we just built. Not that it does more than the others \u2014 it does less. But you can read all of it in an afternoon and know exactly what it decided on your behalf.");
 })();
 
 /* =================================================================== */
