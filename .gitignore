@@ -56,3 +56,13 @@ node_modules/
 
 # macOS Finder metadata. Committed once by a careless `git add -A`.
 .DS_Store
+
+# Deck artifacts belong in workshop/, never at the repository root.
+#
+# build_deck.js writes relative to the working directory, so running it as
+# `node workshop/build_deck.js` from here — or requiring it from a one-liner —
+# drops a second copy of the deck at the root. That happened, and `git add -A`
+# swept a 959 KB duplicate into a commit. Anchored to the root so the real files
+# under workshop/ are untouched.
+/Better-by-Default.pptx
+/Better-by-Default.pdf
