@@ -2804,10 +2804,36 @@ wpyeg_test_assert(
 	null === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'type' => 'note' ) ) ),
 	'A note query runs normally.'
 );
+$mixed_comment_query = wpyeg_test_comment_query( array( 'type__in' => array( 'comment', 'note' ) ) );
 wpyeg_test_assert(
-	null === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'type__in' => array( 'comment', 'note' ) ) ) ),
-	'A query naming notes among other types still runs.'
+	null === wpyeg_defaults_empty_comment_queries( null, $mixed_comment_query ),
+	'A mixed query runs after it has been narrowed to allowed types.'
 );
+wpyeg_test_assert(
+	'' === $mixed_comment_query->query_vars['type'] && array( 'note' ) === $mixed_comment_query->query_vars['type__in'],
+	'A mixed query cannot use an allowed note type to expose ordinary comments.'
+);
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_allowed_comment_types'] = array( 'note', 'review_note' );
+$custom_comment_query = wpyeg_test_comment_query(
+	array(
+		'type'  => array( 'comment', 'review_note' ),
+		'count' => true,
+	)
+);
+wpyeg_test_assert(
+	null === wpyeg_defaults_empty_comment_queries( null, $custom_comment_query ),
+	'A mixed count query runs after it has been narrowed to a custom allowed type.'
+);
+wpyeg_test_assert(
+	'' === $custom_comment_query->query_vars['type'] && array( 'review_note' ) === $custom_comment_query->query_vars['type__in'],
+	'Custom allowed comment types are preserved without exposing disallowed types.'
+);
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_allowed_comment_types'] = array();
+wpyeg_test_assert(
+	array() === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'type' => 'note' ) ) ),
+	'An empty allowed-type list closes even note queries.'
+);
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_allowed_comment_types'] );
 wpyeg_test_assert(
 	0 === wpyeg_defaults_empty_comment_queries( null, wpyeg_test_comment_query( array( 'count' => true ) ) ),
 	'A count query is answered with 0, not an array.'

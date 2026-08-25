@@ -1424,8 +1424,20 @@ function wpyeg_defaults_empty_comment_queries( $comment_data, $query ) {
 		$requested = array_merge( $requested, array_map( 'strval', (array) $value ) );
 	}
 
-	if ( ! empty( $requested ) && ! empty( array_intersect( $requested, $allowed ) ) ) {
-		return $comment_data;
+	if ( ! empty( $requested ) ) {
+		$allowed_requested = array_values( array_unique( array_intersect( $requested, $allowed ) ) );
+
+		if ( ! empty( $allowed_requested ) ) {
+			// A mixed query must not use one allowed type as a passport for every
+			// disallowed type beside it. WP_Comment_Query merges `type` and
+			// `type__in`, so replace both inputs with the allowed intersection.
+			if ( count( $allowed_requested ) !== count( array_unique( $requested ) ) ) {
+				$query->query_vars['type']     = '';
+				$query->query_vars['type__in'] = $allowed_requested;
+			}
+
+			return $comment_data;
+		}
 	}
 
 	// A count query expects a number, not a list.
