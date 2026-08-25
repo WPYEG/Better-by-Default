@@ -2539,6 +2539,28 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 		"The iA Presenter markdown has one slide per rendered slide (markdown {$md_slides}, deck {$slide_count}). "
 			. 'build_deck.js does not read the markdown; both are edited by hand.'
 	);
+
+	/*
+	 * What this does not catch, stated so nobody mistakes it for more.
+	 *
+	 * Count parity finds a slide added to one source and not the other, which is
+	 * the drift that has actually happened. It stays green if a slide is
+	 * rewritten, reordered, or swapped one-for-one: the sources can disagree at
+	 * every equal count.
+	 *
+	 * Comparing headings instead was tried and does not work here. The two
+	 * sources deliberately title the same slide differently — the markdown says
+	 * "A default is just an opinionated filter behind a toggle" where the deck
+	 * says "The one idea to take home" — and the rendered deck's first text run
+	 * is often a kicker such as "security 1 of 7" rather than a title. Matching
+	 * normalised headings reconciles 34 of 42; matching first text runs, 5 of 41.
+	 * A check with that failure rate would be turned off within a week.
+	 *
+	 * The real fix is a stable per-slide identifier carried in both sources,
+	 * which changes how the deck is authored rather than how it is tested. Until
+	 * somebody decides to do that, this guard is the honest subset: it catches
+	 * the counting mistake and claims nothing about content.
+	 */
 }
 
 /*
