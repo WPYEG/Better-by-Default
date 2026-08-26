@@ -1036,6 +1036,15 @@ function wpyeg_defaults_bootstrap() {
 		add_action( 'admin_notices', 'wpyeg_defaults_render_mail_config_notice' );
 	}
 
+	/* ----- Breach screening ----- */
+
+	// Not behind a toggle. This reports that a default the site switched on has
+	// stopped working, which is true whether or not anybody asked — and a switch
+	// here would only offer to turn off the bad news.
+	if ( wpyeg_defaults_enabled( 'require_strong_passwords' ) ) {
+		add_action( 'admin_notices', 'wpyeg_defaults_render_hibp_notice' );
+	}
+
 	/* ----- Login and sessions ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
@@ -2213,6 +2222,146 @@ function wpyeg_defaults_rest_password_context( $request ) {
 }
 
 /**
+ * A per-installation namespace for the breach cache.
+ *
+ * Entries live in transients, and on a site with a persistent object cache a
+ * transient is not a database row — so an uninstaller cannot reach it, and the
+ * same lookup keys become live again after a reinstall. Giving every
+ * installation its own generation makes anything left over belong to a
+ * namespace nothing will construct a second time.
+ *
+ * @return string
+ */
+function wpyeg_defaults_hibp_cache_generation() {
+	$generation = get_option( 'wpyeg_hibp_cache_generation' );
+
+	if ( is_string( $generation ) && '' !== $generation ) {
+		return $generation;
+	}
+
+	$candidate = str_replace( '-', '', wp_generate_uuid4() );
+
+	// add_option() returns false if another request created it first; re-read
+	// rather than overwrite, so concurrent password changes agree on one value.
+	if ( add_option( 'wpyeg_hibp_cache_generation', $candidate, '', false ) ) {
+		return $candidate;
+	}
+
+	$generation = get_option( 'wpyeg_hibp_cache_generation' );
+
+	return is_string( $generation ) && '' !== $generation ? $generation : $candidate;
+}
+
+/**
+ * Note that breach screening could not be completed.
+ *
+ * Failing open is right — refusing a password because somebody else's API is
+ * down would lock people out of their own accounts. Failing open *silently* is
+ * not: "not in the corpus" and "the corpus was not consulted" were the same
+ * answer, so a site whose screening had been erroring for a week looked exactly
+ * like one where every password happened to be clean.
+ *
+ * Stores the kind of failure and when, never the password and never the hash
+ * prefix. The prefix is k-anonymous by design, but a record of which prefixes a
+ * site has looked up is still a record of its passwords' shape.
+ *
+ * @param string $kind Short machine tag: unreachable, http_429, truncated, malformed.
+ * @return void
+ */
+function wpyeg_defaults_hibp_unavailable( $kind ) {
+	$stored = get_transient( 'wpyeg_hibp_unavailable' );
+	$now    = time();
+
+	if ( is_array( $stored ) && isset( $stored['kind'], $stored['seen'] ) && $stored['kind'] === $kind ) {
+		// Same failure as last time. Re-arm the TTL, but not on every attempt:
+		// a password screen under load would otherwise write once per check.
+		if ( ( $now - (int) $stored['seen'] ) < 5 * MINUTE_IN_SECONDS ) {
+			return;
+		}
+
+		$stored['seen']  = $now;
+		$stored['count'] = isset( $stored['count'] ) ? (int) $stored['count'] + 1 : 2;
+		set_transient( 'wpyeg_hibp_unavailable', $stored, HOUR_IN_SECONDS );
+
+		return;
+	}
+
+	set_transient(
+		'wpyeg_hibp_unavailable',
+		array(
+			'kind'  => (string) $kind,
+			'first' => $now,
+			'seen'  => $now,
+			'count' => 1,
+		),
+		HOUR_IN_SECONDS
+	);
+}
+
+/**
+ * The last recorded breach-screening failure, if it is still current.
+ *
+ * @return array|null
+ */
+function wpyeg_defaults_hibp_last_failure() {
+	$stored = get_transient( 'wpyeg_hibp_unavailable' );
+
+	return ( is_array( $stored ) && ! empty( $stored['kind'] ) ) ? $stored : null;
+}
+
+/**
+ * Warn administrators when breach screening has stopped working.
+ *
+ * Not shown to the person changing their password: they cannot act on it, and
+ * telling them the site's security tooling is degraded is not their business.
+ *
+ * @return void
+ */
+function wpyeg_defaults_render_hibp_notice() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	$failure = wpyeg_defaults_hibp_last_failure();
+
+	if ( null === $failure ) {
+		return;
+	}
+
+	$kinds = array(
+		'unreachable' => __( 'the service could not be reached', 'sane-defaults' ),
+		'truncated'   => __( 'the reply was cut short before it could be read', 'sane-defaults' ),
+		'malformed'   => __( 'the reply was not the list of hashes it should have been, which usually means something answered in the service\'s place', 'sane-defaults' ),
+	);
+
+	$kind   = (string) $failure['kind'];
+	$reason = isset( $kinds[ $kind ] )
+		? $kinds[ $kind ]
+		: ( 0 === strpos( $kind, 'http_' )
+			? sprintf(
+				/* translators: %s: HTTP status code. */
+				__( 'the service answered with HTTP %s', 'sane-defaults' ),
+				substr( $kind, 5 )
+			)
+			: __( 'the lookup did not complete', 'sane-defaults' ) );
+	?>
+	<div class="notice notice-warning">
+		<p>
+			<strong><?php esc_html_e( 'Passwords are not being screened against known breaches.', 'sane-defaults' ); ?></strong>
+			<?php
+			printf(
+				/* translators: %s: short reason the lookup failed. */
+				esc_html__( 'The last lookup did not complete: %s. Passwords set since then have been accepted without that check.', 'sane-defaults' ),
+				esc_html( $reason )
+			);
+			?>
+		</p>
+		<p><?php esc_html_e( 'Nobody is blocked from changing their password, and the length, blocklist and personal-context rules are unaffected. This clears itself once a lookup succeeds.', 'sane-defaults' ); ?></p>
+	</div>
+	<?php
+}
+
+/**
  * Check a password against the Have I Been Pwned range API using k-anonymity.
  *
  * Only the first five characters of the SHA-1 hash ever leave the site. HIBP
@@ -2265,7 +2414,7 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 	$suffix = substr( $hash, 5 );
 	$limit  = max( 1024, (int) apply_filters( 'wpyeg_hibp_max_response_bytes', 128 * 1024 ) );
 
-	$cache_key = 'wpyeg_hibp_' . $prefix;
+	$cache_key = 'wpyeg_hibp_' . wpyeg_defaults_hibp_cache_generation() . '_' . $prefix;
 	$body      = get_transient( $cache_key );
 	$cache_hit = false !== $body;
 
@@ -2279,8 +2428,21 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 			)
 		);
 
-		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-			// Fail open — never block a password change because HIBP is down.
+		if ( is_wp_error( $response ) ) {
+			// Fail open — never block a password change because HIBP is down —
+			// but record it, so a site whose screening stopped working can tell.
+			wpyeg_defaults_hibp_unavailable( 'unreachable' );
+
+			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 200 !== $status ) {
+			// The status is kept: a rate limit is a different problem from an
+			// outage, and reads differently to whoever has to act on it.
+			wpyeg_defaults_hibp_unavailable( 'http_' . $status );
+
 			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
 		}
 
@@ -2306,11 +2468,24 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 			delete_transient( $cache_key );
 		}
 
+		wpyeg_defaults_hibp_unavailable( $raw_length >= $limit ? 'truncated' : 'malformed' );
+
 		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
 	}
 
 	if ( ! $cache_hit ) {
 		set_transient( $cache_key, $body, 12 * HOUR_IN_SECONDS );
+
+		/*
+		 * A live response proves screening works again, so the record goes. Only
+		 * on the uncached path: a cache hit says nothing about the service's
+		 * current state, and clearing there would put a write on the common path
+		 * to answer a question it had not asked. Read before delete, so a healthy
+		 * site never writes at all.
+		 */
+		if ( null !== wpyeg_defaults_hibp_last_failure() ) {
+			delete_transient( 'wpyeg_hibp_unavailable' );
+		}
 	}
 
 	$pwned = false;

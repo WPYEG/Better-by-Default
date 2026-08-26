@@ -8,6 +8,7 @@
 define( 'ABSPATH', __DIR__ . '/' );
 define( 'DAY_IN_SECONDS', 86400 );
 define( 'HOUR_IN_SECONDS', 3600 );
+define( 'MINUTE_IN_SECONDS', 60 );
 
 $GLOBALS['wpyeg_test_hooks']         = array();
 $GLOBALS['wpyeg_test_filter_values'] = array();
@@ -39,6 +40,33 @@ function __( $text ) { // phpcs:ignore WordPress.WP.I18n.MissingArgDomain
 function get_option( $name, $default_value = false ) {
 	unset( $name );
 	return isset( $GLOBALS['wpyeg_test_option'] ) ? $GLOBALS['wpyeg_test_option'] : $default_value;
+}
+
+/**
+ * UUID test double.
+ *
+ * Deterministic on purpose: the cache generation only has to be opaque and
+ * stable, and a random one would make a failing assertion unreproducible.
+ *
+ * @return string
+ */
+function wp_generate_uuid4() {
+	return 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+}
+
+/**
+ * Option-creation test double.
+ *
+ * @param string $name          Option name.
+ * @param mixed  $value         Value.
+ * @param string $deprecated    Unused.
+ * @param bool   $autoload      Unused.
+ * @return bool
+ */
+function add_option( $name, $value = '', $deprecated = '', $autoload = true ) {
+	unset( $deprecated, $autoload );
+	$GLOBALS['wpyeg_test_created'][ $name ] = $value;
+	return true;
 }
 
 /**
@@ -1409,14 +1437,27 @@ wpyeg_test_assert( in_array( 'wpyeg_defaults_guard_rest_password_arg', $register
 /**
  * Find the first registration for a hook.
  *
- * @param string $hook Hook name.
+ * @param string      $hook     Hook name.
+ * @param string|null $callback Callback to match, or null for any.
  * @return array|null
  */
-function wpyeg_test_find_hook( $hook ) {
+function wpyeg_test_find_hook( $hook, $callback = null ) {
 	foreach ( $GLOBALS['wpyeg_test_hooks'] as $entry ) {
-		if ( $entry['hook'] === $hook ) {
-			return $entry;
+		if ( $entry['hook'] !== $hook ) {
+			continue;
 		}
+
+		/*
+		 * Match the callback when one is named. admin_notices carries more than
+		 * one notice now, so "is anything hooked here" stopped being the same
+		 * question as "is *this* notice hooked" — and the assertion that used
+		 * the first form would have passed for the wrong reason.
+		 */
+		if ( null !== $callback && ( ! isset( $entry['callback'] ) || $entry['callback'] !== $callback ) ) {
+			continue;
+		}
+
+		return $entry;
 	}
 	return null;
 }
@@ -1888,6 +1929,23 @@ $GLOBALS['wpyeg_test_http']       = array(
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A non-200 response fails open.' );
 
+/**
+ * The breach-range entries the harness has cached.
+ *
+ * The failure record is a transient too, and it is *supposed* to be written
+ * when a lookup fails — counting it would make "nothing was cached" false for
+ * exactly the responses these assertions check, and the test would be measuring
+ * the diagnostic instead of the cache.
+ *
+ * @return array
+ */
+function wpyeg_test_cached_ranges() {
+	return array_diff_key(
+		(array) $GLOBALS['wpyeg_test_transients'],
+		array( 'wpyeg_hibp_unavailable' => true )
+	);
+}
+
 // A body that reaches the transport limit may be truncated and is unavailable.
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
@@ -1895,7 +1953,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'body'     => str_repeat( 'A', 128 * 1024 ),
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A response reaching the 128 KiB transport cap fails open.' );
-wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A capped response is never cached.' );
+wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A capped response is never cached.' );
 
 /*
  * The cap guard has to hold for *well-formed* data too. The check above is
@@ -1923,14 +1981,74 @@ $GLOBALS['wpyeg_test_http']       = array(
 );
 wpyeg_test_assert( strlen( $hibp_capped_body ) === $hibp_cap, 'The truncation fixture reaches the cap exactly.' );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A well-formed response reaching the cap fails open rather than trusting a truncated range.' );
-wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A well-formed capped response is never cached.' );
+wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A well-formed capped response is never cached.' );
 unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] );
 
-// A cached response that no longer validates is cleared, not reused for 12h.
-$GLOBALS['wpyeg_test_transients'] = array( 'wpyeg_hibp_' . substr( $hibp_hash, 0, 5 ) => 'CORRUPTED CACHE ENTRY' );
+/*
+ * --- an outage is recorded, and a working site records nothing ---
+ *
+ * Screening still fails open, which the assertions above cover. These are about
+ * whether anybody could ever find out that it did: "not in the corpus" and "the
+ * corpus was not consulted" used to be the same answer.
+ */
+$GLOBALS['wpyeg_test_transients'] = array();
+wpyeg_test_assert( null === wpyeg_defaults_hibp_last_failure(), 'A site that has not failed records nothing.' );
+
+$GLOBALS['wpyeg_test_http'] = new WP_Error( 'http_request_failed', 'network down' );
+wpyeg_defaults_password_is_pwned( $hibp_password );
+$hibp_record = wpyeg_defaults_hibp_last_failure();
+wpyeg_test_assert( is_array( $hibp_record ) && 'unreachable' === $hibp_record['kind'], 'An unreachable API is recorded as unreachable.' );
+
+// The kind is specific enough to act on: a rate limit is not an outage.
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http']       = array(
+	'response' => array( 'code' => 429 ),
+	'body'     => '',
+);
+wpyeg_defaults_password_is_pwned( $hibp_password );
+wpyeg_test_assert( 'http_429' === wpyeg_defaults_hibp_last_failure()['kind'], 'A rate limit is recorded as its own status.' );
+
+/*
+ * Nothing derived from the password is stored. The hash prefix is k-anonymous
+ * by design, but a log of which prefixes a site looked up is still a record of
+ * its passwords' shape, and no diagnostic needs it.
+ */
+$hibp_serialised = json_encode( wpyeg_defaults_hibp_last_failure() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Test harness; wp_json_encode() is not stubbed here.
+wpyeg_test_assert( false === strpos( $hibp_serialised, $hibp_password ), 'The record does not contain the password.' );
+wpyeg_test_assert( false === strpos( $hibp_serialised, strtoupper( substr( $hibp_hash, 0, 5 ) ) ), 'Nor the hash prefix that was looked up.' );
+
+// A live success clears it.
+$GLOBALS['wpyeg_test_http'] = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => strtoupper( substr( $hibp_hash, 5 ) ) . ':0',
+);
+wpyeg_defaults_password_is_pwned( $hibp_password );
+wpyeg_test_assert( null === wpyeg_defaults_hibp_last_failure(), 'A live successful lookup clears the record.' );
+
+// The cache namespace is per installation, so entries an uninstaller cannot
+// reach are unreachable rather than live again after a reinstall.
+$hibp_generation = wpyeg_defaults_hibp_cache_generation();
+wpyeg_test_assert( '' !== $hibp_generation, 'A cache generation exists.' );
+wpyeg_test_assert(
+	false !== strpos( (string) key( wpyeg_test_cached_ranges() ), $hibp_generation ),
+	'And the range cache key carries it.'
+);
+
+$GLOBALS['wpyeg_test_transients'] = array();
+
+/*
+ * A cached response that no longer validates is cleared, not reused for 12h.
+ *
+ * The key is built the way production builds it, generation and all. Seeding
+ * the un-namespaced key would leave an entry nothing ever reads, and the
+ * assertion below would fail against a cache the plugin never touched.
+ */
+$GLOBALS['wpyeg_test_transients'] = array(
+	'wpyeg_hibp_' . wpyeg_defaults_hibp_cache_generation() . '_' . substr( $hibp_hash, 0, 5 ) => 'CORRUPTED CACHE ENTRY',
+);
 $GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'network down' );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An invalid cached range response fails open.' );
-wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'An invalid cached range response is deleted so the next call refetches.' );
+wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'An invalid cached range response is deleted so the next call refetches.' );
 
 // One invalid row invalidates the response, even if another row looks like a match.
 $GLOBALS['wpyeg_test_transients'] = array();
@@ -1939,7 +2057,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'body'     => "MALFORMED\r\n{$hibp_suffix}:42\r\n",
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A malformed range response fails open instead of trusting partial data.' );
-wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'A malformed range response is never cached.' );
+wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A malformed range response is never cached.' );
 
 /*
  * A 200 whose body is empty is the shape the sibling plugin's review reported:
@@ -1957,7 +2075,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 	'body'     => '',
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An empty 200 fails open.' );
-wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_transients'], 'An empty 200 is never cached, so one bad reply cannot hold a prefix open.' );
+wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'An empty 200 is never cached, so one bad reply cannot hold a prefix open.' );
 
 /*
  * TLS verification is what keeps the hostile-upstream case requiring a real
@@ -3093,7 +3211,7 @@ $GLOBALS['wpyeg_test_option'] = array( 'mail_deliverability_notice' => 'no' );
 $GLOBALS['wpyeg_test_hooks']  = array();
 wpyeg_defaults_bootstrap();
 unset( $GLOBALS['wpyeg_test_option'] );
-wpyeg_test_assert( null === wpyeg_test_find_hook( 'admin_notices' ), 'Turning the notice off unhooks it entirely.' );
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'admin_notices', 'wpyeg_defaults_render_mail_config_notice' ), 'Turning the notice off unhooks it entirely.' );
 
 /*
  * The mail warning's three gates, each reachable now that the decision is its

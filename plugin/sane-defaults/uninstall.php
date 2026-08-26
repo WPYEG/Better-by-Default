@@ -26,6 +26,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
  * Two things, and they need different handling:
  *
  * - `wpyeg_better_by_default` — one option holding every setting's value.
+ * - `wpyeg_hibp_unavailable` — the last breach-screening failure, if screening
+ *   has failed in the last hour. Kind and timestamp only; never the password
+ *   and never the hash prefix.
+ * - `wpyeg_hibp_cache_generation` — the per-installation namespace that keeps
+ *   cache entries left in an external object cache unreachable after reinstall.
  * - `wpyeg_hibp_*` — the Have I Been Pwned response cache, one transient per
  *   five-hex prefix. Deleted with a LIKE query because there is no key to
  *   enumerate: which prefixes exist depends entirely on which passwords have
@@ -37,6 +42,22 @@ function wpyeg_defaults_uninstall_site() {
 	global $wpdb;
 
 	delete_option( 'wpyeg_better_by_default' );
+
+	/*
+	 * The breach-screening outage record, and the cache namespace.
+	 *
+	 * Dropping the generation is what makes the range entries unreachable after
+	 * a reinstall. On a site with a persistent object cache a transient is not a
+	 * database row at all, so the query below cannot see one — a new generation
+	 * means anything left behind belongs to an installation that no longer
+	 * exists, and it expires on its own.
+	 */
+	delete_transient( 'wpyeg_hibp_unavailable' );
+	delete_option( 'wpyeg_hibp_cache_generation' );
+
+	if ( function_exists( 'wp_cache_supports' ) && wp_cache_supports( 'flush_group' ) ) {
+		wp_cache_flush_group( 'wpyeg_hibp' );
+	}
 
 	// A transient is two option rows, and the timeout row outlives the value if
 	// only the value is deleted.
