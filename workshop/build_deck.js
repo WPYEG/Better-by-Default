@@ -889,6 +889,128 @@ schemaMapSlide(31, "Schema map — login, branding, and performance",
   "The visible names on earlier slides are schema keys, not separate WordPress options. A regular login lasts 2 days and a remembered one 14 - WordPress's own values, prefilled rather than sentinels, with a one-day floor on each and the remembered length clamped so it can never be shorter than the regular one. The login logo and Heartbeat remain opt-in, and the three configuration constants stay above the plugin layer."
 );
 
+/* ---------- COLLISION SLIDE helper ---------- */
+// Light content slide: title, standfirst, three bullet cards, speaker notes.
+function collisionSlide(num, title, standfirst, cards, notes) {
+  const s = p.addSlide();
+  s.background = { color: CLOUD };
+  s.addText(title, {
+    x: 0.6, y: 0.55, w: 12.1, h: 0.9, fontFace: HEAD, fontSize: 32, bold: true, color: INK, margin: 0,
+  });
+  s.addText(standfirst, {
+    x: 0.6, y: 1.5, w: 11.9, h: 0.8, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0,
+  });
+  cards.forEach((c, i) => {
+    const y = 2.6 + i * 1.35;
+    s.addShape(p.ShapeType.roundRect, {
+      x: 0.6, y, w: 12.1, h: 1.15, rectRadius: 0.09,
+      fill: { color: WHITE }, line: { color: "DCE6EB", width: 1 },
+      shadow: { type: "outer", color: "C7D4DB", blur: 5, offset: 2, angle: 90, opacity: 0.5 },
+    });
+    dot(s, 0.95, y + 0.32, String(i + 1), STEEL, WHITE, 0.5);
+    s.addText([
+      { text: c.t + "  ", options: { color: INK, bold: true } },
+      { text: c.d, options: { color: SLATE, bold: false } },
+    ], {
+      x: 1.65, y: y + 0.18, w: 10.8, h: 0.8, fontFace: BODY, fontSize: 15, margin: 0, valign: "middle",
+    });
+  });
+  footer(s, num);
+  s.addNotes(notes);
+  return s;
+}
+
+/* =================================================================== */
+/* 31a. WHEN TWO PLUGINS SET THE SAME DEFAULT                          */
+/* =================================================================== */
+collisionSlide(
+  33,
+  "Somebody will install two of these",
+  "Two defaults plugins on one site \u2014 or this one plus a security suite doing half the same job.",
+  [
+    { t: "Nothing errors.", d: "No crash, no warning, no line in a log." },
+    { t: "Nothing is clobbered.", d: "Each plugin keeps its own settings safely." },
+    { t: "One of them silently stops working.", d: "And its settings screen goes on saying otherwise." },
+  ],
+  "This is the part nobody warns you about. Install two defaults plugins and WordPress does not complain \u2014 it runs both and keeps whichever answered last. The loser's settings screen goes on showing a session length the site is not using.\n\nOn the install where this was first measured, all three plugins happened to agree on the same value, so everything looked fine. THAT is the dangerous case. It stays invisible until somebody changes a setting and nothing happens."
+);
+
+/* =================================================================== */
+/* 31b. THE RULE                                                       */
+/* =================================================================== */
+collisionSlide(
+  34,
+  "Some settings share. Some fight.",
+  "The difference is entirely in what your callback does with the argument it is handed.",
+  [
+    { t: "Adding to a list.", d: "Everybody's contribution survives. Security headers work this way." },
+    { t: "Replacing a value.", d: "Last one wins, the rest are discarded. Session length works this way." },
+    { t: "Nothing tells you which you wrote.", d: "Both are add_filter(). Both look identical at the call site." },
+  ],
+  "Here is the whole rule, and it is worth more than any tool. When your code is handed something and ADDS to it, a second plugin doing the same thing is fine \u2014 three plugins set security headers on that test install and all three landed correctly. When your code is handed something and returns its OWN answer instead, only one plugin can win.\n\nSo when you write a filter callback, ask: if a second plugin did exactly this, would both still work? If the answer is no, you are setting policy, and only one plugin on the site can hold it."
+);
+
+/* =================================================================== */
+/* 31c. CHECKING BY HAND                                               */
+/* =================================================================== */
+(() => {
+  const s = p.addSlide();
+  s.background = { color: CLOUD };
+  s.addText("Check any site in about a minute", {
+    x: 0.6, y: 0.55, w: 12.1, h: 0.9, fontFace: HEAD, fontSize: 32, bold: true, color: INK, margin: 0,
+  });
+  s.addText("WordPress keeps every registered callback in one global. Ask it who is on the hook you care about.", {
+    x: 0.6, y: 1.45, w: 11.9, h: 0.7, fontFace: BODY, fontSize: 16, color: SLATE, margin: 0,
+  });
+  codePanel(s, 0.6, 2.3, 12.1, 2.5, [
+    { t: "// run this inside: wp eval '...'", k: "c" },
+    { t: "global $wp_filter; $hook = 'auth_cookie_expiration';", k: "" },
+    { t: "if ( empty( $wp_filter[ $hook ] ) ) { echo \"nobody is filtering it\\n\"; return; }", k: "h" },
+    { t: "foreach ( $wp_filter[ $hook ]->callbacks as $prio => $cbs ) {", k: "" },
+    { t: "    foreach ( $cbs as $id => $cb ) { printf( \"%-6s %s\\n\", $prio, $id ); }", k: "" },
+    { t: "}   // each line is one callback; several means shared, not settled", k: "c" },
+  ], 12.5);
+  s.addText("Several entries means they share the hook. Whether anyone is losing depends on what the callbacks do \u2014 go and read them.", {
+    x: 0.6, y: 5.05, w: 11.9, h: 0.6, fontFace: BODY, fontSize: 15, color: SLATE, italic: true, margin: 0,
+  });
+  footer(s, 35);
+  s.addNotes("You do not need a plugin for this, and that is exactly why we are not shipping one. The same snippet works on any hook, including ones nobody has thought to write a checker for.\n\nTwo things to say out loud, because the obvious reading of the output is wrong. First, an EMPTY result is the normal case on a clean install \u2014 this plugin does not register that filter at all while the lengths are still WordPress's own, which is the fix we made earlier in the deck. Guard for the hook being absent or the example errors on the very plugin it is demonstrating.\n\nSecond, several entries means the hook is SHARED, not that somebody is losing. A callback can pass its input through, or act only under a condition that is not met today. The count tells you where to look; the callbacks tell you what is happening. Printing the callback id rather than print_r() keeps it one line each, which makes the count honest.");
+})();
+
+/* =================================================================== */
+/* 31d. TWO FAILED AUTOMATIONS                                         */
+/* =================================================================== */
+collisionSlide(
+  36,
+  "We tried to automate it twice. Both were wrong.",
+  "Two sibling plugins built the checker. Both attempts shipped, and both were withdrawn.",
+  [
+    { t: "Read the plugin's code for clues.", d: "Named plugins that were doing nothing at all." },
+    { t: "Run the setting, see what comes out.", d: "Meant running other people's code to check on them." },
+    { t: "What worked: say less.", d: "Report what you can prove, and admit what you cannot see." },
+  ],
+  "The first guessed from source code and accused plugins that were not touching the setting. The second measured the real outcome by actually running the filter \u2014 precise, and it meant executing arbitrary third-party code as a side effect of a diagnostic. A tool that reports collisions must not cause them.\n\nUnderneath, both failed the same way: they were trying to recover something WordPress never wrote down. Nothing records which plugin asked for what, and everything built on top of that gap is a guess or a gamble.\n\nWhat ended up working was reporting only what could be proven, and saying plainly on the screen that a clean result means nothing traceable was found \u2014 not that nothing is wrong."
+);
+
+/* =================================================================== */
+/* 31e. THE UNCOMFORTABLE CONCLUSION                                   */
+/* =================================================================== */
+(() => {
+  const s = p.addSlide();
+  s.background = { color: STEEL };
+  s.addText("Where they contest a setting,\ndefaults plugins are alternatives.", {
+    x: 0.8, y: 1.5, w: 11.7, h: 2.2, fontFace: HEAD, fontSize: 38, bold: true, color: WHITE, lineSpacingMultiple: 1.05, margin: 0,
+  });
+  s.addText("Two plugins replacing the same value give you one plugin's behaviour and two settings screens \u2014 only one of which is telling the truth.", {
+    x: 0.8, y: 3.85, w: 11.5, h: 1.1, fontFace: BODY, fontSize: 19, color: SKY, italic: true, margin: 0, valign: "top",
+  });
+  s.addText("Confirm the overlap first. Then pick the one whose choices you agree with.", {
+    x: 0.8, y: 5.05, w: 11.5, h: 0.8, fontFace: BODY, fontSize: 18, color: WHEAT, bold: true, margin: 0,
+  });
+  footer(s, 37);
+  s.addNotes("Say the qualifier out loud, because the slide before this one contradicts the unqualified version. Two defaults plugins are only alternatives WHERE THEY CONTEST THE SAME REPLACING FILTER. Additive hooks compose \u2014 three plugins set security headers on that test install and all three landed. Two plugins with settings that do not overlap at all are simply two plugins. Telling somebody to deactivate one before you have confirmed a contested setting is advice that costs them something for nothing.\n\nWhere there IS a contest, the answer is not to make them cooperate. It is to run one of them.\n\nAnd that is the honest pitch for the plugin we just built. Not that it does more than the others \u2014 it does less. But you can read all of it in an afternoon and know exactly what it decided on your behalf.");
+})();
+
 /* =================================================================== */
 /* 32. CLOSING                                                         */
 /* =================================================================== */

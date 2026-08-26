@@ -684,6 +684,62 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 
 ---
 
+## Somebody will install two of these.
+
+	- **Nothing errors.** No crash, no warning, no log line.
+	- **Nothing is clobbered.** Each plugin keeps its own settings safely.
+	- **One of them silently stops working.** And its settings screen keeps saying otherwise.
+
+This is the part nobody warns you about. Install two defaults plugins — or this one alongside a security suite doing half the same job — and WordPress does not complain. It runs both and keeps whichever answered last. The loser's settings screen goes on showing a session length the site is not using. On the install where this was first measured all three plugins happened to agree on the same value, so everything looked fine. That is the dangerous case: it stays invisible until somebody changes a setting and nothing happens.
+
+---
+
+## Some settings share. Some fight.
+
+	- **Adding to a list** — everybody's contribution survives. Security headers work this way.
+	- **Replacing a value** — last one wins, the rest are discarded. Session length works this way.
+	- **Nothing in WordPress tells you which you are writing.** Both are `add_filter()`.
+
+Here is the whole rule, and it is worth more than any tool. When your code is handed something and adds to it, a second plugin doing the same thing is fine — three plugins set security headers on that test install and all three landed correctly. When your code is handed something and returns its own answer instead, only one plugin can win. The difference is entirely in what your callback does with the argument it is given, and it decides whether you can coexist with anybody. So when you write one, ask: if a second plugin did exactly this, would both still work?
+
+---
+
+## Check any site in about a minute.
+
+	- WordPress keeps every registered callback in one place.
+	- Ask it who is on the hook you care about — guarding for nobody being there.
+	- Several entries means the hook is shared. Whether anyone loses depends on the callbacks.
+
+You do not need a plugin for this, and that is why we are not shipping one. There is a `wp eval` snippet in the reference doc that prints every callback registered on a given filter, with its priority.
+
+Two things to say out loud, because the obvious reading of the output is wrong. An empty result is the normal case on a clean install: this plugin does not register that filter at all while the lengths are still WordPress's own, which is the fix we made earlier in the deck. Guard for the hook being absent or the example errors on the very plugin it is demonstrating.
+
+And several entries means the hook is shared, not that somebody is losing. A callback can pass its input through, or act only under a condition that is not met today. The count tells you where to look; the callbacks tell you what is happening.
+
+---
+
+## We tried to automate it twice. Both were wrong.
+
+	- **Read the plugin's code for clues** — named plugins that were doing nothing at all.
+	- **Run the setting and see what comes out** — meant running other people's code to check on them.
+	- **What worked: say less.** Report what you can prove, and admit what you cannot see.
+
+Two sibling plugins tried to build the checker, and both attempts shipped and were withdrawn. The first guessed from source code and accused plugins that were not touching the setting at all. The second measured the real outcome by actually running the filter — precise, and it meant executing arbitrary third-party code as a side effect of a diagnostic. A tool that reports collisions must not cause them. Underneath, both failed the same way: they were trying to recover something WordPress never wrote down. Nothing records which plugin asked for what. What ended up working was reporting only what could be proven, and saying plainly on screen that a clean result means nothing traceable was found — not that nothing is wrong.
+
+---
+
+## Where they contest a setting, defaults plugins are alternatives.
+
+	- Two plugins replacing the same value give you one plugin's behaviour.
+	- And two settings screens, one of which is lying.
+	- Confirm the overlap first. Then pick the one whose choices you agree with.
+
+Say the qualifier out loud, because the slide before this one contradicts the unqualified version. Two defaults plugins are only alternatives where they contest the same replacing filter. Additive hooks compose — three plugins set security headers on that test install and all three landed. Two plugins whose settings do not overlap are simply two plugins, and telling somebody to deactivate one before a contested setting is confirmed costs them something for nothing.
+
+Where there is a contest, the answer is not to make them cooperate. It is to run one of them. That is also the honest sales pitch for the plugin we just built: not that it does more than the others, but that you can read all of it in an afternoon and know exactly what it decided on your behalf.
+
+---
+
 # Thanks, WPYEG!
 
 *Set your defaults wisely.*

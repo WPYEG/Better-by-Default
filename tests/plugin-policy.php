@@ -2513,6 +2513,54 @@ if ( ! class_exists( 'ZipArchive' ) ) {
 
 	wpyeg_test_assert( $slide_count > 0, 'The rendered deck reports a slide count.' );
 	wpyeg_test_assert( $slide_count === $page_count, "The PDF handout has one page per slide (deck {$slide_count}, handout {$page_count})." );
+
+	/*
+	 * And the markdown carries the same number of slides as the rendered deck.
+	 *
+	 * This is the join nothing was testing. build_deck.js does not read the
+	 * markdown — it builds the deck in JavaScript, and Better-by-Default.ia.md is
+	 * a parallel copy kept in step by hand, which the generator's own header asks
+	 * for and nothing enforced. So a slide added to the markdown alone passed
+	 * every check: the deck matched build_deck.js, the handout matched the deck,
+	 * and the two markdown copies matched each other. Three consistent pairs and
+	 * a deck five slides short of the source.
+	 *
+	 * Count rather than titles. The two sources say the same things in different
+	 * escaping — curly quotes, em dashes, backticks, embedded newlines — so
+	 * comparing text produces failures about punctuation. A count catches the
+	 * drift that actually happens, which is a slide added to one source and not
+	 * the other.
+	 */
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
+	$md_slides = preg_match_all( '/^---$/m', file_get_contents( $repo_root . '/workshop/Better-by-Default.ia.md' ) ) + 1;
+
+	wpyeg_test_assert(
+		$md_slides === $slide_count,
+		"The iA Presenter markdown has one slide per rendered slide (markdown {$md_slides}, deck {$slide_count}). "
+			. 'build_deck.js does not read the markdown; both are edited by hand.'
+	);
+
+	/*
+	 * What this does not catch, stated so nobody mistakes it for more.
+	 *
+	 * Count parity finds a slide added to one source and not the other, which is
+	 * the drift that has actually happened. It stays green if a slide is
+	 * rewritten, reordered, or swapped one-for-one: the sources can disagree at
+	 * every equal count.
+	 *
+	 * Comparing headings instead was tried and does not work here. The two
+	 * sources deliberately title the same slide differently — the markdown says
+	 * "A default is just an opinionated filter behind a toggle" where the deck
+	 * says "The one idea to take home" — and the rendered deck's first text run
+	 * is often a kicker such as "security 1 of 7" rather than a title. Matching
+	 * normalised headings reconciles 34 of 42; matching first text runs, 5 of 41.
+	 * A check with that failure rate would be turned off within a week.
+	 *
+	 * The real fix is a stable per-slide identifier carried in both sources,
+	 * which changes how the deck is authored rather than how it is tested. Until
+	 * somebody decides to do that, this guard is the honest subset: it catches
+	 * the counting mistake and claims nothing about content.
+	 */
 }
 
 /*

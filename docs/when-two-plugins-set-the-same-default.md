@@ -8,6 +8,13 @@ This is what actually happens, measured rather than guessed — three sibling
 plugins activated together on one throwaway install, all three doing
 substantially the same work.
 
+The short version: nothing breaks. No fatal errors, no clobbered settings, no
+warnings in a log. One plugin's setting silently stops applying, its settings
+screen goes on displaying the value it thinks it set, and the site uses somebody
+else's. This page shows which kinds of setting behave that way and which are safe
+to share, how to check any site by hand in about a minute, and what two attempts
+at automating that check got wrong.
+
 ## What did not break
 
 Worth saying first, because it is the failure everyone expects and it did not
@@ -127,6 +134,11 @@ this page found. Kept as it was recorded, because the lesson is in the numbers
 being different, and a page that quietly edits its own evidence to match today
 is worth less than one that shows what it saw.
 
+A line reading `__return_false` is the awkward case, and it is not rare. That is
+a *core* function, so it names nothing about who registered it — several plugins
+can appear on one hook as several identical lines. Priority is the only thing
+distinguishing them, and reflection will not help: the file is `wp-includes`.
+
 If a line says only `closure`, the plugin registered an anonymous function and
 there is no name to print. `ReflectionFunction` will give you the file, which is
 usually enough to identify it:
@@ -208,6 +220,121 @@ If you want the automated version, the design worth copying is:
   well-behaved plugin on the site, and a check that cries wolf gets ignored.
 - **Do not tell the user which plugin to keep.** That is a judgement about the
   site, and a plugin that answered it would be arguing for its own retention.
+- **Only report a hook you are registered on yourself.** Every default in a
+  plugin like this is switchable, and a setting that is off leaves you off the
+  hook — at which point another plugin holding it is not a collision, it is the
+  only plugin doing the job. Reporting it anyway sends somebody to deactivate
+  the plugin providing the behaviour.
+- **Measure the outcome, not the culprit, where you can.** Attribution answers
+  "who is overriding me", which WordPress did not record. Whether your setting
+  is taking effect is a different question, and the site answers it for free
+  every time it runs the filter — observe at `PHP_INT_MAX` and compare against
+  what your setting asks for. It sees the plugins reflection cannot, because it
+  does not care who they are. See the third attempt below.
+- **Know what reflection cannot see, and resist filling the gap.** A plugin that
+  turns something off by registering one of WordPress's own callbacks leaves
+  nothing to attribute: `__return_false` resolves to `wp-includes` and is
+  indistinguishable from core doing it. That is the ordinary way the
+  disable-something category is written — Classic Editor in its default
+  configuration registers
+  `add_filter( 'use_block_editor_for_post_type', '__return_false', 100 )` — so a
+  reflection-only check is blind to a good part of the field it is looking at. A
+  clear result means nothing attributable was found, not that nothing is
+  contesting the hook, and it is worth saying so wherever the result is shown.
+
+  A sibling plugin has made three attempts on that gap, and the two it withdrew
+  are the more useful half of the story. There are two obvious moves once you
+  accept that reflection cannot see these plugins, and the field has now tried
+  each; both came back out. The third one works, and it works by giving up on
+  the premise the other two share.
+
+  **The first was to read the source.** Require two independent things
+  before naming a plugin unproven: an untraceable callback on the hook at
+  runtime, and an active plugin whose *source* declares a filter on that same
+  hook. It reads as conservative and is not. The runtime half is satisfied
+  before any third party is involved — by the checking plugin's own
+  `__return_false` registrations, and by core's, since `comments_open` always
+  carries `_close_comments_for_old_post`. That leaves one weak signal doing the
+  work of two, and a source mention is very weak: a plugin that declares the
+  filter in a mode the site is not using matches exactly like one that is
+  fighting you. Measured, two multi-feature plugins were named across five hooks
+  while registering nothing on any of them. Excluding your own callbacks does
+  not rescue it, because core's are indistinguishable from a third party's use
+  of the same core function, and nothing recovers who called `add_filter`.
+  Naming a plugin that is doing nothing, beside advice to deactivate it, is
+  worse than admitting the blind spot.
+
+  **The second was to run the filter and measure what came out.** This is the
+  one to be careful about, because it is the rigorous-sounding choice: it needs
+  no attribution at all, it observes the site's real behaviour instead of
+  inferring from a registry, and it answers the question exactly. Clone the hook,
+  keep your callback and one rival, call `apply_filters()`, compare the result
+  against your own value, and you know whether that plugin actually changes the
+  outcome.
+
+  It shipped and was withdrawn a day later. Running a filter runs somebody
+  else's code, and a filter callback is only pure by convention:
+
+  - Side effects persist. A `try/finally` restores the hook registry and nothing
+    else — database writes, mail, HTTP requests, globals and object state all
+    survive the rollback.
+  - `exit()` in a foreign callback ends the request, and nothing catches it —
+    not `Throwable`, and not the `finally` that restores the hook registry, which
+    does not run either. Only `register_shutdown_function` fires. So the registry
+    is left in its swapped state and an admin page white-screens with no error
+    attributable to anyone. (`wp_redirect()` alone returns rather than
+    terminating; it is the conventional `wp_redirect(); exit;` that does this,
+    and by `admin_notices` the headers have gone out anyway.)
+  - The arguments are invented. Passing `null` where a `WP_Post` is contracted
+    throws before the callback finishes, but may not throw before it has done
+    something; passing a real user or post ID is worse, because then the foreign
+    code operates on a real entity during an unrelated request.
+  - The answer is not the site's answer. You-plus-one-rival is not the callback
+    stack the site actually runs, so two rivals that cancel or compound each
+    other are measured as neither.
+
+  A check that reports collisions must not cause them, and no amount of care
+  inside the harness makes it transactional — WordPress has no boundary to roll
+  a filter call back across.
+
+  Both failures are the same failure underneath: they try to recover information
+  WordPress did not record. Nothing stores which plugin called `add_filter()`,
+  and everything downstream of that absence is a guess or a gamble.
+
+  **The third attempt stopped trying to.** Ask what the filter produced instead
+  of who produced it. Register on the hook at `PHP_INT_MAX`, and when WordPress
+  runs it *of its own accord*, compare the value the chain settled on against
+  the value your own setting asks for. If they disagree, something on this site
+  is deciding that setting and it is not you. Nothing is invoked, no arguments
+  are invented, and no callback runs that was not already going to run — the
+  whole distinction from the second attempt is that observing a filter WordPress
+  is already running is not the same as calling one.
+
+  It does not name anybody, and it does not need to. "Your setting is not taking
+  effect" is the half an operator can act on; the remedy — look at the active
+  plugins — is the same whoever it turns out to be. Measured against Disable
+  XML-RPC, which registers `add_filter( 'xmlrpc_enabled', '__return_false' )`
+  and is invisible to attribution by construction, the divergence is detected.
+
+  Two things about it are easy to get wrong, and both were:
+
+  - **The observer cannot be gated to admin requests.** `xmlrpc_enabled` never
+    fires on an admin page load; it fires in `xmlrpc.php`. The hook fires where
+    it fires, so the observation has to be recorded there and read back later on
+    the screen that reports it. A check that only looks while somebody is on the
+    settings screen sees nothing.
+  - **A finding with nobody to name must not be graded as passing.** The status
+    was computed from the attributable overlaps alone, so a site whose only
+    finding was an untraceable override got a green badge over a paragraph
+    saying a setting was not taking effect. Those two conditions coincide rather
+    than being rare together: an override nobody can name is precisely the case
+    with no overlap to report.
+
+  Alongside it, the reporting that made the rest honest: three states rather
+  than two. Report the hooks you can prove, stay silent where you can prove
+  nothing, and add a third category — informational, not actionable — for hooks
+  where something is present that you cannot judge. It says less, and everything
+  it says is true.
 
 ## The uncomfortable conclusion
 
