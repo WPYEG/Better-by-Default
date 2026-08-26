@@ -413,6 +413,15 @@ function wpyeg_defaults_help_allowed_html() {
 const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
 
 /**
+ * Plugin version, for asset cache-busting.
+ *
+ * Kept in step with the header above by tests/plugin-policy.php, which reads
+ * both and fails when they disagree — an asset version that lags the plugin is
+ * a stylesheet a browser goes on serving from cache after it changed.
+ */
+const WPYEG_DEFAULTS_VERSION = '1.2.3';
+
+/**
  * Read one setting, falling back to its schema default.
  *
  * @param string $key Schema key (without the wpyeg_ prefix).
@@ -529,6 +538,125 @@ function wpyeg_defaults_zero_comment_count() {
  */
 function wpyeg_defaults_login_header_url() {
 	return home_url();
+}
+
+/*
+ * =====================================================================
+ * ASSETS — the one place a <style> reaches a page
+ * =====================================================================
+ *
+ * Everything this plugin adds to the head goes through wp_enqueue. Nothing
+ * echoes a tag. That is what wordpress.org asks for, and it buys three things
+ * the `echo '<style>…'` shape could not: a site can dequeue any of it by
+ * handle, a caching or asset-concatenating plugin can see it, and the
+ * script-loader filters apply.
+ *
+ * Two no-src handles carry it, one per context. A handle registered with false
+ * as its src prints no <link> of its own and prints nothing at all when no
+ * inline data was added, so enqueuing both unconditionally costs an array entry
+ * and no markup.
+ *
+ * A provider is any callable returning a CSS string; '' means nothing on this
+ * request, which is how the per-screen guards inside several of them report a
+ * miss. Registration happens at priority 5 and immediately runs that context's
+ * providers — wp_add_inline_style() against an unregistered handle is silently
+ * dropped, so the two cannot be reordered.
+ */
+
+/** Handle carrying computed CSS on wp-login.php. */
+const WPYEG_LOGIN_STYLE_HANDLE = 'wpyeg-defaults-login';
+
+/** Handle carrying computed CSS on admin screens. */
+const WPYEG_ADMIN_STYLE_HANDLE = 'wpyeg-defaults-admin';
+
+add_action( 'login_enqueue_scripts', 'wpyeg_defaults_enqueue_login_styles', 5 );
+add_action( 'admin_enqueue_scripts', 'wpyeg_defaults_enqueue_admin_styles', 5 );
+
+/**
+ * Register a callback that supplies CSS for one context.
+ *
+ * Keeps the bootstrap a list of one-line `if` blocks, one per default, and
+ * keeps this the only place that knows about handles and enqueue hooks.
+ *
+ * @param string   $context  One of 'login' or 'admin'.
+ * @param callable $provider Callable returning a CSS string.
+ * @return void
+ */
+function wpyeg_defaults_add_style( $context, $provider ) {
+	wpyeg_defaults_style_providers( $context, $provider );
+}
+
+/**
+ * The registry behind wpyeg_defaults_add_style().
+ *
+ * Called with a provider it records one; called with only a context it returns
+ * that context's list. Named callbacks are keyed by name, so registering the
+ * same function twice registers it once — add_action() has always behaved that
+ * way, and these registrations used to be add_action() calls.
+ *
+ * @param string        $context  Context key.
+ * @param callable|null $provider Provider to record, or null to read.
+ * @return array
+ */
+function wpyeg_defaults_style_providers( $context, $provider = null ) {
+	static $providers = array(
+		'login' => array(),
+		'admin' => array(),
+	);
+
+	if ( ! isset( $providers[ $context ] ) ) {
+		return array();
+	}
+
+	if ( null !== $provider ) {
+		$key = is_string( $provider ) ? $provider : count( $providers[ $context ] );
+
+		$providers[ $context ][ $key ] = $provider;
+	}
+
+	return $providers[ $context ];
+}
+
+/**
+ * Register one no-src handle and attach whatever its providers return.
+ *
+ * @param string $context Context key.
+ * @param string $handle  Handle to register.
+ * @return void
+ */
+function wpyeg_defaults_enqueue_styles( $context, $handle ) {
+	wp_register_style( $handle, false, array(), WPYEG_DEFAULTS_VERSION ); // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion -- version supplied; the sniff misreads a false src.
+	wp_enqueue_style( $handle );
+
+	foreach ( wpyeg_defaults_style_providers( $context ) as $provider ) {
+		if ( ! is_callable( $provider ) ) {
+			continue;
+		}
+
+		$css = trim( (string) call_user_func( $provider ) );
+
+		if ( '' !== $css ) {
+			wp_add_inline_style( $handle, $css );
+		}
+	}
+}
+
+/**
+ * Enqueue the login-screen styles.
+ *
+ * @return void
+ */
+function wpyeg_defaults_enqueue_login_styles() {
+	wpyeg_defaults_enqueue_styles( 'login', WPYEG_LOGIN_STYLE_HANDLE );
+}
+
+/**
+ * Enqueue the admin styles.
+ *
+ * @return void
+ */
+function wpyeg_defaults_enqueue_admin_styles() {
+	wpyeg_defaults_enqueue_styles( 'admin', WPYEG_ADMIN_STYLE_HANDLE );
 }
 
 /**
@@ -1015,7 +1143,7 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_post_passwords' ) ) {
-		add_action( 'admin_print_footer_scripts', 'wpyeg_defaults_hide_post_password_ui' );
+		wpyeg_defaults_add_style( 'admin', 'wpyeg_defaults_hide_post_password_ui' );
 	}
 
 	if ( wpyeg_defaults_enabled( 'force_classic_editor' ) ) {
@@ -1062,10 +1190,10 @@ function wpyeg_defaults_bootstrap() {
 		// a strict script-src CSP that blocks inline scripts. The $_POST strip
 		// above is what actually enforces the policy either way; this is the part
 		// that has to survive a browser that will not run our JavaScript.
-		add_action(
-			'login_head',
-			function () {
-				echo '<style id="wpyeg-hide-remember-me">.login form .forgetmenot { display: none; }</style>';
+		wpyeg_defaults_add_style(
+			'login',
+			static function () {
+				return '.login form .forgetmenot { display: none; }';
 			}
 		);
 	}
@@ -1113,20 +1241,26 @@ function wpyeg_defaults_bootstrap() {
 	$login_logo = wpyeg_defaults_get( 'login_logo_behavior' );
 
 	if ( 'remove_logo' === $login_logo ) {
-		add_action(
-			'login_head',
-			function () {
-				echo '<style>#login h1 a, .login h1 a { display:none; }</style>';
+		wpyeg_defaults_add_style(
+			'login',
+			static function () {
+				return '#login h1 a, .login h1 a { display:none; }';
 			}
 		);
 	} elseif ( 'replace_logo' === $login_logo ) {
-		add_action(
-			'login_head',
-			function () {
+		wpyeg_defaults_add_style(
+			'login',
+			static function () {
 				$icon = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 84 ) : '';
-				if ( $icon ) {
-					echo '<style>#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }</style>';
+
+				// Nothing at all when there is no image: a rule with an empty
+				// url() resolves against the current document, so the browser
+				// re-requests the login page to use as a background.
+				if ( ! $icon ) {
+					return '';
 				}
+
+				return '#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }';
 			}
 		);
 	}
@@ -1313,28 +1447,25 @@ function wpyeg_defaults_lowercase_filename( $filename ) {
  * editable. It depends on editor DOM selectors, so re-check after major
  * WordPress editor changes — if a selector goes stale the field reappears and
  * nothing breaks.
+ *
+ * @return string CSS, or '' when this is not an editor screen.
  */
 function wpyeg_defaults_hide_post_password_ui() {
 	global $pagenow, $post;
 
 	if ( empty( $pagenow ) || ( 'post.php' !== $pagenow && 'post-new.php' !== $pagenow ) ) {
-		return;
+		return '';
 	}
 
 	if ( ! empty( $post->post_password ) ) {
-		return;
+		return '';
 	}
-	?>
-	<style id="wpyeg-hide-post-password">
-		#visibility-radio-password,
+
+	return '#visibility-radio-password,
 		label[for="visibility-radio-password"],
 		#editor-post-password-0,
 		label[for="editor-post-password-0"],
-		#editor-post-password-0-description {
-			display: none;
-		}
-	</style>
-	<?php
+		#editor-post-password-0-description { display: none; }';
 }
 
 /**
