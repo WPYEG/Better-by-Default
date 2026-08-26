@@ -497,6 +497,41 @@ function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
 add_action( 'plugins_loaded', 'wpyeg_defaults_bootstrap' );
 
 /**
+ * A comment count of zero, as the string core would have returned.
+ *
+ * The type is the point. core's get_comments_number() returns
+ * `$post->comment_count`, which comes off the database as a string, and its own
+ * docblock says `string|int`. Most consumers cast; core's own Comments Title
+ * block does not — wp-includes/blocks/comments-title.php compares
+ * `'0' === $comments_count` and returns early. Handing it an integer meant that
+ * early return never fired, and a comments heading rendered over a thread with
+ * nothing in it, on block themes.
+ *
+ * '0' is falsy and casts to 0, so every consumer that casts or tests truthiness
+ * is unaffected.
+ *
+ * @return string
+ */
+function wpyeg_defaults_zero_comment_count() {
+	return '0';
+}
+
+/**
+ * The site home, for the login screen's header link.
+ *
+ * Replaces `add_filter( 'login_headerurl', 'home_url' )`. A filter hands its
+ * callback the value being filtered, and home_url() takes its first argument as
+ * a *path* — so the incoming `https://wordpress.org/` was appended to the site
+ * URL and the logo linked to `https://example.com/https://wordpress.org/`. Every
+ * install with the logo removed, unlinked or replaced had a broken link.
+ *
+ * @return string
+ */
+function wpyeg_defaults_login_header_url() {
+	return home_url();
+}
+
+/**
  * Wire every enabled policy to its WordPress hook.
  *
  * Runs once on plugins_loaded. Each policy is an `if ( option )` around the
@@ -816,7 +851,10 @@ function wpyeg_defaults_bootstrap() {
 		// filter below is in place, but get_comments_number() reads the post's
 		// cached comment_count and does not — so the theme prints "1 Comment" as
 		// a heading over a thread that renders nothing.
-		add_filter( 'get_comments_number', '__return_zero', 20 );
+		//
+		// A named callback returning the *string* "0" rather than __return_zero:
+		// see wpyeg_defaults_zero_comment_count() for why the type matters.
+		add_filter( 'get_comments_number', 'wpyeg_defaults_zero_comment_count', 20 );
 
 		// Stop advertising comment feeds that lead nowhere, then stop serving
 		// them. Removing the link is not removing the feed: /comments/feed/ and
@@ -1088,7 +1126,7 @@ function wpyeg_defaults_bootstrap() {
 	// at the site home instead of wordpress.org. There is no separate toggle:
 	// a replacement/removed logo linking back to wp.org makes no sense.
 	if ( in_array( $login_logo, array( 'remove_logo', 'unlink_logo', 'replace_logo' ), true ) ) {
-		add_filter( 'login_headerurl', 'home_url' );
+		add_filter( 'login_headerurl', 'wpyeg_defaults_login_header_url' );
 		add_filter(
 			'login_headertext',
 			function () {
