@@ -644,7 +644,7 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 
 ---
 
-## Schema map — content and everyday UX
+## Schema map — content policies
 
 | Setting key | Default | Core hook |
 | --- | --- | --- |
@@ -657,12 +657,21 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `limit_unfiltered_html_to_admins` | `yes` | `user_has_cap` drops the cap for non-admins |
 | `disable_post_passwords` | `no` | CSS hides the editor's password option |
 | `force_classic_editor` | `no` | four editor gates answered false |
+
+[The schema group is authoritative: emoji removal lives under Content, not Performance. The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Author and attachment redirects remove thin public pages, while the editor policies remain opt-in where they can disrupt an established workflow.]
+
+---
+
+## Schema map — everyday UX and media
+
+| Setting key | Default | Core hook |
+| --- | --- | --- |
 | `lowercase_upload_filenames` | `yes` | `sanitize_file_name` at priority 20 |
 | `media_sizes_panel` | `yes` | read-only meta box on attachments |
 | `title_only_admin_search` | `no` | `post_search_columns` |
 | `frontend_admin_bar_behavior` | `''` | `show_admin_bar` |
 
-[The schema group is authoritative: emoji removal lives under Content, not Performance. The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Title-only search and front-end admin-bar changes remain opt-in.]
+[Lowercasing applies only to new uploads, and the media panel only reports files WordPress already generated. Title-only search and front-end admin-bar changes remain opt-in because both alter familiar administration workflows.]
 
 ---
 
@@ -718,13 +727,17 @@ And several entries means the hook is shared, not that somebody is losing. A cal
 
 ---
 
-## We tried to automate it twice. Both were wrong.
+## Three attempts. Two were withdrawn.
 
 	- **Read the plugin's code for clues** — named plugins that were doing nothing at all.
 	- **Run the setting and see what comes out** — meant running other people's code to check on them.
-	- **What worked: say less.** Report what you can prove, and admit what you cannot see.
+	- **Observe real runs at `PHP_INT_MAX`** — detects divergence late without claiming attribution.
 
-Two sibling plugins tried to build the checker, and both attempts shipped and were withdrawn. The first guessed from source code and accused plugins that were not touching the setting at all. The second measured the real outcome by actually running the filter — precise, and it meant executing arbitrary third-party code as a side effect of a diagnostic. A tool that reports collisions must not cause them. Underneath, both failed the same way: they were trying to recover something WordPress never wrote down. Nothing records which plugin asked for what. What ended up working was reporting only what could be proven, and saying plainly on screen that a clean result means nothing traceable was found — not that nothing is wrong.
+The first attempt guessed from source code and accused plugins that were not touching the setting. The second measured the outcome by actually running the filter — precise, and it meant executing arbitrary third-party code as a diagnostic side effect. Both shipped and were withdrawn. A tool that reports collisions must not cause them.
+
+The third attempt stopped trying to recover attribution WordPress never recorded. It observes the filter when WordPress already runs it, compares the value at the observer's turn with the configured value, and records a divergence without naming anyone. No synthetic arguments and no extra callback executions.
+
+`PHP_INT_MAX` is the latest priority, not a guarantee of being the last callback. WordPress preserves registration order within a priority, so a callback added there later can still change the result. A divergence the observer sees is evidence; a clean observation is not proof that nothing later diverged.
 
 ---
 
