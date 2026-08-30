@@ -853,7 +853,7 @@ schemaMapSlide(29, "Schema map — security policy and updates",
   "AI connectors are disabled through the WordPress 7.0 core gate and the Connectors screen is closed. Baseline headers and SAMEORIGIN ship separately because framing can break legitimate embeds. BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling."
 );
 
-schemaMapSlide(30, "Schema map — content and everyday UX",
+schemaMapSlide(30, "Schema map — content policies",
   "The schema group is authoritative; emoji removal is a Content setting.",
   [
     ["disable_comments", "yes", "comments, UI, post-type support"],
@@ -865,15 +865,22 @@ schemaMapSlide(30, "Schema map — content and everyday UX",
     ["limit_unfiltered_html_to_admins", "yes", "user_has_cap drops the cap for non-admins"],
     ["disable_post_passwords", "no", "CSS hides the editor's password option"],
     ["force_classic_editor", "no", "four editor gates answered false"],
+  ],
+  "The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Author and attachment redirects remove thin public pages, while the editor policies remain opt-in where they can disrupt an established workflow."
+);
+
+schemaMapSlide(31, "Schema map — everyday UX and media",
+  "Small workflow defaults stay independent from content policy.",
+  [
     ["lowercase_upload_filenames", "yes", "sanitize_file_name at priority 20"],
     ["media_sizes_panel", "yes", "read-only meta box on attachments"],
     ["title_only_admin_search", "no", "post_search_columns"],
     ["frontend_admin_bar_behavior", "''", "show_admin_bar"],
   ],
-  "The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Title-only search and front-end admin-bar changes remain opt-in."
+  "Lowercasing applies only to new uploads, and the media panel only reports files WordPress already generated. Title-only search and front-end admin-bar changes remain opt-in because both alter familiar administration workflows."
 );
 
-schemaMapSlide(31, "Schema map — login, branding, and performance",
+schemaMapSlide(32, "Schema map — login, branding, and performance",
   "Schema keys live in one option array; constants remain above plugins.",
   [
     ["disable_remember_me", "no", "login UI / cookie expiration"],
@@ -924,7 +931,7 @@ function collisionSlide(num, title, standfirst, cards, notes) {
 /* 31a. WHEN TWO PLUGINS SET THE SAME DEFAULT                          */
 /* =================================================================== */
 collisionSlide(
-  33,
+  34,
   "Somebody will install two of these",
   "Two defaults plugins on one site \u2014 or this one plus a security suite doing half the same job.",
   [
@@ -939,7 +946,7 @@ collisionSlide(
 /* 31b. THE RULE                                                       */
 /* =================================================================== */
 collisionSlide(
-  34,
+  35,
   "Some settings share. Some fight.",
   "The difference is entirely in what your callback does with the argument it is handed.",
   [
@@ -973,7 +980,7 @@ collisionSlide(
   s.addText("Several entries means they share the hook. Whether anyone is losing depends on what the callbacks do \u2014 go and read them.", {
     x: 0.6, y: 5.05, w: 11.9, h: 0.6, fontFace: BODY, fontSize: 15, color: SLATE, italic: true, margin: 0,
   });
-  footer(s, 35);
+  footer(s, 36);
   s.addNotes("You do not need a plugin for this, and that is exactly why we are not shipping one. The same snippet works on any hook, including ones nobody has thought to write a checker for.\n\nTwo things to say out loud, because the obvious reading of the output is wrong. First, an EMPTY result is the normal case on a clean install \u2014 this plugin does not register that filter at all while the lengths are still WordPress's own, which is the fix we made earlier in the deck. Guard for the hook being absent or the example errors on the very plugin it is demonstrating.\n\nSecond, several entries means the hook is SHARED, not that somebody is losing. A callback can pass its input through, or act only under a condition that is not met today. The count tells you where to look; the callbacks tell you what is happening. Printing the callback id rather than print_r() keeps it one line each, which makes the count honest.");
 })();
 
@@ -981,15 +988,15 @@ collisionSlide(
 /* 31d. TWO FAILED AUTOMATIONS                                         */
 /* =================================================================== */
 collisionSlide(
-  36,
-  "We tried to automate it twice. Both were wrong.",
-  "Two sibling plugins built the checker. Both attempts shipped, and both were withdrawn.",
+  37,
+  "Three attempts. Two were withdrawn.",
+  "The useful third design observes real filter runs without pretending it can identify the culprit.",
   [
     { t: "Read the plugin's code for clues.", d: "Named plugins that were doing nothing at all." },
     { t: "Run the setting, see what comes out.", d: "Meant running other people's code to check on them." },
-    { t: "What worked: say less.", d: "Report what you can prove, and admit what you cannot see." },
+    { t: "Observe real runs at PHP_INT_MAX.", d: "Detects divergence late, without attribution; same-priority callbacks can still run later." },
   ],
-  "The first guessed from source code and accused plugins that were not touching the setting. The second measured the real outcome by actually running the filter \u2014 precise, and it meant executing arbitrary third-party code as a side effect of a diagnostic. A tool that reports collisions must not cause them.\n\nUnderneath, both failed the same way: they were trying to recover something WordPress never wrote down. Nothing records which plugin asked for what, and everything built on top of that gap is a guess or a gamble.\n\nWhat ended up working was reporting only what could be proven, and saying plainly on the screen that a clean result means nothing traceable was found \u2014 not that nothing is wrong."
+  "The first guessed from source code and accused plugins that were not touching the setting. The second measured the outcome by actually running the filter \u2014 precise, and it meant executing arbitrary third-party code as a diagnostic side effect. A tool that reports collisions must not cause them.\n\nThe third stopped trying to recover attribution WordPress never recorded. It observes a filter when WordPress already runs it, compares the value at the observer's turn with the configured value, and records a divergence without naming anyone. No synthetic arguments and no extra callback executions.\n\nSay the limit out loud: PHP_INT_MAX is the latest priority, not a guarantee of being the last callback. WordPress preserves registration order within a priority, so a callback added there later can still change the result. A divergence the observer sees is evidence; a clean observation is not proof that nothing later diverged."
 );
 
 /* =================================================================== */
@@ -1007,7 +1014,7 @@ collisionSlide(
   s.addText("Confirm the overlap first. Then pick the one whose choices you agree with.", {
     x: 0.8, y: 5.05, w: 11.5, h: 0.8, fontFace: BODY, fontSize: 18, color: WHEAT, bold: true, margin: 0,
   });
-  footer(s, 37);
+  footer(s, 38);
   s.addNotes("Say the qualifier out loud, because the slide before this one contradicts the unqualified version. Two defaults plugins are only alternatives WHERE THEY CONTEST THE SAME REPLACING FILTER. Additive hooks compose \u2014 three plugins set security headers on that test install and all three landed. Two plugins with settings that do not overlap at all are simply two plugins. Telling somebody to deactivate one before you have confirmed a contested setting is advice that costs them something for nothing.\n\nWhere there IS a contest, the answer is not to make them cooperate. It is to run one of them.\n\nAnd that is the honest pitch for the plugin we just built. Not that it does more than the others \u2014 it does less. But you can read all of it in an afternoon and know exactly what it decided on your behalf.");
 })();
 
