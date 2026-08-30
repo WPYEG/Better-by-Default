@@ -413,6 +413,15 @@ function wpyeg_defaults_help_allowed_html() {
 const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
 
 /**
+ * Plugin version, for asset cache-busting.
+ *
+ * Kept in step with the header above by tests/plugin-policy.php, which reads
+ * both and fails when they disagree — an asset version that lags the plugin is
+ * a stylesheet a browser goes on serving from cache after it changed.
+ */
+const WPYEG_DEFAULTS_VERSION = '1.2.3';
+
+/**
  * Read one setting, falling back to its schema default.
  *
  * @param string $key Schema key (without the wpyeg_ prefix).
@@ -495,6 +504,160 @@ function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
  */
 
 add_action( 'plugins_loaded', 'wpyeg_defaults_bootstrap' );
+
+/**
+ * A comment count of zero, as the string core would have returned.
+ *
+ * The type is the point. core's get_comments_number() returns
+ * `$post->comment_count`, which comes off the database as a string, and its own
+ * docblock says `string|int`. Most consumers cast; core's own Comments Title
+ * block does not — wp-includes/blocks/comments-title.php compares
+ * `'0' === $comments_count` and returns early. Handing it an integer meant that
+ * early return never fired, and a comments heading rendered over a thread with
+ * nothing in it, on block themes.
+ *
+ * '0' is falsy and casts to 0, so every consumer that casts or tests truthiness
+ * is unaffected.
+ *
+ * @return string
+ */
+function wpyeg_defaults_zero_comment_count() {
+	return '0';
+}
+
+/**
+ * The site home, for the login screen's header link.
+ *
+ * Replaces `add_filter( 'login_headerurl', 'home_url' )`. A filter hands its
+ * callback the value being filtered, and home_url() takes its first argument as
+ * a *path* — so the incoming `https://wordpress.org/` was appended to the site
+ * URL and the logo linked to `https://example.com/https://wordpress.org/`. Every
+ * install with the logo removed, unlinked or replaced had a broken link.
+ *
+ * @return string
+ */
+function wpyeg_defaults_login_header_url() {
+	return home_url();
+}
+
+/*
+ * =====================================================================
+ * ASSETS — the one place a <style> reaches a page
+ * =====================================================================
+ *
+ * Everything this plugin adds to the head goes through wp_enqueue. Nothing
+ * echoes a tag. That is what wordpress.org asks for, and it buys three things
+ * the `echo '<style>…'` shape could not: a site can dequeue any of it by
+ * handle, a caching or asset-concatenating plugin can see it, and the
+ * script-loader filters apply.
+ *
+ * Two no-src handles carry it, one per context. A handle registered with false
+ * as its src prints no <link> of its own and prints nothing at all when no
+ * inline data was added, so enqueuing both unconditionally costs an array entry
+ * and no markup.
+ *
+ * A provider is any callable returning a CSS string; '' means nothing on this
+ * request, which is how the per-screen guards inside several of them report a
+ * miss. Registration happens at priority 5 and immediately runs that context's
+ * providers — wp_add_inline_style() against an unregistered handle is silently
+ * dropped, so the two cannot be reordered.
+ */
+
+/** Handle carrying computed CSS on wp-login.php. */
+const WPYEG_LOGIN_STYLE_HANDLE = 'wpyeg-defaults-login';
+
+/** Handle carrying computed CSS on admin screens. */
+const WPYEG_ADMIN_STYLE_HANDLE = 'wpyeg-defaults-admin';
+
+add_action( 'login_enqueue_scripts', 'wpyeg_defaults_enqueue_login_styles', 5 );
+add_action( 'admin_enqueue_scripts', 'wpyeg_defaults_enqueue_admin_styles', 5 );
+
+/**
+ * Register a callback that supplies CSS for one context.
+ *
+ * Keeps the bootstrap a list of one-line `if` blocks, one per default, and
+ * keeps this the only place that knows about handles and enqueue hooks.
+ *
+ * @param string   $context  One of 'login' or 'admin'.
+ * @param callable $provider Callable returning a CSS string.
+ * @return void
+ */
+function wpyeg_defaults_add_style( $context, $provider ) {
+	wpyeg_defaults_style_providers( $context, $provider );
+}
+
+/**
+ * The registry behind wpyeg_defaults_add_style().
+ *
+ * Called with a provider it records one; called with only a context it returns
+ * that context's list. Named callbacks are keyed by name, so registering the
+ * same function twice registers it once — add_action() has always behaved that
+ * way, and these registrations used to be add_action() calls.
+ *
+ * @param string        $context  Context key.
+ * @param callable|null $provider Provider to record, or null to read.
+ * @return array
+ */
+function wpyeg_defaults_style_providers( $context, $provider = null ) {
+	static $providers = array(
+		'login' => array(),
+		'admin' => array(),
+	);
+
+	if ( ! isset( $providers[ $context ] ) ) {
+		return array();
+	}
+
+	if ( null !== $provider ) {
+		$key = is_string( $provider ) ? $provider : count( $providers[ $context ] );
+
+		$providers[ $context ][ $key ] = $provider;
+	}
+
+	return $providers[ $context ];
+}
+
+/**
+ * Register one no-src handle and attach whatever its providers return.
+ *
+ * @param string $context Context key.
+ * @param string $handle  Handle to register.
+ * @return void
+ */
+function wpyeg_defaults_enqueue_styles( $context, $handle ) {
+	wp_register_style( $handle, false, array(), WPYEG_DEFAULTS_VERSION ); // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion -- version supplied; the sniff misreads a false src.
+	wp_enqueue_style( $handle );
+
+	foreach ( wpyeg_defaults_style_providers( $context ) as $provider ) {
+		if ( ! is_callable( $provider ) ) {
+			continue;
+		}
+
+		$css = trim( (string) call_user_func( $provider ) );
+
+		if ( '' !== $css ) {
+			wp_add_inline_style( $handle, $css );
+		}
+	}
+}
+
+/**
+ * Enqueue the login-screen styles.
+ *
+ * @return void
+ */
+function wpyeg_defaults_enqueue_login_styles() {
+	wpyeg_defaults_enqueue_styles( 'login', WPYEG_LOGIN_STYLE_HANDLE );
+}
+
+/**
+ * Enqueue the admin styles.
+ *
+ * @return void
+ */
+function wpyeg_defaults_enqueue_admin_styles() {
+	wpyeg_defaults_enqueue_styles( 'admin', WPYEG_ADMIN_STYLE_HANDLE );
+}
 
 /**
  * Wire every enabled policy to its WordPress hook.
@@ -816,7 +979,10 @@ function wpyeg_defaults_bootstrap() {
 		// filter below is in place, but get_comments_number() reads the post's
 		// cached comment_count and does not — so the theme prints "1 Comment" as
 		// a heading over a thread that renders nothing.
-		add_filter( 'get_comments_number', '__return_zero', 20 );
+		//
+		// A named callback returning the *string* "0" rather than __return_zero:
+		// see wpyeg_defaults_zero_comment_count() for why the type matters.
+		add_filter( 'get_comments_number', 'wpyeg_defaults_zero_comment_count', 20 );
 
 		// Stop advertising comment feeds that lead nowhere, then stop serving
 		// them. Removing the link is not removing the feed: /comments/feed/ and
@@ -977,7 +1143,7 @@ function wpyeg_defaults_bootstrap() {
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_post_passwords' ) ) {
-		add_action( 'admin_print_footer_scripts', 'wpyeg_defaults_hide_post_password_ui' );
+		wpyeg_defaults_add_style( 'admin', 'wpyeg_defaults_hide_post_password_ui' );
 	}
 
 	if ( wpyeg_defaults_enabled( 'force_classic_editor' ) ) {
@@ -998,6 +1164,15 @@ function wpyeg_defaults_bootstrap() {
 		add_action( 'admin_notices', 'wpyeg_defaults_render_mail_config_notice' );
 	}
 
+	/* ----- Breach screening ----- */
+
+	// Not behind a toggle. This reports that a default the site switched on has
+	// stopped working, which is true whether or not anybody asked — and a switch
+	// here would only offer to turn off the bad news.
+	if ( wpyeg_defaults_enabled( 'require_strong_passwords' ) ) {
+		add_action( 'admin_notices', 'wpyeg_defaults_render_hibp_notice' );
+	}
+
 	/* ----- Login and sessions ----- */
 
 	if ( wpyeg_defaults_enabled( 'disable_remember_me' ) ) {
@@ -1015,10 +1190,10 @@ function wpyeg_defaults_bootstrap() {
 		// a strict script-src CSP that blocks inline scripts. The $_POST strip
 		// above is what actually enforces the policy either way; this is the part
 		// that has to survive a browser that will not run our JavaScript.
-		add_action(
-			'login_head',
-			function () {
-				echo '<style id="wpyeg-hide-remember-me">.login form .forgetmenot { display: none; }</style>';
+		wpyeg_defaults_add_style(
+			'login',
+			static function () {
+				return '.login form .forgetmenot { display: none; }';
 			}
 		);
 	}
@@ -1066,20 +1241,26 @@ function wpyeg_defaults_bootstrap() {
 	$login_logo = wpyeg_defaults_get( 'login_logo_behavior' );
 
 	if ( 'remove_logo' === $login_logo ) {
-		add_action(
-			'login_head',
-			function () {
-				echo '<style>#login h1 a, .login h1 a { display:none; }</style>';
+		wpyeg_defaults_add_style(
+			'login',
+			static function () {
+				return '#login h1 a, .login h1 a { display:none; }';
 			}
 		);
 	} elseif ( 'replace_logo' === $login_logo ) {
-		add_action(
-			'login_head',
-			function () {
+		wpyeg_defaults_add_style(
+			'login',
+			static function () {
 				$icon = function_exists( 'get_site_icon_url' ) ? get_site_icon_url( 84 ) : '';
-				if ( $icon ) {
-					echo '<style>#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }</style>';
+
+				// Nothing at all when there is no image: a rule with an empty
+				// url() resolves against the current document, so the browser
+				// re-requests the login page to use as a background.
+				if ( ! $icon ) {
+					return '';
 				}
+
+				return '#login h1 a, .login h1 a { background-image:url(' . esc_url( $icon ) . '); background-size:contain; }';
 			}
 		);
 	}
@@ -1088,7 +1269,7 @@ function wpyeg_defaults_bootstrap() {
 	// at the site home instead of wordpress.org. There is no separate toggle:
 	// a replacement/removed logo linking back to wp.org makes no sense.
 	if ( in_array( $login_logo, array( 'remove_logo', 'unlink_logo', 'replace_logo' ), true ) ) {
-		add_filter( 'login_headerurl', 'home_url' );
+		add_filter( 'login_headerurl', 'wpyeg_defaults_login_header_url' );
 		add_filter(
 			'login_headertext',
 			function () {
@@ -1266,28 +1447,25 @@ function wpyeg_defaults_lowercase_filename( $filename ) {
  * editable. It depends on editor DOM selectors, so re-check after major
  * WordPress editor changes — if a selector goes stale the field reappears and
  * nothing breaks.
+ *
+ * @return string CSS, or '' when this is not an editor screen.
  */
 function wpyeg_defaults_hide_post_password_ui() {
 	global $pagenow, $post;
 
 	if ( empty( $pagenow ) || ( 'post.php' !== $pagenow && 'post-new.php' !== $pagenow ) ) {
-		return;
+		return '';
 	}
 
 	if ( ! empty( $post->post_password ) ) {
-		return;
+		return '';
 	}
-	?>
-	<style id="wpyeg-hide-post-password">
-		#visibility-radio-password,
+
+	return '#visibility-radio-password,
 		label[for="visibility-radio-password"],
 		#editor-post-password-0,
 		label[for="editor-post-password-0"],
-		#editor-post-password-0-description {
-			display: none;
-		}
-	</style>
-	<?php
+		#editor-post-password-0-description { display: none; }';
 }
 
 /**
@@ -2187,6 +2365,146 @@ function wpyeg_defaults_rest_password_context( $request ) {
 }
 
 /**
+ * A per-installation namespace for the breach cache.
+ *
+ * Entries live in transients, and on a site with a persistent object cache a
+ * transient is not a database row — so an uninstaller cannot reach it, and the
+ * same lookup keys become live again after a reinstall. Giving every
+ * installation its own generation makes anything left over belong to a
+ * namespace nothing will construct a second time.
+ *
+ * @return string
+ */
+function wpyeg_defaults_hibp_cache_generation() {
+	$generation = get_option( 'wpyeg_hibp_cache_generation' );
+
+	if ( is_string( $generation ) && '' !== $generation ) {
+		return $generation;
+	}
+
+	$candidate = str_replace( '-', '', wp_generate_uuid4() );
+
+	// add_option() returns false if another request created it first; re-read
+	// rather than overwrite, so concurrent password changes agree on one value.
+	if ( add_option( 'wpyeg_hibp_cache_generation', $candidate, '', false ) ) {
+		return $candidate;
+	}
+
+	$generation = get_option( 'wpyeg_hibp_cache_generation' );
+
+	return is_string( $generation ) && '' !== $generation ? $generation : $candidate;
+}
+
+/**
+ * Note that breach screening could not be completed.
+ *
+ * Failing open is right — refusing a password because somebody else's API is
+ * down would lock people out of their own accounts. Failing open *silently* is
+ * not: "not in the corpus" and "the corpus was not consulted" were the same
+ * answer, so a site whose screening had been erroring for a week looked exactly
+ * like one where every password happened to be clean.
+ *
+ * Stores the kind of failure and when, never the password and never the hash
+ * prefix. The prefix is k-anonymous by design, but a record of which prefixes a
+ * site has looked up is still a record of its passwords' shape.
+ *
+ * @param string $kind Short machine tag: unreachable, http_429, truncated, malformed.
+ * @return void
+ */
+function wpyeg_defaults_hibp_unavailable( $kind ) {
+	$stored = get_transient( 'wpyeg_hibp_unavailable' );
+	$now    = time();
+
+	if ( is_array( $stored ) && isset( $stored['kind'], $stored['seen'] ) && $stored['kind'] === $kind ) {
+		// Same failure as last time. Re-arm the TTL, but not on every attempt:
+		// a password screen under load would otherwise write once per check.
+		if ( ( $now - (int) $stored['seen'] ) < 5 * MINUTE_IN_SECONDS ) {
+			return;
+		}
+
+		$stored['seen']  = $now;
+		$stored['count'] = isset( $stored['count'] ) ? (int) $stored['count'] + 1 : 2;
+		set_transient( 'wpyeg_hibp_unavailable', $stored, HOUR_IN_SECONDS );
+
+		return;
+	}
+
+	set_transient(
+		'wpyeg_hibp_unavailable',
+		array(
+			'kind'  => (string) $kind,
+			'first' => $now,
+			'seen'  => $now,
+			'count' => 1,
+		),
+		HOUR_IN_SECONDS
+	);
+}
+
+/**
+ * The last recorded breach-screening failure, if it is still current.
+ *
+ * @return array|null
+ */
+function wpyeg_defaults_hibp_last_failure() {
+	$stored = get_transient( 'wpyeg_hibp_unavailable' );
+
+	return ( is_array( $stored ) && ! empty( $stored['kind'] ) ) ? $stored : null;
+}
+
+/**
+ * Warn administrators when breach screening has stopped working.
+ *
+ * Not shown to the person changing their password: they cannot act on it, and
+ * telling them the site's security tooling is degraded is not their business.
+ *
+ * @return void
+ */
+function wpyeg_defaults_render_hibp_notice() {
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+
+	$failure = wpyeg_defaults_hibp_last_failure();
+
+	if ( null === $failure ) {
+		return;
+	}
+
+	$kinds = array(
+		'unreachable' => __( 'the service could not be reached', 'sane-defaults' ),
+		'truncated'   => __( 'the reply was cut short before it could be read', 'sane-defaults' ),
+		'malformed'   => __( 'the reply was not the list of hashes it should have been, which usually means something answered in the service\'s place', 'sane-defaults' ),
+	);
+
+	$kind   = (string) $failure['kind'];
+	$reason = isset( $kinds[ $kind ] )
+		? $kinds[ $kind ]
+		: ( 0 === strpos( $kind, 'http_' )
+			? sprintf(
+				/* translators: %s: HTTP status code. */
+				__( 'the service answered with HTTP %s', 'sane-defaults' ),
+				substr( $kind, 5 )
+			)
+			: __( 'the lookup did not complete', 'sane-defaults' ) );
+	?>
+	<div class="notice notice-warning">
+		<p>
+			<strong><?php esc_html_e( 'Passwords are not being screened against known breaches.', 'sane-defaults' ); ?></strong>
+			<?php
+			printf(
+				/* translators: %s: short reason the lookup failed. */
+				esc_html__( 'The last lookup did not complete: %s. Passwords set since then have been accepted without that check.', 'sane-defaults' ),
+				esc_html( $reason )
+			);
+			?>
+		</p>
+		<p><?php esc_html_e( 'Nobody is blocked from changing their password, and the length, blocklist and personal-context rules are unaffected. This clears itself once a lookup succeeds.', 'sane-defaults' ); ?></p>
+	</div>
+	<?php
+}
+
+/**
  * Check a password against the Have I Been Pwned range API using k-anonymity.
  *
  * Only the first five characters of the SHA-1 hash ever leave the site. HIBP
@@ -2239,7 +2557,7 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 	$suffix = substr( $hash, 5 );
 	$limit  = max( 1024, (int) apply_filters( 'wpyeg_hibp_max_response_bytes', 128 * 1024 ) );
 
-	$cache_key = 'wpyeg_hibp_' . $prefix;
+	$cache_key = 'wpyeg_hibp_' . wpyeg_defaults_hibp_cache_generation() . '_' . $prefix;
 	$body      = get_transient( $cache_key );
 	$cache_hit = false !== $body;
 
@@ -2253,8 +2571,21 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 			)
 		);
 
-		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
-			// Fail open — never block a password change because HIBP is down.
+		if ( is_wp_error( $response ) ) {
+			// Fail open — never block a password change because HIBP is down —
+			// but record it, so a site whose screening stopped working can tell.
+			wpyeg_defaults_hibp_unavailable( 'unreachable' );
+
+			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 200 !== $status ) {
+			// The status is kept: a rate limit is a different problem from an
+			// outage, and reads differently to whoever has to act on it.
+			wpyeg_defaults_hibp_unavailable( 'http_' . $status );
+
 			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
 		}
 
@@ -2280,11 +2611,24 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 			delete_transient( $cache_key );
 		}
 
+		wpyeg_defaults_hibp_unavailable( $raw_length >= $limit ? 'truncated' : 'malformed' );
+
 		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
 	}
 
 	if ( ! $cache_hit ) {
 		set_transient( $cache_key, $body, 12 * HOUR_IN_SECONDS );
+
+		/*
+		 * A live response proves screening works again, so the record goes. Only
+		 * on the uncached path: a cache hit says nothing about the service's
+		 * current state, and clearing there would put a write on the common path
+		 * to answer a question it had not asked. Read before delete, so a healthy
+		 * site never writes at all.
+		 */
+		if ( null !== wpyeg_defaults_hibp_last_failure() ) {
+			delete_transient( 'wpyeg_hibp_unavailable' );
+		}
 	}
 
 	$pwned = false;
