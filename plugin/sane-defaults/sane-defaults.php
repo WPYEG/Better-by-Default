@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.2.3
+ * Version:           1.2.4
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -419,7 +419,7 @@ const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
  * both and fails when they disagree — an asset version that lags the plugin is
  * a stylesheet a browser goes on serving from cache after it changed.
  */
-const WPYEG_DEFAULTS_VERSION = '1.2.3';
+const WPYEG_DEFAULTS_VERSION = '1.2.4';
 
 /**
  * Read one setting, falling back to its schema default.
@@ -997,6 +997,9 @@ function wpyeg_defaults_bootstrap() {
 		// most of all — goes to the database and answers normally without this.
 		add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
 
+		// The single-item REST route builds no query; guard its dispatch only.
+		add_filter( 'rest_request_before_callbacks', 'wpyeg_defaults_guard_rest_comment', 10, 3 );
+
 		// Take the comment blocks out of the inserter: on a site with comments off
 		// they can only render nothing.
 		add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
@@ -1031,6 +1034,14 @@ function wpyeg_defaults_bootstrap() {
 		);
 	}
 
+	/*
+	 * Both redirects below run at priority 9, not the default 10. Core hooks
+	 * redirect_canonical to template_redirect at 10 in default-filters.php,
+	 * before any plugin loads, so a plugin at 10 always runs after it. That let
+	 * /?author=N canonical-redirect to /author/nicename/ (publishing the very
+	 * name this hides) and let attachment pages render. Keel's security review
+	 * caught it; the comment-feed block above was already at 9.
+	 */
 	if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
 		add_action(
 			'template_redirect',
@@ -1039,7 +1050,8 @@ function wpyeg_defaults_bootstrap() {
 					wp_safe_redirect( home_url( '/' ), 301 );
 					exit;
 				}
-			}
+			},
+			9
 		);
 		// Redirecting /author/ pages does not stop feeds naming the author in
 		// every <dc:creator> element, so the login names this default exists to
@@ -1085,7 +1097,8 @@ function wpyeg_defaults_bootstrap() {
 
 				wp_safe_redirect( $target, 301 );
 				exit;
-			}
+			},
+			9
 		);
 	}
 
@@ -1627,6 +1640,52 @@ function wpyeg_defaults_empty_comment_queries( $comment_data, $query ) {
 }
 
 /**
+ * Refuse disallowed comment types on the REST single-item route.
+ *
+ * The controller reads through get_comment() without building a comment query.
+ * Guard dispatch rather than filtering get_comment(): other REST routes need
+ * real comments internally, particularly wp_delete_post()'s comment cleanup.
+ * Older core versions also dereference the filtered object for ARRAY_A/ARRAY_N.
+ * This hook runs after route matching and validation, and works on WordPress
+ * 6.4 (the plugin's minimum), including internal REST requests. Allowed types
+ * such as Block Notes remain available.
+ *
+ * @param mixed           $result  A prior short-circuit result, or null.
+ * @param array           $handler Matched route handler (unused).
+ * @param WP_REST_Request $request REST request.
+ * @return mixed|WP_Error
+ */
+function wpyeg_defaults_guard_rest_comment( $result, $handler, $request ) {
+	unset( $handler );
+
+	if ( null !== $result ) {
+		return $result;
+	}
+
+	if ( ! preg_match( '#^/wp/v2/comments/[0-9]+/?$#i', $request->get_route() ) ) {
+		return $result;
+	}
+
+	// Route matching and argument validation have already run. Use the same
+	// merged id as the controller: query/body parameters can override the URL.
+	$comment = get_comment( (int) $request['id'] );
+	if ( ! $comment ) {
+		return $result; // Core supplies the missing-ID error.
+	}
+
+	$type = '' === (string) $comment->comment_type ? 'comment' : (string) $comment->comment_type;
+	if ( in_array( $type, wpyeg_defaults_allowed_comment_types(), true ) ) {
+		return $result;
+	}
+
+	return new WP_Error(
+		'rest_comment_invalid_id',
+		__( 'Invalid comment ID.', 'sane-defaults' ),
+		array( 'status' => 404 )
+	);
+}
+
+/**
  * Comment blocks removed from the inserter while comments are disabled.
  *
  * @return string[]
@@ -2004,7 +2063,36 @@ function wpyeg_defaults_password_enforced_for_user( $user ) {
  */
 function wpyeg_defaults_validate_password( $password, $user = null ) {
 	/*
-	 * Breach screening runs first, for every account, exempt or not. The role
+	 * Two rejections that cost nothing come before the network call.
+	 *
+	 * Breach screening otherwise runs ahead of every cheap check, so anyone who
+	 * can reach a password field can drive one outbound request and one cache
+	 * entry per submission, with the prefix of their choosing. Moving the role
+	 * gate first would fix that by exempting low-privilege accounts from the one
+	 * rule that costs them nothing, which is the wrong trade.
+	 *
+	 * What is safe to move ahead is anything that can never be a valid password
+	 * whatever the role: nothing at all, and something longer than WordPress
+	 * will hash. That narrows the amplification without closing it; closing it
+	 * takes a rate limit. Ported from Keel's 0.6.0 security review.
+	 */
+	if ( '' === (string) $password ) {
+		return new WP_Error(
+			'wpyeg_password_empty',
+			__( '<strong>Error:</strong> Enter a password.', 'sane-defaults' )
+		);
+	}
+
+	// 4096 bytes is WordPress's own PHP_PASSWORD_MAX limit.
+	if ( strlen( (string) $password ) > 4096 ) {
+		return new WP_Error(
+			'wpyeg_password_too_long',
+			__( '<strong>Error:</strong> That password is too long.', 'sane-defaults' )
+		);
+	}
+
+	/*
+	 * Breach screening runs next, for every account, exempt or not. The role
 	 * gate below deliberately sits after it — see that function's docblock for
 	 * why the order is the whole design.
 	 */
@@ -2349,7 +2437,18 @@ function wpyeg_defaults_rest_password_context( $request ) {
 		$user_id = (int) $request['id'];
 	}
 
-	if ( $user_id ) {
+	/*
+	 * Only resolve a user the caller may actually edit.
+	 *
+	 * Sanitize callbacks run BEFORE authorization: WP_REST_Server calls
+	 * sanitize_params() and only then the route's permission_callback. So by
+	 * the time core refuses a subscriber's PUT to /wp/v2/users/123, this has
+	 * already been handed 123. Resolving it anyway ran the password policy
+	 * against another account's login, email and nicename and returned the
+	 * verdict in the validation error, an oracle for whether a guessed string
+	 * appears in someone else's user record. Ported from Keel's security review.
+	 */
+	if ( $user_id && ( get_current_user_id() === $user_id || current_user_can( 'edit_user', $user_id ) ) ) {
 		$existing = get_userdata( $user_id );
 		if ( $existing ) {
 			return $existing;
