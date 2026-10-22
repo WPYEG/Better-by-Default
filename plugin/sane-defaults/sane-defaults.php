@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.2.3
+ * Version:           1.2.4
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -419,7 +419,7 @@ const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
  * both and fails when they disagree — an asset version that lags the plugin is
  * a stylesheet a browser goes on serving from cache after it changed.
  */
-const WPYEG_DEFAULTS_VERSION = '1.2.3';
+const WPYEG_DEFAULTS_VERSION = '1.2.4';
 
 /**
  * Read one setting, falling back to its schema default.

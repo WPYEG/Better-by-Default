@@ -2,9 +2,9 @@
 Contributors: wpyeg
 Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
-Tested up to: 7.0.2
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.3
+Stable tag: 1.2.4
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -107,6 +107,17 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= 1.2.4 =
+* The login header link pointed at the wrong place. It was `add_filter( 'login_headerurl', 'home_url' )`, but a filter hands its callback the value being filtered and `home_url()` reads its first argument as a path, so every site with the logo removed, unlinked or replaced linked to `https://example.com/https://wordpress.org/`. It links to the site's home page now, as it always claimed to.
+* "Disable comments" reports a zero comment count as the string `'0'`, which is what core returns, instead of the integer `0`. Core's Comments Title block compares strictly, so on block themes it rendered a comments heading over a thread with nothing in it.
+* "Disable comments" no longer lets one allowed comment type carry disallowed ones through with it. A query asking for an allowed type and a disallowed type together used to run in full; it is now narrowed to the allowed types it asked for.
+* Breach screening still fails open when the Have I Been Pwned API is unreachable, because refusing a password over somebody else's outage would lock people out of their own accounts. What changed is that the outage is no longer silent: the failure is recorded with its kind, administrators see a notice, and the next successful lookup clears it. The record never holds the password or its hash prefix.
+* The breach-screening cache is keyed per installation. On a site with Redis or Memcached a transient is not a database row, so an uninstaller cannot reach it, and cached lookups used to come back to life after a reinstall.
+* Deleting the plugin now cleans up after it. There was no uninstaller, so the settings option and every breach-cache transient stayed behind, and settings a site had deliberately removed came back on a later install. Deactivating still deletes nothing. A test now fails if the plugin stores a key that the uninstaller does not remove.
+* Every stylesheet goes through `wp_enqueue_style()` instead of being echoed as a `<style>` tag, so a site can dequeue any of it by handle and caching plugins can see it. The replace-logo rule is no longer emitted when there is no image; with an empty `url()`, the browser requested the login page again to use as a background.
+* Tested up to WordPress 7.1.
+* Docs: three vague sentences now say what they meant. One example is that a required symbol does add entropy on paper, but it does not add guessing resistance.
+
 = 1.2.3 =
 * "Require authentication for all REST requests" no longer closes oEmbed with everything else. Closing REST used to take `/oembed/1.0` with it, and the damage landed where the site owner never looks: every post of theirs that another site had embedded degraded to a bare link, silently, on somebody else's page. The route is allowlisted now, filterable through `wpyeg_public_rest_routes`. Matching is on a path boundary, so `/oembed/1.0-internal` is not admitted by sharing a prefix, and the route is read from parsed query vars rather than `REQUEST_URI`, which carries whatever the client sent.
 * The carve-out is only safe because of what sits behind it. oEmbed returns `author_name` and an `author_url` carrying the account nicename — opening that route would hand an anonymous caller exactly the usernames the REST user-discovery default exists to refuse. So closing REST now registers the author strip itself, independently of the author-archive setting, rather than relying on another default happening to be on.
@@ -174,6 +185,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.2.4 =
+Bug fixes, plus a cleanup that applies only when the plugin is deleted. Deleting it (not deactivating it) now removes its settings and breach-screening cache, so reinstalling starts from the shipped defaults. Sites that remove, unlink or replace the login logo get a working home-page link back. Administrators now see a notice when the breach-screening API cannot be reached.
 
 = 1.2.3 =
 Only affects sites running "Require authentication for all REST requests". That setting no longer blocks `/oembed/1.0`, so anonymous oEmbed requests succeed where they previously returned 401 — which is what stops other sites' embeds of your posts degrading to bare links. It is a deliberate loosening: if you want the endpoint closed to everyone, filter `wpyeg_public_rest_routes` to an empty array. oEmbed responses have their author name and author URL stripped whenever REST is closed, so the route cannot be used to recover the usernames that setting exists to hide.
