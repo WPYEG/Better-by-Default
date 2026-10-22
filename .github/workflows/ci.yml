@@ -20,8 +20,9 @@ jobs:
       fail-fast: false
       matrix:
         # The floor is what the plugin header and composer.json both claim, so
-        # it is tested rather than assumed. The top is the current release.
-        php: ['7.4', '8.1', '8.5']
+        # it is tested rather than assumed. Keep 8.4 for the required branch
+        # protection check, and test the current release alongside it.
+        php: ['7.4', '8.1', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v7
 
