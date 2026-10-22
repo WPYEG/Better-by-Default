@@ -997,8 +997,8 @@ function wpyeg_defaults_bootstrap() {
 		// most of all — goes to the database and answers normally without this.
 		add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
 
-		// ...except /wp/v2/comments/123, which builds no query at all.
-		add_filter( 'get_comment', 'wpyeg_defaults_hide_rest_comment' );
+		// The single-item REST route builds no query; guard its dispatch only.
+		add_filter( 'rest_request_before_callbacks', 'wpyeg_defaults_guard_rest_comment', 10, 3 );
 
 		// Take the comment blocks out of the inserter: on a site with comments off
 		// they can only render nothing.
@@ -1640,49 +1640,49 @@ function wpyeg_defaults_empty_comment_queries( $comment_data, $query ) {
 }
 
 /**
- * Hide disallowed comment types from the REST single-item route.
+ * Refuse disallowed comment types on the REST single-item route.
  *
- * The comments_pre_query filter covers WP_Comment_Query, every listing path, but
- * not this one. WP_REST_Comments_Controller::get_comment() calls core's
- * get_comment(), which reads the row through WP_Comment::get_instance() without
- * building a query, so the filter above never runs and `/wp/v2/comments/123`
- * kept answering on a site with comments disabled. Ported from Keel, where an
- * external security review found it.
+ * The controller reads through get_comment() without building a comment query.
+ * Guard dispatch rather than filtering get_comment(): other REST routes need
+ * real comments internally, particularly wp_delete_post()'s comment cleanup.
+ * Older core versions also dereference the filtered object for ARRAY_A/ARRAY_N.
+ * This hook runs after route matching and validation, and works on WordPress
+ * 6.4 (the plugin's minimum), including internal REST requests. Allowed types
+ * such as Block Notes remain available.
  *
- * Scoped to REST rather than filtering get_comment() everywhere: the admin,
- * wp_notify_postauthor() and every other caller still get real comments. Only
- * the public API answers by the policy. Type-aware for the same reason the
- * query filter is, so allowed types such as Block Notes keep working.
- *
- * @param WP_Comment|null $comment The comment, or null.
- * @return WP_Comment|null
+ * @param mixed           $result  A prior short-circuit result, or null.
+ * @param array           $handler Matched route handler (unused).
+ * @param WP_REST_Request $request REST request.
+ * @return mixed|WP_Error
  */
-function wpyeg_defaults_hide_rest_comment( $comment ) {
-	if ( ! is_object( $comment ) || ! isset( $comment->comment_type ) ) {
-		return $comment;
+function wpyeg_defaults_guard_rest_comment( $result, $handler, $request ) {
+	unset( $handler );
+
+	if ( null !== $result ) {
+		return $result;
 	}
 
-	// wp_is_rest_endpoint() is 6.5+; this plugin supports 6.4, which only has
-	// the constant rest_api_loaded() defines. Note that wp_is_rest_request()
-	// does not exist — Keel asked for it behind function_exists() and the guard
-	// silently never fired.
-	$is_rest = function_exists( 'wp_is_rest_endpoint' )
-		? wp_is_rest_endpoint()
-		: ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+	if ( ! preg_match( '#^/wp/v2/comments/[0-9]+/?$#i', $request->get_route() ) ) {
+		return $result;
+	}
 
-	if ( ! $is_rest ) {
-		return $comment;
+	// Route matching and argument validation have already run. Use the same
+	// merged id as the controller: query/body parameters can override the URL.
+	$comment = get_comment( (int) $request['id'] );
+	if ( ! $comment ) {
+		return $result; // Core supplies the missing-ID error.
 	}
 
 	$type = '' === (string) $comment->comment_type ? 'comment' : (string) $comment->comment_type;
-
 	if ( in_array( $type, wpyeg_defaults_allowed_comment_types(), true ) ) {
-		return $comment;
+		return $result;
 	}
 
-	// The controller turns an empty comment into its own 404, which is the
-	// honest answer: on this site that route has nothing to return.
-	return null;
+	return new WP_Error(
+		'rest_comment_invalid_id',
+		__( 'Invalid comment ID.', 'sane-defaults' ),
+		array( 'status' => 404 )
+	);
 }
 
 /**

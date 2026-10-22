@@ -134,6 +134,27 @@ function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
 }
 
 /**
+ * Comment-lookup double that runs the registered get_comment filters.
+ *
+ * Unlike apply_filters() below, this must execute callbacks: hiding a comment
+ * here also hides it from wp_delete_comment() during REST post deletion.
+ *
+ * @param int $comment_id Comment ID.
+ * @return object|null
+ */
+function get_comment( $comment_id ) {
+	$comment = isset( $GLOBALS['wpyeg_test_comments'][ $comment_id ] )
+		? $GLOBALS['wpyeg_test_comments'][ $comment_id ]
+		: null;
+	foreach ( $GLOBALS['wpyeg_test_hooks'] as $entry ) {
+		if ( 'get_comment' === $entry['hook'] ) {
+			$comment = call_user_func( $entry['callback'], $comment );
+		}
+	}
+	return $comment;
+}
+
+/**
  * Hook-removal test double.
  *
  * @param string   $hook     Hook name.
@@ -2925,7 +2946,14 @@ foreach ( $GLOBALS['wpyeg_test_hooks'] as $entry ) {
 	wpyeg_test_assert( $entry['priority'] < 10, 'Every template_redirect callback runs before redirect_canonical (priority below 10).' );
 }
 wpyeg_test_assert( $template_redirects >= 3, 'The author, attachment and comment-feed redirects are all registered.' );
-wpyeg_test_assert( null !== wpyeg_test_find_hook( 'get_comment', 'wpyeg_defaults_hide_rest_comment' ), 'Disabling comments also guards the REST single-comment route.' );
+// During REST post deletion, wp_delete_comment() must still find each row.
+// Returning null here skips cleanup and leaves orphaned comments and metadata.
+$GLOBALS['wpyeg_test_rest_endpoint'] = true;
+$GLOBALS['wpyeg_test_comments'][123] = (object) array( 'comment_type' => 'comment' );
+wpyeg_test_assert( get_comment( 123 ) === $GLOBALS['wpyeg_test_comments'][123], 'REST post deletion can still retrieve ordinary comments for cleanup.' );
+unset( $GLOBALS['wpyeg_test_rest_endpoint'], $GLOBALS['wpyeg_test_comments'] );
+$comment_guard = wpyeg_test_find_hook( 'rest_request_before_callbacks', 'wpyeg_defaults_guard_rest_comment' );
+wpyeg_test_assert( null !== $comment_guard && 3 === $comment_guard['accepted_args'], 'Disabling comments guards REST dispatch with the request available.' );
 unset( $GLOBALS['wpyeg_test_option'] );
 $GLOBALS['wpyeg_test_hooks'] = array();
 
@@ -3004,7 +3032,7 @@ wpyeg_test_assert(
 );
 
 /**
- * Test double for wp_is_rest_endpoint() (WordPress 6.5+).
+ * Test double used to reproduce the former get_comment filter's REST scope.
  *
  * @return bool
  */
@@ -3012,20 +3040,46 @@ function wp_is_rest_endpoint() {
 	return ! empty( $GLOBALS['wpyeg_test_rest_endpoint'] );
 }
 
-$rest_comment                 = new stdClass();
-$rest_comment->comment_type   = 'comment';
-$rest_note                    = new stdClass();
-$rest_note->comment_type      = 'note';
-$legacy_comment               = new stdClass();
-$legacy_comment->comment_type = '';
+$GLOBALS['wpyeg_test_comments'] = array(
+	123 => (object) array( 'comment_type' => 'comment' ),
+	124 => (object) array( 'comment_type' => '' ),
+	125 => (object) array( 'comment_type' => 'note' ),
+	126 => (object) array( 'comment_type' => 'review' ),
+);
+$dispatch_comment               = function ( $route, $result = null, $id = null ) use ( $comment_guard ) {
+	// Model the effective id after core merges URL, query and body parameters.
+	if ( null === $id ) {
+		preg_match( '#/([0-9]+)/?$#', $route, $ids );
+		$id = isset( $ids[1] ) ? (int) $ids[1] : null;
+	}
+	$request = new WP_REST_Request( array( 'id' => $id ), $route );
+	return call_user_func( $comment_guard['callback'], $result, null, $request );
+};
 
-wpyeg_test_assert( wpyeg_defaults_hide_rest_comment( $rest_comment ) === $rest_comment, 'Outside REST, get_comment() still returns the comment.' );
-$GLOBALS['wpyeg_test_rest_endpoint'] = true;
-wpyeg_test_assert( null === wpyeg_defaults_hide_rest_comment( $rest_comment ), 'GET /wp/v2/comments/123 answers 404 while comments are disabled.' );
-wpyeg_test_assert( null === wpyeg_defaults_hide_rest_comment( $legacy_comment ), 'An empty comment_type is an ordinary comment and is hidden too.' );
-wpyeg_test_assert( wpyeg_defaults_hide_rest_comment( $rest_note ) === $rest_note, 'Allowed types still answer over REST.' );
-wpyeg_test_assert( null === wpyeg_defaults_hide_rest_comment( null ), 'A missing comment passes through.' );
-unset( $GLOBALS['wpyeg_test_rest_endpoint'] );
+foreach ( array( '/wp/v2/comments/123', '/wp/v2/comments/123/', '/wp/v2/comments/124', '/WP/v2/COMMENTS/123' ) as $route ) {
+	$blocked_comment = $dispatch_comment( $route );
+	wpyeg_test_assert( is_wp_error( $blocked_comment ) && 'rest_comment_invalid_id' === $blocked_comment->get_error_code() && 404 === $blocked_comment->get_error_data()['status'], 'Single ordinary and legacy comments answer 404, including trailing-slash and mixed-case routes.' );
+}
+wpyeg_test_assert( null === $dispatch_comment( '/wp/v2/comments/125' ), 'Block Notes remain accessible.' );
+wpyeg_test_assert( is_wp_error( $dispatch_comment( '/wp/v2/comments/125', null, 123 ) ), 'An overridden request id cannot expose an ordinary comment through a note URL.' );
+wpyeg_test_assert( null === $dispatch_comment( '/wp/v2/comments/123', null, 125 ), 'The allowlist checks the effective controller id when it points to a note.' );
+wpyeg_test_assert( is_wp_error( $dispatch_comment( '/wp/v2/comments/126' ) ), 'Custom comment types are hidden unless explicitly allowed.' );
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_allowed_comment_types'] = array( 'note', 'review' );
+wpyeg_test_assert( null === $dispatch_comment( '/wp/v2/comments/126' ), 'The comment-type allowlist applies to single-item requests.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_allowed_comment_types'] );
+wpyeg_test_assert( null === $dispatch_comment( '/wp/v2/comments/999' ), 'Missing comments are left to core to reject.' );
+foreach ( array( '/wp/v2/posts/123', '/wp/v2/media/123', '/wp/v2/comments', '/wp/v2/comments/123/extra', '/custom/v1/comments/123' ) as $route ) {
+	wpyeg_test_assert( null === $dispatch_comment( $route ), 'Other routes, including post and attachment deletion, dispatch normally.' );
+}
+$prior_comment_error = new WP_Error( 'prior_error', 'Already refused', array( 'status' => 403 ) );
+wpyeg_test_assert( $prior_comment_error === $dispatch_comment( '/wp/v2/comments/123', $prior_comment_error ), 'A prior dispatch error is preserved.' );
+unset( $GLOBALS['wpyeg_test_comments'] );
+
+$GLOBALS['wpyeg_test_option'] = array( 'disable_comments' => 'no' );
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'rest_request_before_callbacks', 'wpyeg_defaults_guard_rest_comment' ), 'Turning off the policy restores the single-comment route.' );
+unset( $GLOBALS['wpyeg_test_option'] );
+$GLOBALS['wpyeg_test_hooks'] = array();
 
 wpyeg_test_assert( false === wpyeg_defaults_remove_comment_blocks( false ), 'A prior deny-all (false) is preserved, not expanded.' );
 wpyeg_test_assert( array() === wpyeg_defaults_remove_comment_blocks( array() ), 'An empty allowlist is a deliberate deny-all and stays empty.' );

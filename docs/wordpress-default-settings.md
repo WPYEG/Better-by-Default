@@ -385,10 +385,10 @@ add_action( 'template_redirect', 'wpyeg_defaults_block_comment_feeds', 9 );
 // has. Block Notes (WordPress 6.9, comment_type 'note') stay queryable.
 add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
 
-// ...except /wp/v2/comments/123, which reads one row through get_comment() and
-// builds no query. Over REST only, return null for disallowed types: the
-// controller answers 404, and the admin and notifications still see comments.
-add_filter( 'get_comment', 'wpyeg_defaults_hide_rest_comment' );
+// The single-item route builds no query. Guard that route's dispatch with a
+// type-aware 404, leaving get_comment() intact for other REST operations such
+// as post deletion, which needs to remove the post's comments and metadata.
+add_filter( 'rest_request_before_callbacks', 'wpyeg_defaults_guard_rest_comment', 10, 3 );
 
 // Take the comment blocks out of the inserter: with comments off they can only
 // render nothing.
