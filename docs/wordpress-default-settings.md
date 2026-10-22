@@ -385,6 +385,11 @@ add_action( 'template_redirect', 'wpyeg_defaults_block_comment_feeds', 9 );
 // has. Block Notes (WordPress 6.9, comment_type 'note') stay queryable.
 add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
 
+// ...except /wp/v2/comments/123, which reads one row through get_comment() and
+// builds no query. Over REST only, return null for disallowed types: the
+// controller answers 404, and the admin and notifications still see comments.
+add_filter( 'get_comment', 'wpyeg_defaults_hide_rest_comment' );
+
 // Take the comment blocks out of the inserter: with comments off they can only
 // render nothing.
 add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
@@ -579,13 +584,18 @@ add_action( 'pre_ping', function ( &$links ) {
 - **Why:** Author archive URLs (`/author/{slug}/`) are another username-enumeration path and
   usually thin, duplicate content. Redirect them home.
 
+Register it at priority **9**, not the default 10. Core hooks `redirect_canonical` to
+`template_redirect` at 10 before any plugin loads, so a callback at 10 runs after it, and
+`/?author=N` canonical-redirects to `/author/{nicename}/` first, which publishes the very
+username this setting hides. The attachment redirect below needs the same priority.
+
 ```php
 add_action( 'template_redirect', function () {
     if ( is_author() ) {
         wp_safe_redirect( home_url( '/' ), 301 );
         exit;
     }
-} );
+}, 9 ); // Ahead of core's redirect_canonical at 10.
 ```
 
 ### Redirect Attachment Pages
@@ -636,7 +646,7 @@ add_action( 'template_redirect', function () {
 
     wp_safe_redirect( $target, 301 );
     exit;
-} );
+}, 9 );
 ```
 
 > **Offloaded media:** if the file lives on S3 or a CDN, `wp_safe_redirect()` will refuse the

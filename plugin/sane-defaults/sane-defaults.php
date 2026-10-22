@@ -997,6 +997,9 @@ function wpyeg_defaults_bootstrap() {
 		// most of all — goes to the database and answers normally without this.
 		add_filter( 'comments_pre_query', 'wpyeg_defaults_empty_comment_queries', 10, 2 );
 
+		// ...except /wp/v2/comments/123, which builds no query at all.
+		add_filter( 'get_comment', 'wpyeg_defaults_hide_rest_comment' );
+
 		// Take the comment blocks out of the inserter: on a site with comments off
 		// they can only render nothing.
 		add_filter( 'allowed_block_types_all', 'wpyeg_defaults_remove_comment_blocks', PHP_INT_MAX );
@@ -1031,6 +1034,14 @@ function wpyeg_defaults_bootstrap() {
 		);
 	}
 
+	/*
+	 * Both redirects below run at priority 9, not the default 10. Core hooks
+	 * redirect_canonical to template_redirect at 10 in default-filters.php,
+	 * before any plugin loads, so a plugin at 10 always runs after it. That let
+	 * /?author=N canonical-redirect to /author/nicename/ (publishing the very
+	 * name this hides) and let attachment pages render. Keel's security review
+	 * caught it; the comment-feed block above was already at 9.
+	 */
 	if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
 		add_action(
 			'template_redirect',
@@ -1039,7 +1050,8 @@ function wpyeg_defaults_bootstrap() {
 					wp_safe_redirect( home_url( '/' ), 301 );
 					exit;
 				}
-			}
+			},
+			9
 		);
 		// Redirecting /author/ pages does not stop feeds naming the author in
 		// every <dc:creator> element, so the login names this default exists to
@@ -1085,7 +1097,8 @@ function wpyeg_defaults_bootstrap() {
 
 				wp_safe_redirect( $target, 301 );
 				exit;
-			}
+			},
+			9
 		);
 	}
 
@@ -1627,6 +1640,52 @@ function wpyeg_defaults_empty_comment_queries( $comment_data, $query ) {
 }
 
 /**
+ * Hide disallowed comment types from the REST single-item route.
+ *
+ * The comments_pre_query filter covers WP_Comment_Query, every listing path, but
+ * not this one. WP_REST_Comments_Controller::get_comment() calls core's
+ * get_comment(), which reads the row through WP_Comment::get_instance() without
+ * building a query, so the filter above never runs and `/wp/v2/comments/123`
+ * kept answering on a site with comments disabled. Ported from Keel, where an
+ * external security review found it.
+ *
+ * Scoped to REST rather than filtering get_comment() everywhere: the admin,
+ * wp_notify_postauthor() and every other caller still get real comments. Only
+ * the public API answers by the policy. Type-aware for the same reason the
+ * query filter is, so allowed types such as Block Notes keep working.
+ *
+ * @param WP_Comment|null $comment The comment, or null.
+ * @return WP_Comment|null
+ */
+function wpyeg_defaults_hide_rest_comment( $comment ) {
+	if ( ! is_object( $comment ) || ! isset( $comment->comment_type ) ) {
+		return $comment;
+	}
+
+	// wp_is_rest_endpoint() is 6.5+; this plugin supports 6.4, which only has
+	// the constant rest_api_loaded() defines. Note that wp_is_rest_request()
+	// does not exist — Keel asked for it behind function_exists() and the guard
+	// silently never fired.
+	$is_rest = function_exists( 'wp_is_rest_endpoint' )
+		? wp_is_rest_endpoint()
+		: ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+
+	if ( ! $is_rest ) {
+		return $comment;
+	}
+
+	$type = '' === (string) $comment->comment_type ? 'comment' : (string) $comment->comment_type;
+
+	if ( in_array( $type, wpyeg_defaults_allowed_comment_types(), true ) ) {
+		return $comment;
+	}
+
+	// The controller turns an empty comment into its own 404, which is the
+	// honest answer: on this site that route has nothing to return.
+	return null;
+}
+
+/**
  * Comment blocks removed from the inserter while comments are disabled.
  *
  * @return string[]
@@ -2004,7 +2063,36 @@ function wpyeg_defaults_password_enforced_for_user( $user ) {
  */
 function wpyeg_defaults_validate_password( $password, $user = null ) {
 	/*
-	 * Breach screening runs first, for every account, exempt or not. The role
+	 * Two rejections that cost nothing come before the network call.
+	 *
+	 * Breach screening otherwise runs ahead of every cheap check, so anyone who
+	 * can reach a password field can drive one outbound request and one cache
+	 * entry per submission, with the prefix of their choosing. Moving the role
+	 * gate first would fix that by exempting low-privilege accounts from the one
+	 * rule that costs them nothing, which is the wrong trade.
+	 *
+	 * What is safe to move ahead is anything that can never be a valid password
+	 * whatever the role: nothing at all, and something longer than WordPress
+	 * will hash. That narrows the amplification without closing it; closing it
+	 * takes a rate limit. Ported from Keel's 0.6.0 security review.
+	 */
+	if ( '' === (string) $password ) {
+		return new WP_Error(
+			'wpyeg_password_empty',
+			__( '<strong>Error:</strong> Enter a password.', 'sane-defaults' )
+		);
+	}
+
+	// 4096 bytes is WordPress's own PHP_PASSWORD_MAX limit.
+	if ( strlen( (string) $password ) > 4096 ) {
+		return new WP_Error(
+			'wpyeg_password_too_long',
+			__( '<strong>Error:</strong> That password is too long.', 'sane-defaults' )
+		);
+	}
+
+	/*
+	 * Breach screening runs next, for every account, exempt or not. The role
 	 * gate below deliberately sits after it — see that function's docblock for
 	 * why the order is the whole design.
 	 */
@@ -2349,7 +2437,18 @@ function wpyeg_defaults_rest_password_context( $request ) {
 		$user_id = (int) $request['id'];
 	}
 
-	if ( $user_id ) {
+	/*
+	 * Only resolve a user the caller may actually edit.
+	 *
+	 * Sanitize callbacks run BEFORE authorization: WP_REST_Server calls
+	 * sanitize_params() and only then the route's permission_callback. So by
+	 * the time core refuses a subscriber's PUT to /wp/v2/users/123, this has
+	 * already been handed 123. Resolving it anyway ran the password policy
+	 * against another account's login, email and nicename and returned the
+	 * verdict in the validation error, an oracle for whether a guessed string
+	 * appears in someone else's user record. Ported from Keel's security review.
+	 */
+	if ( $user_id && ( get_current_user_id() === $user_id || current_user_can( 'edit_user', $user_id ) ) ) {
 		$existing = get_userdata( $user_id );
 		if ( $existing ) {
 			return $existing;

@@ -1385,6 +1385,13 @@ $update_request = new WP_REST_Request( array( 'id' => 12 ), '/wp/v2/users/12' );
 $update         = wpyeg_test_sanitize_rest_password( $guarded, '/wp/v2/users/(?P<id>[\d]+)', 'administratorlonghorse', $update_request );
 wpyeg_test_assert( is_wp_error( $update ) && 'wpyeg_password_personal' === $update->get_error_code(), 'An update is checked against the stored user the route points at.' );
 
+// Sanitize callbacks run before the permission check, so a caller who may not
+// edit user 12 must not learn whether a guess matches user 12's record.
+$GLOBALS['wpyeg_test_can'] = false;
+$unauthorized_update       = wpyeg_test_sanitize_rest_password( $guarded, '/wp/v2/users/(?P<id>[\d]+)', 'administratorlonghorse', $update_request );
+wpyeg_test_assert( 'administratorlonghorse' === $unauthorized_update, "A caller who cannot edit the target is not checked against that user's record." );
+unset( $GLOBALS['wpyeg_test_can'] );
+
 // /wp/v2/users/me carries no id; the context is the authenticated user.
 $GLOBALS['wpyeg_test_current_user'] = 12;
 $me_request                         = new WP_REST_Request( array(), '/wp/v2/users/me' );
@@ -1687,6 +1694,15 @@ $GLOBALS['wpyeg_test_last_http_url']                       = null;
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( 'a password nobody has' ), 'With screening off the answer is "not breached".' );
 wpyeg_test_assert( null === $GLOBALS['wpyeg_test_last_http_url'], 'And nothing leaves the server: the filter short-circuits before wp_remote_get.' );
 unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_disable_hibp'] );
+
+// Two passwords can never be valid whatever the role, so they are refused before
+// screening rather than each costing an outbound lookup and a cache entry.
+$GLOBALS['wpyeg_test_last_http_url'] = null;
+$empty_password                      = wpyeg_defaults_validate_password( '' );
+wpyeg_test_assert( is_wp_error( $empty_password ) && 'wpyeg_password_empty' === $empty_password->get_error_code(), 'An empty password is refused.' );
+$huge_password = wpyeg_defaults_validate_password( str_repeat( 'a', 4097 ) );
+wpyeg_test_assert( is_wp_error( $huge_password ) && 'wpyeg_password_too_long' === $huge_password->get_error_code(), 'A password longer than WordPress will hash is refused.' );
+wpyeg_test_assert( null === $GLOBALS['wpyeg_test_last_http_url'], 'Neither free rejection reaches the breach API.' );
 
 // A host or CDN may already own these — but "already set" is not the same as
 // "stronger", and deferring to a weaker value lets it win purely by arriving
@@ -2888,6 +2904,32 @@ unset( $GLOBALS['wpyeg_test_option'] );
 $GLOBALS['wpyeg_test_hooks'] = array();
 
 /*
+ * Every template_redirect callback must run ahead of core's redirect_canonical,
+ * which core registers at 10 before any plugin loads. A plugin at 10 loses the
+ * tie on registration order, so /?author=N canonical-redirected to the very
+ * nicename the author default hides. The unit stubs never run hooks, so the
+ * priority is the only thing a test here can see — check it for every one.
+ */
+$GLOBALS['wpyeg_test_option'] = array(
+	'disable_author_archives'   => 'yes',
+	'redirect_attachment_pages' => 'yes',
+	'disable_comments'          => 'yes',
+);
+wpyeg_defaults_bootstrap();
+$template_redirects = 0;
+foreach ( $GLOBALS['wpyeg_test_hooks'] as $entry ) {
+	if ( 'template_redirect' !== $entry['hook'] ) {
+		continue;
+	}
+	++$template_redirects;
+	wpyeg_test_assert( $entry['priority'] < 10, 'Every template_redirect callback runs before redirect_canonical (priority below 10).' );
+}
+wpyeg_test_assert( $template_redirects >= 3, 'The author, attachment and comment-feed redirects are all registered.' );
+wpyeg_test_assert( null !== wpyeg_test_find_hook( 'get_comment', 'wpyeg_defaults_hide_rest_comment' ), 'Disabling comments also guards the REST single-comment route.' );
+unset( $GLOBALS['wpyeg_test_option'] );
+$GLOBALS['wpyeg_test_hooks'] = array();
+
+/*
  * Comment teardown: the parts that reach past the theme template.
  *
  * The REST case is the one that matters. Core's comments controller declares
@@ -2960,6 +3002,30 @@ wpyeg_test_assert(
 	array() === wpyeg_defaults_empty_comment_queries( null, null ),
 	'A query object without query vars is answered empty rather than let through.'
 );
+
+/**
+ * Test double for wp_is_rest_endpoint() (WordPress 6.5+).
+ *
+ * @return bool
+ */
+function wp_is_rest_endpoint() {
+	return ! empty( $GLOBALS['wpyeg_test_rest_endpoint'] );
+}
+
+$rest_comment                 = new stdClass();
+$rest_comment->comment_type   = 'comment';
+$rest_note                    = new stdClass();
+$rest_note->comment_type      = 'note';
+$legacy_comment               = new stdClass();
+$legacy_comment->comment_type = '';
+
+wpyeg_test_assert( wpyeg_defaults_hide_rest_comment( $rest_comment ) === $rest_comment, 'Outside REST, get_comment() still returns the comment.' );
+$GLOBALS['wpyeg_test_rest_endpoint'] = true;
+wpyeg_test_assert( null === wpyeg_defaults_hide_rest_comment( $rest_comment ), 'GET /wp/v2/comments/123 answers 404 while comments are disabled.' );
+wpyeg_test_assert( null === wpyeg_defaults_hide_rest_comment( $legacy_comment ), 'An empty comment_type is an ordinary comment and is hidden too.' );
+wpyeg_test_assert( wpyeg_defaults_hide_rest_comment( $rest_note ) === $rest_note, 'Allowed types still answer over REST.' );
+wpyeg_test_assert( null === wpyeg_defaults_hide_rest_comment( null ), 'A missing comment passes through.' );
+unset( $GLOBALS['wpyeg_test_rest_endpoint'] );
 
 wpyeg_test_assert( false === wpyeg_defaults_remove_comment_blocks( false ), 'A prior deny-all (false) is preserved, not expanded.' );
 wpyeg_test_assert( array() === wpyeg_defaults_remove_comment_blocks( array() ), 'An empty allowlist is a deliberate deny-all and stays empty.' );
