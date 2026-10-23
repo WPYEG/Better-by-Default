@@ -171,8 +171,8 @@ add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
 > still breaks incoming WordPress.com requests; the plugin now allows Jetpack-verified batches.
 > Site Health reports the local policy for connected Jetpack sites: critical for an endpoint block,
 > recommended when signature verification is unavailable, and good when verified requests are
-> permitted or multicall is explicitly allowed. This is not an end-to-end connectivity test; test the connection and the
-> features the site uses. Keep Remote Publishing enabled until that testing proves it unnecessary.
+> permitted or multicall is explicitly allowed. This is not an end-to-end connectivity test;
+> test the connection and the features the site uses. Keep Remote Publishing enabled until that testing proves it unnecessary.
 > A plugin-level 403 still boots WordPress and occupies PHP; only an edge block prevents the request
 > from reaching PHP. See [Jetpack's current requirements](https://jetpack.com/support/getting-started-with-jetpack/).
 > **`demo.*`:** the inert `demo.sayHello`/`demo.addTwoNumbers` methods still confirm XML-RPC is

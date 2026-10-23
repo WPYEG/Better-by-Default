@@ -826,9 +826,9 @@ function wpyeg_defaults_bootstrap() {
 					 */
 					class Wpyeg_Multicall_Disabled_Server extends wp_xmlrpc_server {
 						/**
-						 * Refuse the batching wrapper.
+						 * Refuse the batching wrapper unless Jetpack verifies the request.
 						 *
-						 * @param array $methodcalls Batched calls, ignored.
+						 * @param array $methodcalls Batched calls forwarded unchanged after verification.
 						 * @return array|IXR_Error
 						 */
 						public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
