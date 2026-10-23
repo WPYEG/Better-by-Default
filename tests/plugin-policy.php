@@ -3105,6 +3105,8 @@ wpyeg_test_assert(
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack absent, no warning is shown.' );
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'The warning belongs to the endpoint block, not to every setting.' );
 
+wpyeg_test_assert( array() === wpyeg_defaults_site_health_tests( array() ), 'Without Jetpack, no compatibility check is added to Site Health.' );
+
 define( 'JETPACK__VERSION', '14.0' );
 wpyeg_test_assert( '' !== wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack active, the endpoint block carries a warning.' );
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'Even with Jetpack active the warning stays on its own setting.' );
