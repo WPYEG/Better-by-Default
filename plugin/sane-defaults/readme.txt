@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.5
+Stable tag: 1.2.6
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -109,7 +109,7 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
-= Unreleased =
+= 1.2.6 =
 * Settings descriptions use more literal explanations, define useful technical terms, and explain the three wp-config.php examples. Setting behaviour and defaults are unchanged.
 
 = 1.2.5 =
@@ -198,6 +198,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.2.6 =
+Settings descriptions and configuration examples are clearer. Setting behaviour and defaults are unchanged.
 
 = 1.2.5 =
 Jetpack-verified WordPress.com multicalls are now permitted while general multicall remains disabled. Refused batches return an XML-RPC fault over HTTP 200 instead of HTTP 405. An explicit full-endpoint block still takes precedence; Site Health reports the local XML-RPC policy for connected Jetpack sites. AI connector help now explains its effect on Jetpack AI features, without changing the setting or its default.
