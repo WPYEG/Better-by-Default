@@ -2719,7 +2719,7 @@ function wpyeg_defaults_render_hibp_notice() {
 		: ( 0 === strpos( $kind, 'http_' )
 			? sprintf(
 				/* translators: %s: HTTP status code. */
-				__( 'the service answered with HTTP %s', 'sane-defaults' ),
+				__( 'the service returned HTTP %s', 'sane-defaults' ),
 				substr( $kind, 5 )
 			)
 			: __( 'the lookup did not complete', 'sane-defaults' ) );
@@ -3166,7 +3166,7 @@ function wpyeg_defaults_section_labels() {
 		'headers'        => __( 'Response Headers', 'sane-defaults' ),
 		'ai'             => __( 'AI Features', 'sane-defaults' ),
 		'comments'       => __( 'Comments and Pings', 'sane-defaults' ),
-		'thin_pages'     => __( 'Thin Public Pages', 'sane-defaults' ),
+		'thin_pages'     => __( 'Author and Attachment Pages', 'sane-defaults' ),
 		'frontend'       => __( 'Front-End Output', 'sane-defaults' ),
 		'editor'         => __( 'Editor', 'sane-defaults' ),
 		'admin_search'   => __( 'Admin Search', 'sane-defaults' ),
