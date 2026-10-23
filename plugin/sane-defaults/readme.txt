@@ -107,6 +107,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= Unreleased =
+* AI connector help now explains that closing the shared AI support gate also disables Jetpack AI features. A contextual note appears when Jetpack is active; the default and runtime policy are unchanged.
+
 = 1.2.4 =
 * The login header link pointed at the wrong place. It was `add_filter( 'login_headerurl', 'home_url' )`, but a filter hands its callback the value being filtered and `home_url()` reads its first argument as a path, so every site with the logo removed, unlinked or replaced linked to `https://example.com/https://wordpress.org/`. It links to the site's home page now, as it always claimed to.
 * "Disable comments" reports a zero comment count as the string `'0'`, which is what core returns, instead of the integer `0`. Core's Comments Title block compares strictly, so on block themes it rendered a comments heading over a thread with nothing in it.

@@ -3105,7 +3105,22 @@ wpyeg_test_assert(
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack absent, no warning is shown.' );
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'The warning belongs to the endpoint block, not to every setting.' );
 
+wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_ai_connectors' ), 'Without Jetpack, the AI setting has no Jetpack-specific note.' );
+ob_start();
+wpyeg_defaults_render_control( 'disable_ai_connectors', $jetpack_schema['disable_ai_connectors'], true );
+$ai_without_jetpack = ob_get_clean();
+wpyeg_test_assert( false === strpos( $ai_without_jetpack, 'Jetpack is active on this site.' ), 'An inactive Jetpack adds no contextual note to the rendered AI control.' );
+
 define( 'JETPACK__VERSION', '14.0' );
+$jetpack_ai_note = wpyeg_defaults_jetpack_warning( 'disable_ai_connectors' );
+wpyeg_test_assert( false !== strpos( $jetpack_ai_note, 'AI Assistant' ), 'With Jetpack active, the AI setting explains its effect on Jetpack AI Assistant.' );
+ob_start();
+wpyeg_defaults_render_control( 'disable_ai_connectors', $jetpack_schema['disable_ai_connectors'], true );
+$ai_with_jetpack = ob_get_clean();
+wpyeg_test_assert( false !== strpos( $ai_with_jetpack, 'Jetpack follows this setting' ), 'The Jetpack-specific AI note is rendered beside the setting.' );
+$GLOBALS['wpyeg_test_option'] = array( 'disable_ai_connectors' => 'no' );
+wpyeg_test_assert( false !== strpos( wpyeg_defaults_jetpack_warning( 'disable_ai_connectors' ), 'while Disable AI connectors is on' ), 'The note describes the conditional effect accurately even while the setting is off.' );
+unset( $GLOBALS['wpyeg_test_option'] );
 wpyeg_test_assert( '' !== wpyeg_defaults_jetpack_warning( 'block_xmlrpc_endpoint' ), 'With Jetpack active, the endpoint block carries a warning.' );
 wpyeg_test_assert( '' === wpyeg_defaults_jetpack_warning( 'disable_rest' ), 'Even with Jetpack active the warning stays on its own setting.' );
 
