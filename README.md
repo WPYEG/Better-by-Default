@@ -4,8 +4,7 @@
 
 A small, data-driven plugin that flips a menu of sensible security, UX, SEO, and performance
 defaults onto any WordPress install — each one individually toggleable under
-**Settings → Better by Default**. Built as the teaching project for the
-[WPYEG — Edmonton WordPress Meetup](https://wpyeg.ca/).
+**Settings → Better by Default**. Built as the teaching project for the WPYEG — Edmonton WordPress Meetup.
 
 Default settings are powerful things. Here they are opinionated filters sitting behind a toggle. Whose opinions do they reflect? Don't let your site be a product of an environment you didn't define. Make your environment a thoughtful product of your own intentions.
 
