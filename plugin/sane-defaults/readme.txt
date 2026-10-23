@@ -109,6 +109,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
+= Unreleased =
+* Settings descriptions use more literal explanations, define useful technical terms, and explain the three wp-config.php examples. Setting behaviour and defaults are unchanged.
+
 = 1.2.5 =
 * AI connector help now explains that closing the shared AI support gate also disables Jetpack AI features. A contextual note appears when Jetpack is active; the default and runtime policy are unchanged.
 * XML-RPC multicall now permits requests Jetpack verifies as signed by WordPress.com while refusing all other batches. Refusals use fault -32601 over HTTP 200 instead of a transport-breaking 405. Site Health reports the XML-RPC policy for connected Jetpack sites.

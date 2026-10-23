@@ -87,15 +87,15 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'rest',
 			'label'   => 'Restrict REST API user discovery',
-			'help'    => 'Hides <code>/wp/v2/users</code> from logged-out requests (stops username enumeration).',
+			'help'    => 'Prevents visitors who are not logged in from listing users through <code>/wp/v2/users</code>. This limits username discovery through the REST API.',
 		),
 		'disable_rest'                    => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'security',
 			'section' => 'rest',
-			'label'   => 'Require auth for all REST requests',
-			'help'    => 'Blocks anonymous REST entirely. The logged-in block editor still works, but public blocks, embeds, search, and integrations may not.',
+			'label'   => 'Require login for REST API requests',
+			'help'    => 'Requires login for REST API requests, except public oEmbed requests used to embed posts on other sites. The block editor still works for logged-in users. Public blocks, search and integrations may stop working.',
 		),
 		'xmlrpc_allow_pingbacks'          => array(
 			'default' => 'no',
@@ -103,7 +103,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'xmlrpc',
 			'label'   => 'Accept incoming pingbacks',
-			'help'    => 'OFF (default) removes <code>pingback.ping</code> — a spam/reflection-DDoS vector — and the <code>X-Pingback</code> header.',
+			'help'    => 'Off by default. Removes incoming pingback methods, including <code>pingback.ping</code>, and the <code>X-Pingback</code> header. This prevents spam pingbacks and requests that use your site to send traffic to another site.',
 		),
 		'xmlrpc_allow_remote_publishing'  => array(
 			'default' => 'no',
@@ -111,7 +111,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'xmlrpc',
 			'label'   => 'Allow remote publishing (blogging apps)',
-			'help'    => 'OFF (default) removes credential-authenticated <code>wp.*</code>, <code>metaWeblog.*</code>, <code>mt.*</code>, and <code>blogger.*</code> methods plus the RSD link. Leave ON while Jetpack is active unless connection and feature testing proves it unnecessary.',
+			'help'    => 'Off by default. Removes the <code>wp.*</code>, <code>metaWeblog.*</code>, <code>mt.*</code> and <code>blogger.*</code> methods used by blogging apps, plus the RSD discovery link. Leave on while Jetpack is active unless connection and feature testing proves it unnecessary.',
 		),
 		'xmlrpc_allow_multicall'          => array(
 			'default' => 'no',
@@ -119,7 +119,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'xmlrpc',
 			'label'   => 'Allow system.multicall',
-			'help'    => 'OFF (default) refuses <code>system.multicall</code> except requests Jetpack verifies as signed by WordPress.com. Jetpack uses multicall to manage connected sites. WordPress 4.4 stopped it being a password-guessing multiplier; refusing other batches is modest defence-in-depth, not a password control.',
+			'help'    => 'Off by default. <code>system.multicall</code> combines several XML-RPC calls into one request. Only requests Jetpack verifies as signed by WordPress.com are allowed. This limits other batched requests; WordPress already prevents repeated password guesses after the first failed login in a request.',
 		),
 		'block_xmlrpc_endpoint'           => array(
 			'default' => 'no',
@@ -127,7 +127,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'xmlrpc',
 			'label'   => 'Block the endpoint entirely (returns 403)',
-			'help'    => 'Strictest tier — <code>xmlrpc.php</code> returns <code>403</code> for every request. Leave XML-RPC reachable while Jetpack is active, unless connection and feature testing proves Jetpack no longer needs it. Prefer an edge block when possible; this plugin-level block still boots PHP.',
+			'help'    => 'Returns HTTP <code>403</code> for every request to <code>xmlrpc.php</code>, including Jetpack requests. Leave off while Jetpack is active unless connection and feature testing proves it unnecessary. Blocking requests at your CDN, firewall or web server also avoids running PHP.',
 		),
 		'disable_application_passwords'   => array(
 			'default' => 'no',
@@ -135,7 +135,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'credentials',
 			'label'   => 'Prohibit Application Passwords',
-			'help'    => 'OFF (default) keeps them available — separate, revocable integration credentials for REST and XML-RPC. They inherit the owning user\'s access and bypass interactive 2FA, so use a least-privileged account.',
+			'help'    => 'Off by default, so Application Passwords remain available. These are separate passwords for REST and XML-RPC integrations that you can revoke individually. They allow the same actions as the associated user and do not prompt for two-factor authentication. Use an account with only the permissions the integration needs.',
 		),
 		'require_strong_passwords'        => array(
 			'default' => 'yes',
@@ -143,7 +143,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'credentials',
 			'label'   => 'Require strong passwords',
-			'help'    => 'Server-side rule: 15+ characters, screened against known breaches, checked against a small blocklist, and not built from your username or the name part of your email. No forced uppercase, number, or symbol rules. The readme describes exactly what the breach check sends.',
+			'help'    => 'Checks every account for passwords found in known breaches. Other checks require 15 characters and reject common passwords, usernames and the name part of email addresses; subscriber-only accounts are exempt. Does not require uppercase letters, numbers or symbols. The readme explains what the breach check sends.',
 		),
 		'limit_unfiltered_html_to_admins' => array(
 			'default' => 'yes',
@@ -151,7 +151,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'capabilities',
 			'label'   => 'Limit unfiltered HTML to administrators',
-			'help'    => 'Editors hold <code>unfiltered_html</code> on single-site installs, which is enough to save a raw <code>&lt;script&gt;</code> into a post. This removes it from everyone except administrators (and Super Admins on multisite).',
+			'help'    => 'On single-site installations, Editors can normally save HTML that includes <code>&lt;script&gt;</code> elements. This removes that permission from everyone except administrators and, on multisite, Super Admins.',
 		),
 		'remove_version'                  => array(
 			'default' => 'no',
@@ -159,7 +159,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'disclosure',
 			'label'   => 'Remove WordPress version fingerprint',
-			'help'    => 'Strips the generator meta tag. Obscurity, not hardening: it trims scanner noise but does not make an out-of-date site any safer, and the version still leaks from asset query strings and feeds. Off by default — patch instead. Turn on if you want the noise reduction.',
+			'help'    => 'Removes the generator meta tag, one source of the WordPress version fingerprint used by automated scanners. Other URLs or responses may still include the version. This does not protect outdated software; keep WordPress updated.',
 		),
 		'security_headers'                => array(
 			'default' => 'yes',
@@ -167,7 +167,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'headers',
 			'label'   => 'Send baseline security headers',
-			'help'    => '<code>X-Content-Type-Options: nosniff</code> and <code>Referrer-Policy: strict-origin-when-cross-origin</code>. Both are low-risk. Framing is controlled separately below, because that is the one that can break a site. Already-set headers are never overwritten.',
+			'help'    => 'Sets <code>X-Content-Type-Options: nosniff</code> and adds <code>Referrer-Policy: strict-origin-when-cross-origin</code> if no referrer policy is set. Corrects invalid content-type options. Control iframe embedding separately below.',
 		),
 		'frame_options'                   => array(
 			'default' => 'SAMEORIGIN',
@@ -175,10 +175,10 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'headers',
 			'label'   => 'X-Frame-Options (clickjacking)',
-			'help'    => 'Controls who may embed this site in an iframe. <code>SAMEORIGIN</code> blocks cross-origin framing, which stops clickjacking but also breaks legitimate embeds — an intranet dashboard, a screenshot or visual-review service, a kiosk or signage screen — usually as a silent blank frame. Leave unchanged if your host or CDN already sets <code>X-Frame-Options</code>, or if the site is meant to be embedded elsewhere.',
+			'help'    => 'Controls whether another page may display this site in an iframe. <code>SAMEORIGIN</code> permits pages on the same origin; <code>DENY</code> prevents all iframe embedding. This helps prevent clickjacking, where a misleading page tricks visitors into clicking an embedded site. It can also prevent intended embeds from displaying. Leave unchanged if another service configures this header or the site must be embedded elsewhere.',
 			'choices' => array(
-				'SAMEORIGIN' => 'SAMEORIGIN — only this site may frame it',
-				'DENY'       => 'DENY — nobody may frame it',
+				'SAMEORIGIN' => 'SAMEORIGIN — allow embedding on the same origin',
+				'DENY'       => 'DENY — prevent all iframe embedding',
 				''           => 'Leave unchanged (host/CDN sets it, or the site is embedded elsewhere)',
 			),
 		),
@@ -188,7 +188,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'ai',
 			'label'   => 'Disable AI connectors',
-			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the <code>wp_supports_ai</code> gate and closes the core Connectors screen. Plugins that honour this gate, including Jetpack, also disable their AI features. Also fires <code>wpyeg_disable_ai_connectors</code> for AI integrations core does not know about.',
+			'help'    => 'Disables WordPress AI provider connectors using <code>wp_supports_ai</code>, the shared gate that controls whether AI features are enabled. Plugins that use this gate, including Jetpack, also disable their AI features. Prevents access to the core Connectors screen and runs <code>wpyeg_disable_ai_connectors</code> for other AI integrations.',
 		),
 
 		// --- Updates ----------------------------------------------------
@@ -197,12 +197,12 @@ function wpyeg_defaults_schema() {
 			'type'    => 'select',
 			'group'   => 'updates',
 			'label'   => 'Automatic WordPress Core Updates',
-			'help'    => 'Maintenance and security releases install automatically by default. Major releases should be tested and deployed within 30 days. An explicit <code>wp-config.php</code> policy takes precedence.',
+			'help'    => 'Installs maintenance and security releases automatically by default. Test major releases before installing them, preferably within 30 days. Update settings in <code>wp-config.php</code> override this selection.',
 			'choices' => array(
 				'minor'   => 'Maintenance/security releases only — recommended',
 				'all'     => 'All stable releases',
 				'manual'  => 'No automatic core releases',
-				'inherit' => 'Leave unchanged (WordPress, host, or another plugin decides)',
+				'inherit' => 'Leave unchanged (use WordPress, hosting or other plugin settings)',
 			),
 		),
 		// --- Content and public surfaces ---------------------------------
@@ -212,15 +212,15 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'comments',
 			'label'   => 'Disable comments, trackbacks and pingbacks',
-			'help'    => 'Closes comments everywhere, hides existing threads, removes the admin menu.',
+			'help'    => 'Prevents new comments, trackbacks and pingbacks. Hides existing comments from visitors and removes the Comments menu. Editorial notes remain available.',
 		),
 		'disable_pingbacks'               => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'section' => 'comments',
-			'label'   => 'Default new posts to pings closed',
-			'help'    => 'Sets the "allow pingbacks" default to off for newly created content.',
+			'label'   => 'Disable pingbacks and trackbacks on new posts',
+			'help'    => 'Sets pingbacks and trackbacks to off by default for new posts. Existing posts are unchanged.',
 		),
 		'disable_self_pingbacks'          => array(
 			'default' => 'yes',
@@ -228,7 +228,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'comments',
 			'label'   => 'Disable self-pingbacks',
-			'help'    => 'Stops internal links from generating pingback noise.',
+			'help'    => 'Prevents a link between posts on this site from creating a pingback notification.',
 		),
 		'disable_author_archives'         => array(
 			'default' => 'yes',
@@ -236,7 +236,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'thin_pages',
 			'label'   => 'Disable public author archives',
-			'help'    => 'Redirects <code>/author/{slug}/</code> to home (another enumeration + thin-content fix).',
+			'help'    => 'Redirects <code>/author/{slug}/</code> to the home page. This removes public author archives, which can reveal usernames and repeat content listed elsewhere.',
 		),
 		'redirect_attachment_pages'       => array(
 			'default' => 'yes',
@@ -244,7 +244,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'thin_pages',
 			'label'   => 'Redirect attachment pages',
-			'help'    => 'Sends thin attachment pages to the parent post, or to the file itself when the media is unattached. Skipped automatically when the theme provides <code>attachment.php</code> or <code>image.php</code>, since that theme meant to render them. Core has its own switch since 6.4 (<code>wp_attachment_pages_enabled</code>); this prefers the parent post over the bare file.',
+			'help'    => 'Redirects an attachment page to its parent post, or to the media file if there is no parent. Does not redirect when the active theme includes <code>attachment.php</code> or <code>image.php</code>.',
 		),
 		'disable_emojis'                  => array(
 			'default' => 'yes',
@@ -252,7 +252,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'frontend',
 			'label'   => 'Disable emoji script',
-			'help'    => 'Removes the emoji detection script + inline CSS from every page.',
+			'help'    => 'Removes the emoji detection script and its inline CSS from site pages.',
 		),
 
 		'disable_post_passwords'          => array(
@@ -261,15 +261,15 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'editor',
 			'label'   => 'Hide post-password protection',
-			'help'    => 'Hides the "Password protected" visibility option in the editor. Post passwords are weak and full-page caches bypass them. Cosmetic and non-destructive: it changes no data, and a post that already has a password keeps its field so it stays editable.',
+			'help'    => 'Hides the "Password protected" option for posts without a password. Existing post passwords remain editable. This does not change stored passwords or post visibility. Post passwords provide limited protection, and full-page caching can bypass password checks.',
 		),
 		'force_classic_editor'            => array(
 			'default' => 'no',
 			'type'    => 'toggle',
 			'group'   => 'content',
 			'section' => 'editor',
-			'label'   => 'Force the classic editor',
-			'help'    => 'Restores the pre-block editing experience for posts, pages, and custom post types, plus the classic Widgets screen. Front-end display of existing block content is unaffected.',
+			'label'   => 'Use the classic editor',
+			'help'    => 'Uses the classic editor for posts, pages and custom post types, and the classic Widgets screen. Existing block content is displayed as before on the public site.',
 		),
 
 		// --- Admin and front-end UX --------------------------------------
@@ -279,14 +279,14 @@ function wpyeg_defaults_schema() {
 			'group'   => 'ux',
 			'section' => 'admin_search',
 			'label'   => 'Title-only admin search',
-			'help'    => 'Speeds up admin list-table search on big sites by matching titles only.',
+			'help'    => 'Searches titles instead of full content in admin post lists. This can make searches faster on large sites.',
 		),
 		'frontend_admin_bar_behavior'     => array(
 			'default' => '',
 			'type'    => 'select',
 			'group'   => 'ux',
 			'label'   => 'Front-End Admin Bar',
-			'help'    => 'The WordPress toolbar shown across the top of the site for logged-in users. Hide it for non-admins, or for everyone.',
+			'help'    => 'Controls the toolbar at the top of the public site for logged-in users. Hide it for non-administrators or for everyone.',
 			'choices' => array(
 				''                => 'Leave unchanged (WordPress default)',
 				'hide_non_admins' => 'Hide for non-admins',
@@ -300,7 +300,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'ux',
 			'section' => 'media',
 			'label'   => 'Lowercase upload filenames',
-			'help'    => 'Lowercases new upload filenames, so a case-sensitive server and a case-insensitive one agree about what a file is called. Only new uploads are affected.',
+			'help'    => 'Converts new upload filenames to lowercase. Existing files are not renamed.',
 		),
 		'media_sizes_panel'               => array(
 			'default' => 'yes',
@@ -308,7 +308,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'ux',
 			'section' => 'media',
 			'label'   => 'Show generated image sizes',
-			'help'    => 'Adds a read-only panel to the attachment edit screen listing the resized files WordPress generated, with their dimensions. Useful for confirming what exists without a media-management plugin.',
+			'help'    => 'Lists the generated image files and their dimensions on the attachment edit screen. This panel does not change the files.',
 		),
 
 		// --- Login and sessions ------------------------------------------
@@ -318,7 +318,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'login',
 			'section' => 'sessions',
 			'label'   => 'Disable "Remember Me"',
-			'help'    => 'Removes the "Remember Me" checkbox from the login form, so every login uses the regular session length below. Good for shared/kiosk machines.',
+			'help'    => 'Removes the "Remember Me" checkbox from the login form. All logins use the regular session length below. This may be useful on shared computers.',
 		),
 		'session_regular_days'            => array(
 			'default' => 2,
@@ -345,11 +345,11 @@ function wpyeg_defaults_schema() {
 			'type'    => 'select',
 			'group'   => 'branding',
 			'label'   => 'Login Logo',
-			'help'    => 'The default logo links to wordpress.org. Left untouched by default, since changing the login screen out of the box is intrusive. Removing, unlinking, or replacing it keeps the login screen organizationally consistent and prevents the logo from sending users to an unexpected external site; those choices point the header link at your home page.',
+			'help'    => 'Uses the WordPress logo and its wordpress.org link by default. Choose another option to match your site branding. Removing, unlinking or replacing the logo sets the login header URL to your home page. The replacement logo uses your site icon.',
 			'choices' => array(
 				'keep_default' => 'Keep the WordPress logo and wp.org link (WordPress default)',
 				'remove_logo'  => 'Remove the logo and the wp.org link',
-				'unlink_logo'  => 'Keep the logo, drop the wp.org link',
+				'unlink_logo'  => 'Keep the logo, remove the wp.org link',
 				'replace_logo' => 'Replace the logo with the site icon',
 			),
 		),
@@ -360,8 +360,8 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'email',
 			'section' => 'deliverability',
-			'label'   => 'Warn when the site\'s From address looks undeliverable',
-			'help'    => 'WordPress sends mail from <code>wordpress@yourdomain</code> unless something changes it. On a domain that cannot actually send — a staging host, a <code>.local</code> address, a domain with no mail records — password resets and order receipts fail silently. This shows an admin notice when the address looks undeliverable. It never blocks or alters mail, and it stays quiet on local environments.',
+			'label'   => 'Warn about an invalid From email address',
+			'help'    => 'Shows an admin notice if the From address is invalid or uses a reserved domain such as <code>localhost</code> or <code>.test</code>. Password resets and notifications may not arrive. This does not test delivery or change outgoing mail. No notice is shown on local development sites.',
 		),
 
 		// --- Performance ------------------------------------------------
@@ -370,8 +370,8 @@ function wpyeg_defaults_schema() {
 			'type'    => 'toggle',
 			'group'   => 'performance',
 			'section' => 'heartbeat',
-			'label'   => 'Throttle the Heartbeat API',
-			'help'    => 'Slows admin polling to 60s and drops it on the dashboard home.',
+			'label'   => 'Reduce periodic admin requests',
+			'help'    => 'Sets the interval between WordPress Heartbeat API requests to 60 seconds and disables these periodic requests on Dashboard → Home.',
 		),
 	);
 
@@ -2710,7 +2710,7 @@ function wpyeg_defaults_render_hibp_notice() {
 	$kinds = array(
 		'unreachable' => __( 'the service could not be reached', 'sane-defaults' ),
 		'truncated'   => __( 'the reply was cut short before it could be read', 'sane-defaults' ),
-		'malformed'   => __( 'the reply was not the list of hashes it should have been, which usually means something answered in the service\'s place', 'sane-defaults' ),
+		'malformed'   => __( 'the response did not contain a valid list of password hashes', 'sane-defaults' ),
 	);
 
 	$kind   = (string) $failure['kind'];
@@ -2719,7 +2719,7 @@ function wpyeg_defaults_render_hibp_notice() {
 		: ( 0 === strpos( $kind, 'http_' )
 			? sprintf(
 				/* translators: %s: HTTP status code. */
-				__( 'the service answered with HTTP %s', 'sane-defaults' ),
+				__( 'the service returned HTTP %s', 'sane-defaults' ),
 				substr( $kind, 5 )
 			)
 			: __( 'the lookup did not complete', 'sane-defaults' ) );
@@ -2730,12 +2730,12 @@ function wpyeg_defaults_render_hibp_notice() {
 			<?php
 			printf(
 				/* translators: %s: short reason the lookup failed. */
-				esc_html__( 'The last lookup did not complete: %s. Passwords set since then have been accepted without that check.', 'sane-defaults' ),
+				esc_html__( 'The last breach check failed: %s. Since then, passwords have been accepted without a breach check.', 'sane-defaults' ),
 				esc_html( $reason )
 			);
 			?>
 		</p>
-		<p><?php esc_html_e( 'Nobody is blocked from changing their password, and the length, blocklist and personal-context rules are unaffected. This clears itself once a lookup succeeds.', 'sane-defaults' ); ?></p>
+		<p><?php esc_html_e( 'Password changes remain available. The length, blocklist and personal-information checks still apply. This notice is removed after a successful breach check.', 'sane-defaults' ); ?></p>
 	</div>
 	<?php
 }
@@ -2989,7 +2989,7 @@ function wpyeg_defaults_config_lock( $key ) {
 	switch ( $key ) {
 		case 'core_update_policy':
 			if ( defined( 'WP_AUTO_UPDATE_CORE' ) ) {
-				return __( 'Locked by <code>WP_AUTO_UPDATE_CORE</code> in <code>wp-config.php</code>. Remove that constant to manage core releases here.', 'sane-defaults' );
+				return __( 'Configured by <code>WP_AUTO_UPDATE_CORE</code> in <code>wp-config.php</code>. Remove that constant to manage automatic core updates on this screen.', 'sane-defaults' );
 			}
 			if ( $updates_off ) {
 				/* translators: %s: a wp-config.php constant name. */
@@ -3119,7 +3119,7 @@ function wpyeg_defaults_render_mail_config_notice() {
 			<?php
 			printf(
 				/* translators: %s: the site's From email address. */
-				esc_html__( 'WordPress will send mail from %s, which does not look like an address that can deliver. Password resets and notifications may fail without any error.', 'sane-defaults' ),
+				esc_html__( 'WordPress uses %s as the From address, but this address is invalid or uses a reserved domain. Password resets and notifications may not be delivered.', 'sane-defaults' ),
 				'<code>' . esc_html( wpyeg_defaults_mail_from_address() ) . '</code>' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped inline.
 			);
 			?>
@@ -3166,7 +3166,7 @@ function wpyeg_defaults_section_labels() {
 		'headers'        => __( 'Response Headers', 'sane-defaults' ),
 		'ai'             => __( 'AI Features', 'sane-defaults' ),
 		'comments'       => __( 'Comments and Pings', 'sane-defaults' ),
-		'thin_pages'     => __( 'Thin Public Pages', 'sane-defaults' ),
+		'thin_pages'     => __( 'Author and Attachment Pages', 'sane-defaults' ),
 		'frontend'       => __( 'Front-End Output', 'sane-defaults' ),
 		'editor'         => __( 'Editor', 'sane-defaults' ),
 		'admin_search'   => __( 'Admin Search', 'sane-defaults' ),
@@ -3398,7 +3398,7 @@ function wpyeg_defaults_render_settings_page() {
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Better by Default', 'sane-defaults' ); ?></h1>
-		<p><?php esc_html_e( 'Each switch below is one opinionated default, and they are independent: turning one on does not turn on anything else, and a switch left off means this plugin does not apply that default at all.', 'sane-defaults' ); ?></p>
+		<p><?php esc_html_e( 'These “opinionated defaults” are the plugin’s recommended settings. Each option is independent. Read its description to see what enabling or disabling it changes.', 'sane-defaults' ); ?></p>
 
 		<form method="post" action="options.php">
 			<?php settings_fields( 'wpyeg_better_by_default_group' ); ?>
@@ -3422,7 +3422,12 @@ function wpyeg_defaults_render_settings_page() {
 		</form>
 
 		<hr />
-		<p><em><?php esc_html_e( 'Three hardening moves live in wp-config.php and cannot be toggled here:', 'sane-defaults' ); ?></em></p>
+		<p><?php esc_html_e( 'Configure these three settings in wp-config.php. You cannot change them on this screen:', 'sane-defaults' ); ?></p>
+		<ul>
+			<li><code>DISALLOW_FILE_EDIT</code> — <?php esc_html_e( 'Disable the built-in theme and plugin file editors.', 'sane-defaults' ); ?></li>
+			<li><code>AUTOSAVE_INTERVAL</code> — <?php esc_html_e( 'Set the time between autosaves in seconds. The example below uses 120 seconds.', 'sane-defaults' ); ?></li>
+			<li><code>WP_POST_REVISIONS</code> — <?php esc_html_e( 'Limit the number of revisions stored for each post. The example below keeps up to 10.', 'sane-defaults' ); ?></li>
+		</ul>
 		<pre style="background:#f6f7f7;padding:12px;border:1px solid #dcdcde;max-width:640px;">define( 'DISALLOW_FILE_EDIT', true );
 define( 'AUTOSAVE_INTERVAL', 120 );
 define( 'WP_POST_REVISIONS', 10 );</pre>
