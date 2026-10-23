@@ -3110,6 +3110,7 @@ ob_start();
 wpyeg_defaults_render_control( 'disable_ai_connectors', $jetpack_schema['disable_ai_connectors'], true );
 $ai_without_jetpack = ob_get_clean();
 wpyeg_test_assert( false === strpos( $ai_without_jetpack, 'Jetpack is active on this site.' ), 'An inactive Jetpack adds no contextual note to the rendered AI control.' );
+wpyeg_test_assert( array() === wpyeg_defaults_site_health_tests( array() ), 'Without Jetpack, no compatibility check is added to Site Health.' );
 
 define( 'JETPACK__VERSION', '14.0' );
 $jetpack_ai_note = wpyeg_defaults_jetpack_warning( 'disable_ai_connectors' );

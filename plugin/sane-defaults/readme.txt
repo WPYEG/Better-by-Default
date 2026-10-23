@@ -109,6 +109,7 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 = Unreleased =
 * AI connector help now explains that closing the shared AI support gate also disables Jetpack AI features. A contextual note appears when Jetpack is active; the default and runtime policy are unchanged.
+* XML-RPC multicall now permits requests Jetpack verifies as signed by WordPress.com while refusing all other batches. Refusals use fault -32601 over HTTP 200 instead of a transport-breaking 405. Site Health reports the XML-RPC policy for connected Jetpack sites.
 
 = 1.2.4 =
 * The login header link pointed at the wrong place. It was `add_filter( 'login_headerurl', 'home_url' )`, but a filter hands its callback the value being filtered and `home_url()` reads its first argument as a path, so every site with the logo removed, unlinked or replaced linked to `https://example.com/https://wordpress.org/`. It links to the site's home page now, as it always claimed to.

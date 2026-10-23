@@ -143,13 +143,23 @@ XML-RPC request, later attempts fail without testing more credentials. Multicall
 pingbacks are also directly callable and do not depend on it. See
 [WordPress Trac #34336](https://core.trac.wordpress.org/ticket/34336).
 
+WordPress.com uses multicall to manage Jetpack-connected sites. The replacement server
+runs core's `multiCall()` only when Jetpack's
+`Automattic\Jetpack\Connection\Manager::verify_xml_rpc_signature()` verifies the request.
+A `for=jetpack` argument is not authentication. Missing verification APIs, empty or error
+results, and exceptions all fail closed.
+
+Refusals use XML-RPC fault `-32601` over HTTP 200. Fault `405` was wrong: when remote
+publishing is off, core interprets an HTTP-shaped fault code as the response status, so
+clients see a transport error instead of an XML-RPC fault.
+
 ```php
 add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
     if ( wpyeg_defaults_enabled( 'block_xmlrpc_endpoint' ) ) {
         return 'Wpyeg_Blocked_XMLRPC_Server';     // serve_request() → 403 for everything
     }
     if ( ! wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
-        return 'Wpyeg_Multicall_Disabled_Server'; // extends wp_xmlrpc_server, overrides multiCall() → IXR_Error
+        return 'Wpyeg_Multicall_Disabled_Server'; // Jetpack-verified → core; otherwise IXR_Error( -32601 )
     }
     return $class;
 } );
@@ -157,9 +167,12 @@ add_filter( 'wp_xmlrpc_server_class', function ( $class ) {
 
 > **Jetpack:** Jetpack currently requires a publicly accessible XML-RPC endpoint, so never apply
 > the blanket 403 on a Jetpack site. Turning off incoming pingbacks is the low-risk change. Removing
-> core publishing methods or refusing multicall leaves `jetpack.*` registrations untouched, but
-> method registration alone is not a compatibility guarantee; test the Jetpack connection and the
-> features the site uses. Keep Remote Publishing enabled until that testing proves it unnecessary.
+> core publishing methods leaves `jetpack.*` registrations untouched. Refusing all multicalls
+> still breaks incoming WordPress.com requests; the plugin now allows Jetpack-verified batches.
+> Site Health reports the local policy for connected Jetpack sites: critical for an endpoint block,
+> recommended when signature verification is unavailable, and good when verified requests are
+> permitted or multicall is explicitly allowed. This is not an end-to-end connectivity test;
+> test the connection and the features the site uses. Keep Remote Publishing enabled until that testing proves it unnecessary.
 > A plugin-level 403 still boots WordPress and occupies PHP; only an edge block prevents the request
 > from reaching PHP. See [Jetpack's current requirements](https://jetpack.com/support/getting-started-with-jetpack/).
 > **`demo.*`:** the inert `demo.sayHello`/`demo.addTwoNumbers` methods still confirm XML-RPC is

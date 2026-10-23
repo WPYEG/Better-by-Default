@@ -13,7 +13,7 @@
   "scripts": {
     "lint": "phpcs --standard=phpcs.xml",
     "lint:fix": "phpcbf --standard=phpcs.xml",
-    "test": "php tests/plugin-policy.php && php tests/uninstall-coverage.php",
+    "test": "php tests/plugin-policy.php && php tests/uninstall-coverage.php && php tests/xmlrpc-multicall.php absent && php tests/xmlrpc-multicall.php legacy && php tests/xmlrpc-multicall.php modern",
     "build": "php bin/build-zip.php",
     "build:deck": "cd workshop && node build_deck.js",
     "verify:dist": "php bin/build-zip.php --check",
