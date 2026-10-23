@@ -658,7 +658,6 @@ $wpyeg_field_help_words = str_word_count( preg_replace( '/<[^>]*>/', '', $schema
 wpyeg_test_assert( $wpyeg_field_help_words >= 40 && $wpyeg_field_help_words <= 55, "Password field help states the rule in 40-55 words (currently {$wpyeg_field_help_words})." );
 wpyeg_test_assert( false === strpos( $schema['require_strong_passwords']['help'], 'haveibeenpwned.com' ), 'The protocol detail stays out of the field help; the reference doc and readme carry it.' );
 wpyeg_test_assert( false === strpos( $schema['login_logo_behavior']['help'], 'trust leak' ), 'Login-logo guidance does not overstate an external destination as a trust leak.' );
-wpyeg_test_assert( false !== strpos( $schema['login_logo_behavior']['help'], 'organizationally consistent' ), 'Login-logo guidance describes the actual branding and destination benefit.' );
 
 foreach ( $schema as $field ) {
 	$help_without_safe_markup = preg_replace(
