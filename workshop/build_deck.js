@@ -850,7 +850,7 @@ schemaMapSlide(29, "Schema map — security policy and updates",
     ["Plugin and theme code", "per-item", "WordPress per-item choices"],
     ["WP_AUTO_UPDATE_CORE", "operator", "wp-config.php wins"],
   ],
-  "AI connectors are disabled through the WordPress 7.0 core gate and the Connectors screen is closed. Baseline headers and SAMEORIGIN ship separately because framing can break legitimate embeds. BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling."
+  "AI connectors are disabled through the WordPress 7.0 core gate and the core Connectors screen is closed. Jetpack follows the same gate, so Jetpack AI Assistant and its other AI features are disabled too. Gutenberg can provide a separate Connectors screen, which BBD does not close. Baseline headers and SAMEORIGIN ship separately because framing can break legitimate embeds. BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling."
 );
 
 schemaMapSlide(30, "Schema map — content policies",

@@ -640,7 +640,7 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | Plugin and theme code | per-item | WordPress per-item choices |
 | `WP_AUTO_UPDATE_CORE` | operator-owned | `wp-config.php` wins |
 
-[This slide completes the security and update inventory. AI connectors are disabled through the WordPress 7.0 core gate and the Connectors screen is closed. Baseline headers and `SAMEORIGIN` ship separately because framing can break legitimate embeds. Update ownership stays explicit: BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling.]
+[This slide completes the security and update inventory. AI connectors are disabled through the WordPress 7.0 core gate and the core Connectors screen is closed. Jetpack follows the same gate, so Jetpack AI Assistant and its other AI features are disabled too. Gutenberg can provide a separate Connectors screen, which BBD does not close. Baseline headers and `SAMEORIGIN` ship separately because framing can break legitimate embeds. Update ownership stays explicit: BBD governs core release classes unless a constant wins, while language files and plugin/theme code remain with WordPress, the host, or fleet tooling.]
 
 ---
 

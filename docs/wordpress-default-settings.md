@@ -336,6 +336,15 @@ add_action( 'admin_init', function () {
 } );
 ```
 
+Jetpack honours the same `wp_supports_ai` gate: while this setting is on, Jetpack AI
+Assistant and its other AI features are disabled too. The settings screen shows a
+Jetpack-specific note when Jetpack is active. Other plugins that honour the gate can also
+be affected; integrations that do not honour it need their own controls or the action below.
+
+Only the **core** Connectors screen is closed here. Gutenberg can provide a separate
+Connectors screen, which this plugin does not remove or block. Screen visibility and the
+AI support gate are separate controls.
+
 > **Note:** core also honours a `WP_AI_SUPPORT` constant, which a deployment can set to
 > `false` in `wp-config.php` to hard-lock the disabled posture above the plugin layer. The
 > workshop plugin additionally fires a `wpyeg_disable_ai_connectors` action as a seam for AI

@@ -188,7 +188,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'ai',
 			'label'   => 'Disable AI connectors',
-			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the <code>wp_supports_ai</code> gate and closes the core Connectors screen. Also fires <code>wpyeg_disable_ai_connectors</code> for AI integrations core does not know about.',
+			'help'    => 'Turns off WordPress 7.0 AI provider connectors via the <code>wp_supports_ai</code> gate and closes the core Connectors screen. Plugins that honour this gate, including Jetpack, also disable their AI features. Also fires <code>wpyeg_disable_ai_connectors</code> for AI integrations core does not know about.',
 		),
 
 		// --- Updates ----------------------------------------------------
@@ -1671,22 +1671,26 @@ function wpyeg_defaults_site_health_jetpack_xmlrpc() {
 }
 
 /**
- * The Jetpack warning for the XML-RPC endpoint block, when it applies.
+ * Contextual Jetpack help for the XML-RPC endpoint block and AI gate.
  *
  * Returned for the settings screen rather than written into the help text,
- * because it is only true on some sites — and a warning that is always on
+ * because it is only relevant on some sites — and a warning that is always on
  * teaches people to stop reading warnings.
  *
  * @param string $key Schema key being rendered.
  * @return string Markup, or '' when the warning does not apply.
  */
 function wpyeg_defaults_jetpack_warning( $key ) {
-	if ( 'block_xmlrpc_endpoint' !== $key || ! wpyeg_defaults_jetpack_active() ) {
+	if ( ! in_array( $key, array( 'block_xmlrpc_endpoint', 'disable_ai_connectors' ), true ) || ! wpyeg_defaults_jetpack_active() ) {
 		return '';
 	}
 
 	// Rendered on the settings screen, which is well after init, so unlike the
 	// schema's help text this one is translated. See wpyeg_defaults_schema().
+	if ( 'disable_ai_connectors' === $key ) {
+		return __( 'Jetpack is active on this site. Jetpack follows this setting: while Disable AI connectors is on, Jetpack AI Assistant and its other AI features are disabled too.', 'sane-defaults' );
+	}
+
 	return __( '<strong>Jetpack is active on this site.</strong> It uses XML-RPC for its WordPress.com connection, so blocking the endpoint will break it. Leave this off unless connection and feature testing proves Jetpack no longer needs XML-RPC.', 'sane-defaults' );
 }
 
