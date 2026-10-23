@@ -9,6 +9,9 @@ thing is built around one idea worth carrying home:
 
 ## Install
 
+[Try Better by Default in WordPress Playground](https://playground.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2FWPYEG%2FBetter-by-Default%2Fmain%2Fplayground%2Fblueprint.json) in a temporary browser-based WordPress site.
+The plugin is activated and its settings screen opens automatically.
+
 1. Copy the `sane-defaults` folder into `wp-content/plugins/`
    (or upload the zip via **Plugins → Add New → Upload Plugin**).
 2. Activate. The documented defaults apply immediately — they live in the schema, not the

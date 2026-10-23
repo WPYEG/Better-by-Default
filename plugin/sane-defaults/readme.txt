@@ -75,6 +75,8 @@ Plugin and theme code updates continue to use WordPress's individual per-item ch
 
 == Installation ==
 
+[Try Better by Default in WordPress Playground](https://playground.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2FWPYEG%2FBetter-by-Default%2Fmain%2Fplayground%2Fblueprint.json) without installing anything. The demo activates the current build and opens Settings → Better by Default in a temporary WordPress site.
+
 1. Upload the `sane-defaults` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload Plugin.
 2. Activate. The documented defaults apply immediately. They live in the plugin's schema rather than the database, so nothing is written to `wp_options` until you save the settings screen — and a setting you have never saved follows the current default, including after an upgrade that improves one.
 3. Visit **Settings → Better by Default** to flip switches.

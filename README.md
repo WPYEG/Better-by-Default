@@ -22,6 +22,7 @@ Better-by-Default/
 │                            keeps the docs and the deck in step with the schema;
 │                            class-wp-*.php are the two WordPress stubs it needs
 ├── bin/                   → build-zip.php — rebuilds dist/ reproducibly
+├── playground/            → blueprint.json — the browser demo
 ├── dist/                  → sane-defaults.zip — a ready-to-install build
 ├── composer.json          → the lint/test/build scripts
 ├── phpcs.xml              → WordPress Coding Standards config
@@ -30,6 +31,9 @@ Better-by-Default/
 ```
 
 ## Quick start
+
+[Try Better by Default in WordPress Playground](https://playground.wordpress.net/?blueprint-url=https%3A%2F%2Fraw.githubusercontent.com%2FWPYEG%2FBetter-by-Default%2Fmain%2Fplayground%2Fblueprint.json) — no installation needed. The demo activates the current build and opens
+**Settings → Better by Default** in a temporary WordPress site.
 
 Install the plugin one of three ways:
 

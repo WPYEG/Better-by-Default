@@ -1,0 +1,26 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "meta": {
+    "title": "Better by Default",
+    "author": "WPYEG",
+    "description": "Try the current Better by Default build in a temporary WordPress site."
+  },
+  "preferredVersions": {
+    "php": "8.4",
+    "wp": "latest"
+  },
+  "landingPage": "/wp-admin/options-general.php?page=sane-defaults",
+  "login": true,
+  "steps": [
+    {
+      "step": "installPlugin",
+      "pluginData": {
+        "resource": "url",
+        "url": "https://raw.githubusercontent.com/WPYEG/Better-by-Default/main/dist/sane-defaults.zip"
+      },
+      "options": {
+        "activate": true
+      }
+    }
+  ]
+}
