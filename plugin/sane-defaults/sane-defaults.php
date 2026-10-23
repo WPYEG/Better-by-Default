@@ -119,7 +119,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'security',
 			'section' => 'xmlrpc',
 			'label'   => 'Allow system.multicall',
-			'help'    => 'OFF (default) refuses <code>system.multicall</code>, a general batching wrapper with little established modern use. WordPress 4.4 prevented it from being used as a password-guessing multiplier, so refusing it now is modest defence-in-depth against batching, not a password control.',
+			'help'    => 'OFF (default) refuses <code>system.multicall</code> except requests Jetpack verifies as signed by WordPress.com. Jetpack uses multicall to manage connected sites. WordPress 4.4 stopped it being a password-guessing multiplier; refusing other batches is modest defence-in-depth, not a password control.',
 		),
 		'block_xmlrpc_endpoint'           => array(
 			'default' => 'no',
@@ -829,10 +829,16 @@ function wpyeg_defaults_bootstrap() {
 						 * Refuse the batching wrapper.
 						 *
 						 * @param array $methodcalls Batched calls, ignored.
-						 * @return IXR_Error
+						 * @return array|IXR_Error
 						 */
 						public function multiCall( $methodcalls ) { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Overrides a core method name.
-							return new IXR_Error( 405, 'system.multicall is disabled on this site.' );
+							if ( wpyeg_defaults_jetpack_request_verified() ) {
+								return parent::multiCall( $methodcalls );
+							}
+
+							// A fault, not an HTTP status: core otherwise sends HTTP 405
+							// when xmlrpc_enabled is false (remote publishing is off).
+							return new IXR_Error( -32601, 'system.multicall is disabled on this site.' );
 						}
 					}
 				}
@@ -842,6 +848,8 @@ function wpyeg_defaults_bootstrap() {
 			return $class;
 		}
 	);
+
+	add_filter( 'site_status_tests', 'wpyeg_defaults_site_health_tests' );
 
 	if ( wpyeg_defaults_enabled( 'disable_application_passwords' ) ) {
 		add_filter( 'wp_is_application_passwords_available', '__return_false' );
@@ -1534,7 +1542,132 @@ function wpyeg_defaults_render_media_sizes( $post ) {
  * @return bool
  */
 function wpyeg_defaults_jetpack_active() {
-	return defined( 'JETPACK__VERSION' ) || class_exists( 'Automattic\\Jetpack\\Connection\\Manager' );
+	return defined( 'JETPACK__VERSION' ) || class_exists( 'Automattic\Jetpack\Connection\Manager' );
+}
+
+/**
+ * Construct Jetpack's manager without making Jetpack a required dependency.
+ *
+ * @return object|null
+ */
+function wpyeg_defaults_jetpack_manager() {
+	$class = 'Automattic\Jetpack\Connection\Manager';
+	try {
+		return class_exists( $class ) ? new $class() : null;
+	} catch ( Throwable $error ) {
+		return null;
+	}
+}
+
+/**
+ * Whether Jetpack verifies this request as signed by WordPress.com.
+ *
+ * Never trust for=jetpack or a user-agent string. Jetpack verifies the body,
+ * signature, timestamp and nonce against its token and returns token details
+ * on success. Empty results, WP_Error, missing APIs and exceptions fail closed.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_jetpack_request_verified() {
+	$manager = wpyeg_defaults_jetpack_manager();
+	if ( ! is_callable( array( $manager, 'verify_xml_rpc_signature' ) ) ) {
+		return false;
+	}
+
+	try {
+		$verified = $manager->verify_xml_rpc_signature();
+	} catch ( Throwable $error ) {
+		return false;
+	}
+
+	return is_array( $verified ) && ! empty( $verified );
+}
+
+/**
+ * Classify whether this plugin's XML-RPC policy accommodates Jetpack.
+ *
+ * This checks policy and API availability, not end-to-end connectivity.
+ * An unknown connection status is reported conservatively rather than hidden.
+ *
+ * @return string Empty without a connection; blocked, open, verified or refused.
+ */
+function wpyeg_defaults_jetpack_xmlrpc_state() {
+	if ( ! wpyeg_defaults_jetpack_active() ) {
+		return '';
+	}
+
+	$manager = wpyeg_defaults_jetpack_manager();
+	if ( is_callable( array( $manager, 'is_connected' ) ) ) {
+		try {
+			if ( ! $manager->is_connected() ) {
+				return '';
+			}
+		} catch ( Throwable $error ) {
+			unset( $error ); // Unknown connection status: report the policy.
+		}
+	}
+
+	if ( wpyeg_defaults_enabled( 'block_xmlrpc_endpoint' ) ) {
+		return 'blocked';
+	}
+	if ( wpyeg_defaults_enabled( 'xmlrpc_allow_multicall' ) ) {
+		return 'open';
+	}
+
+	return is_callable( array( $manager, 'verify_xml_rpc_signature' ) ) ? 'verified' : 'refused';
+}
+
+/**
+ * Add the Jetpack compatibility check where there is a connection to report.
+ *
+ * @param array $tests Site Health tests.
+ * @return array
+ */
+function wpyeg_defaults_site_health_tests( $tests ) {
+	if ( '' !== wpyeg_defaults_jetpack_xmlrpc_state() ) {
+		$tests['direct']['wpyeg_defaults_jetpack_xmlrpc'] = array(
+			'label' => __( 'Jetpack and XML-RPC', 'sane-defaults' ),
+			'test'  => 'wpyeg_defaults_site_health_jetpack_xmlrpc',
+		);
+	}
+	return $tests;
+}
+
+/**
+ * Report the local XML-RPC policy without claiming a live connection was tested.
+ *
+ * @return array Site Health result.
+ */
+function wpyeg_defaults_site_health_jetpack_xmlrpc() {
+	$state  = wpyeg_defaults_jetpack_xmlrpc_state();
+	$result = array(
+		'label'       => __( 'XML-RPC policy permits Jetpack-verified multicalls', 'sane-defaults' ),
+		'status'      => 'good',
+		'badge'       => array(
+			'label' => __( 'Better by Default', 'sane-defaults' ),
+			'color' => 'blue',
+		),
+		'description' => '<p>' . esc_html__( 'Only multicalls that Jetpack verifies as signed by WordPress.com are permitted. This checks the local policy and verification API, not live connectivity. Other XML-RPC settings, plugins or hosting rules can still affect Jetpack.', 'sane-defaults' ) . '</p>',
+		'test'        => 'wpyeg_defaults_jetpack_xmlrpc',
+	);
+
+	if ( 'blocked' === $state ) {
+		$result['status']      = 'critical';
+		$result['label']       = __( 'Jetpack is connected, but the XML-RPC endpoint is blocked', 'sane-defaults' );
+		$result['description'] = '<p>' . esc_html__( 'Turn off Block the endpoint entirely under Settings → Better by Default, or disconnect Jetpack if it is not needed. Jetpack may still report itself connected while incoming WordPress.com requests fail.', 'sane-defaults' ) . '</p>';
+	} elseif ( 'refused' === $state ) {
+		$result['status']      = 'recommended';
+		$result['label']       = __( 'Jetpack signature verification is unavailable', 'sane-defaults' );
+		$result['description'] = '<p>' . esc_html__( 'Requests from WordPress.com are refused because Jetpack signature verification is unavailable. Update or repair Jetpack, or enable Allow system.multicall under Settings → Better by Default. Jetpack may still report itself connected while incoming requests fail.', 'sane-defaults' ) . '</p>';
+	} elseif ( 'open' === $state ) {
+		$result['label']       = __( 'XML-RPC policy allows multicalls', 'sane-defaults' );
+		$result['description'] = '<p>' . esc_html__( 'Allow system.multicall is enabled. Better by Default does not refuse these batches. This checks local policy, not live Jetpack connectivity.', 'sane-defaults' ) . '</p>';
+	} elseif ( '' === $state ) {
+		$result['label']       = __( 'No Jetpack connection to check', 'sane-defaults' );
+		$result['description'] = '<p>' . esc_html__( 'No connected Jetpack site was found.', 'sane-defaults' ) . '</p>';
+	}
+
+	return $result;
 }
 
 /**
