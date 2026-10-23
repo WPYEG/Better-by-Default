@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.4
+Stable tag: 1.2.5
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -107,7 +107,7 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 
 == Changelog ==
 
-= Unreleased =
+= 1.2.5 =
 * AI connector help now explains that closing the shared AI support gate also disables Jetpack AI features. A contextual note appears when Jetpack is active; the default and runtime policy are unchanged.
 * XML-RPC multicall now permits requests Jetpack verifies as signed by WordPress.com while refusing all other batches. Refusals use fault -32601 over HTTP 200 instead of a transport-breaking 405. Site Health reports the XML-RPC policy for connected Jetpack sites.
 
@@ -193,6 +193,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.2.5 =
+Jetpack-verified WordPress.com multicalls are now permitted while general multicall remains disabled. Refused batches return an XML-RPC fault over HTTP 200 instead of HTTP 405. An explicit full-endpoint block still takes precedence; Site Health reports the local XML-RPC policy for connected Jetpack sites. AI connector help now explains its effect on Jetpack AI features, without changing the setting or its default.
 
 = 1.2.4 =
 Security and bug fixes, plus a cleanup that applies only when the plugin is deleted. With comments disabled, the REST API no longer serves a single comment by ID. `/?author=N` no longer reveals an author's username on the way to the redirect. Deleting it (not deactivating it) now removes its settings and breach-screening cache, so reinstalling starts from the shipped defaults. Sites that remove, unlink or replace the login logo get a working home-page link back. Administrators now see a notice when the breach-screening API cannot be reached.
