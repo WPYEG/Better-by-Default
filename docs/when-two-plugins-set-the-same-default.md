@@ -116,7 +116,7 @@ On the three-plugin test install that prints:
 
 ```
 10     closure
-50     PixelManagedPlatform\Security\Settings::filter_auth_cookie_expiration
+50     AgencyExperience\Security\Settings::filter_auth_cookie_expiration
 50     keel_defaults_session_length
 ```
 

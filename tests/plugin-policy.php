@@ -1517,7 +1517,7 @@ function wpyeg_test_find_hook( $hook, $callback = null ) {
  * The retired-claims list is not here any more.
  *
  * It lives in tests/fixtures/retired-copy.json, a fixture shared with Keel (and
- * available to Pixel), because these plugins say the same things about the same
+ * available to AX), because these plugins say the same things about the same
  * WordPress behaviours and therefore retire the same wrong claims. Each repo used
  * to keep its own list, so retiring a phrase here did not retire it there — which
  * is how an author-identity leak lived in two plugins while the fix sat in the
@@ -2253,7 +2253,7 @@ foreach ( $schema as $key => $field ) {
 
 wpyeg_test_assert( $workshop_source === $presenter_source, 'The iA Presenter source is identical to the canonical workshop source.' );
 wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_source, 'remember_me_policy' ), 'Removed setting names do not survive in learner materials.' );
-wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_source, 'PMP-specific' ), 'BBD settings are not mislabeled as PMP-specific.' );
+wpyeg_test_assert( false === strpos( $reference_doc . $workshop_source . $deck_source, 'AX-specific' ), 'BBD settings are not mislabeled as AX-specific.' );
 wpyeg_test_assert( false === strpos( $deck_source, 'OPTION   ' ), 'Workshop chips identify schema keys rather than separate options.' );
 
 /*

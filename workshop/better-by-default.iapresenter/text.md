@@ -52,12 +52,12 @@ WordPress is built to be interrupted at labelled moments (hooks) so you never ed
 
 	1. **`wp-config.php` constants** — Load first. When core treats one as authoritative, plugin settings cannot override it.
 	2. **Must-use plugins** — Load before normal plugins, so their callbacks register first.
-	3. **Normal plugins** — Load in `active_plugins` order — PMP before BBD on this demo site.
+	3. **Normal plugins** — Load in `active_plugins` order — AX before BBD on this demo site.
 	4. **Hook priority** — Lower runs earlier; higher runs later. Ties keep registration order.
 
 `effective behaviour = hard constants + every callback, in execution order`
 
-This is a debugging model, not a universal “last plugin wins” rule. Constants cannot be redefined; filters pass a value through every callback; actions may accumulate effects. Load order establishes registration order, while hook priority establishes execution order. At equal priority, the callback registered later runs later — which is why the demo site's PMP-before-BBD plugin order can matter.
+This is a debugging model, not a universal “last plugin wins” rule. Constants cannot be redefined; filters pass a value through every callback; actions may accumulate effects. Load order establishes registration order, while hook priority establishes execution order. At equal priority, the callback registered later runs later — which is why the demo site's AX-before-BBD plugin order can matter.
 
 [Sources: WordPress Advanced Administration Handbook, [Must Use Plugins — Features](https://developer.wordpress.org/advanced-administration/plugins/mu-plugins/); WordPress Plugin Handbook, [Actions — Priority](https://developer.wordpress.org/plugins/hooks/actions/#priority); WordPress Code Reference, [`wp_get_active_and_valid_plugins()` — Source](https://developer.wordpress.org/reference/functions/wp_get_active_and_valid_plugins/); WordPress Advanced Administration Handbook, [Editing `wp-config.php`](https://developer.wordpress.org/advanced-administration/wordpress/wp-config/).]
 
