@@ -214,7 +214,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
   const steps = [
     { n: "1", t: "wp-config.php constants", d: "Load first. When core treats one as authoritative, plugin settings cannot override it." },
     { n: "2", t: "Must-use plugins", d: "Load before normal plugins, so their callbacks register first." },
-    { n: "3", t: "Normal plugins", d: "Load in active_plugins order — PMP before BBD on this demo site." },
+    { n: "3", t: "Normal plugins", d: "Load in active_plugins order — AX before BBD on this demo site." },
     { n: "4", t: "Hook priority", d: "Lower runs earlier; higher runs later. Ties keep registration order." },
   ];
   steps.forEach((c, i) => {
@@ -229,7 +229,7 @@ function codePanel(s, x, y, w, h, lines, fontSize) {
     x: 0.85, y: 6.1, w: 11.6, h: 0.72, fontFace: MONO, fontSize: 13, bold: true, color: CGOLD, valign: "middle", margin: 0,
   });
   footer(s, 5);
-  s.addNotes("This is a debugging model, not a universal 'last plugin wins' rule. Constants cannot be redefined; filters pass a value through every callback; actions may accumulate effects. wp-config.php is loaded before plugins. Must-use plugins load before normal plugins. Normal plugins are included in the stored active_plugins order — PMP before BBD on this demo site. Within a hook, lower priorities run earlier, higher priorities later, and equal priorities retain registration order. Sources: https://developer.wordpress.org/advanced-administration/plugins/mu-plugins/ ; https://developer.wordpress.org/plugins/hooks/actions/#priority ; https://developer.wordpress.org/reference/functions/wp_get_active_and_valid_plugins/ ; https://developer.wordpress.org/advanced-administration/wordpress/wp-config/");
+  s.addNotes("This is a debugging model, not a universal 'last plugin wins' rule. Constants cannot be redefined; filters pass a value through every callback; actions may accumulate effects. wp-config.php is loaded before plugins. Must-use plugins load before normal plugins. Normal plugins are included in the stored active_plugins order — AX before BBD on this demo site. Within a hook, lower priorities run earlier, higher priorities later, and equal priorities retain registration order. Sources: https://developer.wordpress.org/advanced-administration/plugins/mu-plugins/ ; https://developer.wordpress.org/plugins/hooks/actions/#priority ; https://developer.wordpress.org/reference/functions/wp_get_active_and_valid_plugins/ ; https://developer.wordpress.org/advanced-administration/wordpress/wp-config/");
 })();
 
 /* =================================================================== */
