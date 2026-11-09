@@ -43,6 +43,10 @@ function wpyeg_defaults_uninstall_site() {
 
 	delete_option( 'wpyeg_better_by_default' );
 
+	// What the saved rewrite rules were built under (WordPress 7.2's /random/
+	// redirects). Deactivation already handed the rules back to core.
+	delete_option( 'wpyeg_random_rules_state' );
+
 	/*
 	 * The breach-screening outage record, and the cache namespace.
 	 *

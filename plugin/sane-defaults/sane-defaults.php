@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.2.6
+ * Version:           1.3.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -145,6 +145,14 @@ function wpyeg_defaults_schema() {
 			'label'   => 'Require strong passwords',
 			'help'    => 'Checks every account for passwords found in known breaches. Other checks require 15 characters and reject common passwords, usernames and the name part of email addresses; subscriber-only accounts are exempt. Does not require uppercase letters, numbers or symbols. The readme explains what the breach check sends.',
 		),
+		'protect_public_names'            => array(
+			'default' => 'no',
+			'type'    => 'toggle',
+			'group'   => 'security',
+			'section' => 'public_names',
+			'label'   => 'Keep logins and email addresses out of public names',
+			'help'    => 'Off by default. When an account is created or updated, a display name, nickname or author slug that repeats the login, the email address or the part before the <code>@</code> is replaced with a safe one. Names people chose that are already safe are kept, and logins, email addresses and passwords never change. Existing accounts change the next time they are saved. On multisite the main site\'s setting decides, because accounts are shared.',
+		),
 		'limit_unfiltered_html_to_admins' => array(
 			'default' => 'yes',
 			'type'    => 'toggle',
@@ -245,6 +253,14 @@ function wpyeg_defaults_schema() {
 			'section' => 'thin_pages',
 			'label'   => 'Redirect attachment pages',
 			'help'    => 'Redirects an attachment page to its parent post, or to the media file if there is no parent. Does not redirect when the active theme includes <code>attachment.php</code> or <code>image.php</code>.',
+		),
+		'disable_random_redirects'        => array(
+			'default' => 'yes',
+			'type'    => 'toggle',
+			'group'   => 'content',
+			'section' => 'random',
+			'label'   => 'Disable random post redirects',
+			'help'    => 'WordPress 7.2 and later answer <code>/random/</code>, and <code>?random</code> on any archive or search, with a redirect to a random published post. Each request runs an uncached random-order query, and the author form confirms which author slugs exist. Has no effect on earlier versions.',
 		),
 		'disable_emojis'                  => array(
 			'default' => 'yes',
@@ -419,7 +435,7 @@ const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
  * both and fails when they disagree — an asset version that lags the plugin is
  * a stylesheet a browser goes on serving from cache after it changed.
  */
-const WPYEG_DEFAULTS_VERSION = '1.2.6';
+const WPYEG_DEFAULTS_VERSION = '1.3.0';
 
 /**
  * Read one setting, falling back to its schema default.
@@ -504,6 +520,7 @@ function wpyeg_defaults_allow_dev_core_updates( $enabled ) {
  */
 
 add_action( 'plugins_loaded', 'wpyeg_defaults_bootstrap' );
+register_deactivation_hook( __FILE__, 'wpyeg_defaults_deactivate' );
 
 /**
  * A comment count of zero, as the string core would have returned.
@@ -1108,6 +1125,48 @@ function wpyeg_defaults_bootstrap() {
 			},
 			9
 		);
+	}
+
+	/*
+	 * WordPress 7.2 sends /random/ and ?random to a random published post.
+	 * Returning false drops the rewrite rules, hides the Permalinks field and
+	 * makes core ignore the query variable. On earlier versions nothing applies
+	 * this filter, so registering it costs nothing.
+	 */
+	if ( wpyeg_defaults_enabled( 'disable_random_redirects' ) ) {
+		add_filter( 'wp_enable_random_content_redirect', '__return_false' );
+	}
+
+	if ( function_exists( 'wp_is_random_content_redirect_enabled' ) ) {
+		/*
+		 * Shape 2, register always: core saves the /random/ rewrite rules once,
+		 * so they outlive a change of answer whichever way it goes. Note what
+		 * the saved rules were built under and soft-flush them when that
+		 * differs. One option read per request, written only on a change.
+		 */
+		add_filter( 'rewrite_rules_array', 'wpyeg_defaults_note_random_rules', PHP_INT_MAX );
+		add_action( 'init', 'wpyeg_defaults_check_random_rules', PHP_INT_MAX );
+
+		/*
+		 * /random/author/{slug}/ redirects to a post when that author exists and
+		 * 404s when not: the existence test the author-archive redirect closes.
+		 * Core redirects inside WP::main(), before template_redirect, so the
+		 * archive redirect never sees these requests.
+		 */
+		if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
+			add_action( 'pre_get_posts', 'wpyeg_defaults_block_random_author', 100 );
+		}
+	}
+
+	/*
+	 * Public names. Filters on the user record itself, so they cover every
+	 * route that saves an account through wp_insert_user(): registration, Add
+	 * New, profile screens, REST, WP-CLI and shop plugins.
+	 */
+	if ( wpyeg_defaults_public_names_enforced() ) {
+		add_filter( 'wp_pre_insert_user_data', 'wpyeg_defaults_public_names_filter_user', 20, 4 );
+		add_filter( 'insert_user_meta', 'wpyeg_defaults_public_names_filter_meta', 20, 3 );
+		add_filter( 'insert_custom_user_meta', 'wpyeg_defaults_public_names_filter_custom_meta', 20, 2 );
 	}
 
 	if ( wpyeg_defaults_enabled( 'disable_emojis' ) ) {
@@ -3006,6 +3065,14 @@ function wpyeg_defaults_config_lock( $key ) {
 				return __( '<code>DISALLOW_UNFILTERED_HTML</code> in <code>wp-config.php</code> already removes unfiltered HTML from every role, so this restriction has no additional effect.', 'sane-defaults' );
 			}
 			break;
+
+		case 'protect_public_names':
+			// One users table serves every site, so a per-site switch would make
+			// an account's public name depend on which dashboard last saved it.
+			if ( is_multisite() && ! is_main_site() ) {
+				return __( 'On multisite, accounts are shared by every site, so the main site\'s setting decides for all of them.', 'sane-defaults' );
+			}
+			break;
 	}
 
 	return null;
@@ -3161,12 +3228,14 @@ function wpyeg_defaults_section_labels() {
 		'rest'           => __( 'REST API', 'sane-defaults' ),
 		'xmlrpc'         => __( 'XML-RPC', 'sane-defaults' ),
 		'credentials'    => __( 'Passwords and Credentials', 'sane-defaults' ),
+		'public_names'   => __( 'Public Names', 'sane-defaults' ),
 		'capabilities'   => __( 'Capabilities', 'sane-defaults' ),
 		'disclosure'     => __( 'Version Disclosure', 'sane-defaults' ),
 		'headers'        => __( 'Response Headers', 'sane-defaults' ),
 		'ai'             => __( 'AI Features', 'sane-defaults' ),
 		'comments'       => __( 'Comments and Pings', 'sane-defaults' ),
 		'thin_pages'     => __( 'Author and Attachment Pages', 'sane-defaults' ),
+		'random'         => __( 'Random Post Links', 'sane-defaults' ),
 		'frontend'       => __( 'Front-End Output', 'sane-defaults' ),
 		'editor'         => __( 'Editor', 'sane-defaults' ),
 		'admin_search'   => __( 'Admin Search', 'sane-defaults' ),
@@ -3527,4 +3596,523 @@ function wpyeg_defaults_strip_oembed_author( $data ) {
  */
 function wpyeg_defaults_drop_users_sitemap( $provider, $name ) {
 	return ( 'users' === $name ) ? false : $provider;
+}
+
+/*
+ * =======================================================================
+ * RANDOM POST REDIRECTS (WordPress 7.2+)
+ * =====================================================================
+ */
+
+/**
+ * Record whether the rewrite rules being generated include the random block.
+ *
+ * Core builds the `/random/` rules only when rewrite rules are generated, and
+ * saves them. Whether they belong there can change afterwards: this setting,
+ * another plugin answering the same filter, or activating and deactivating this
+ * one. Remembering what the saved rules were built under lets
+ * wpyeg_defaults_check_random_rules() notice any of those on the next request
+ * without watching each one.
+ *
+ * Runs on `rewrite_rules_array`, which fires only while rules are generated.
+ * The option is written only when the answer changes.
+ *
+ * @param mixed $rules Generated rewrite rules, returned unchanged.
+ * @return mixed
+ */
+function wpyeg_defaults_note_random_rules( $rules ) {
+	$state = wp_is_random_content_redirect_enabled() ? 'on' : 'off';
+
+	if ( get_option( 'wpyeg_random_rules_state' ) !== $state ) {
+		update_option( 'wpyeg_random_rules_state', $state, true );
+	}
+
+	return $rules;
+}
+
+/**
+ * Rebuild the saved rewrite rules when they disagree with the random setting.
+ *
+ * Saved while the redirects were on and kept after they were turned off, the
+ * rules still match `/random/`, and core renders the blog home with a 200.
+ * Saved while they were off and kept after they were turned back on,
+ * `/random/` is a 404. Deleting the saved rules is WordPress's own soft flush:
+ * the request that parses the URL rebuilds them.
+ *
+ * A site without saved rules (plain permalinks) has nothing to rebuild, which
+ * also keeps this from deleting an empty option on every request.
+ *
+ * @return void
+ */
+function wpyeg_defaults_check_random_rules() {
+	if ( ! get_option( 'rewrite_rules' ) ) {
+		return;
+	}
+
+	$state = wp_is_random_content_redirect_enabled() ? 'on' : 'off';
+
+	if ( get_option( 'wpyeg_random_rules_state' ) !== $state ) {
+		delete_option( 'rewrite_rules' );
+	}
+}
+
+/**
+ * Find no post for a random redirect scoped to an author.
+ *
+ * With nothing selected, core answers 404 for every author, real or not, so the
+ * response no longer says which author slugs or IDs exist.
+ *
+ * @param WP_Query $query Query being prepared.
+ * @return void
+ */
+function wpyeg_defaults_block_random_author( $query ) {
+	if ( ! $query instanceof WP_Query || ! $query->is_author() || ! function_exists( 'wp_is_random_content_query' ) ) {
+		return;
+	}
+
+	if ( wp_is_random_content_query( $query ) ) {
+		$query->set( 'post__in', array( 0 ) );
+	}
+}
+
+/*
+ * =======================================================================
+ * PUBLIC NAMES
+ *
+ * When a login is an email address, wp_insert_user() copies it into the
+ * display name and nickname and builds the author slug from it, so the address
+ * turns up in bylines, comments and comment CSS classes. Since WordPress 4.5
+ * every account also accepts its email as a login name. These filters replace
+ * only the fields that would publish a login or an address, on every save.
+ *
+ * Deliberately simpler than Keel's version: no cleanup screen. An existing
+ * account is fixed the next time it is saved, and past comments keep the name
+ * they were posted under. Old author slugs are not redirected, because a
+ * redirect would confirm which address belongs to which byline.
+ * =====================================================================
+ */
+
+/**
+ * Whether public names are enforced on this request.
+ *
+ * On multisite there is one users table, so the main site's setting decides
+ * for every site.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_public_names_enforced() {
+	if ( ! is_multisite() || is_main_site() ) {
+		return wpyeg_defaults_enabled( 'protect_public_names' );
+	}
+
+	$stored = get_blog_option( get_main_site_id(), WPYEG_DEFAULTS_OPTION, array() );
+
+	return is_array( $stored ) && isset( $stored['protect_public_names'] ) && 'yes' === $stored['protect_public_names'];
+}
+
+/**
+ * Whether a value is an email address, ignoring punctuation around it.
+ *
+ * @param string $value Candidate.
+ * @return bool
+ */
+function wpyeg_defaults_is_email( $value ) {
+	$value = trim( (string) $value, " \t\n\r\0\x0B<>()[]{}\"',;:" );
+	return '' !== $value && false !== strpos( $value, '@' ) && false !== is_email( $value );
+}
+
+/**
+ * The private values a public field must not repeat: the login, the email
+ * address and the part of each address before the @, lower-cased.
+ *
+ * @param string $login Login.
+ * @param string $email Contact email.
+ * @return string[]
+ */
+function wpyeg_defaults_public_names_secrets( $login, $email ) {
+	$values = array();
+	foreach ( array( (string) $login, (string) $email ) as $value ) {
+		$value = trim( $value );
+		if ( '' === $value ) {
+			continue;
+		}
+		$values[] = $value;
+		if ( wpyeg_defaults_is_email( $value ) ) {
+			$local = substr( $value, 0, strrpos( $value, '@' ) );
+			if ( '' !== $local ) {
+				$values[] = $local;
+			}
+		}
+	}
+
+	$lower = array();
+	foreach ( $values as $value ) {
+		$lower[] = function_exists( 'mb_strtolower' ) ? mb_strtolower( $value ) : strtolower( $value );
+	}
+
+	return array_values( array_unique( $lower ) );
+}
+
+/**
+ * Whether a display name or nickname is safe to publish.
+ *
+ * Unsafe: empty, equal (ignoring case) to the login, the email or the part
+ * before the @, or holding an email address anywhere. An at-sign that is not
+ * part of an address ("Studio @ Night") is fine.
+ *
+ * @param string $name  Candidate.
+ * @param string $login Login.
+ * @param string $email Contact email.
+ * @return bool
+ */
+function wpyeg_defaults_public_name_is_safe( $name, $login, $email ) {
+	$name = trim( (string) $name );
+	if ( '' === $name ) {
+		return false;
+	}
+	if ( false !== strpos( $name, '@' ) ) {
+		foreach ( preg_split( '/\s+/u', $name ) as $token ) {
+			if ( wpyeg_defaults_is_email( $token ) ) {
+				return false;
+			}
+		}
+	}
+
+	$lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( $name ) : strtolower( $name );
+
+	return ! in_array( $lower, wpyeg_defaults_public_names_secrets( $login, $email ), true );
+}
+
+/**
+ * Whether a slug is the one core derives from a value, with or without the
+ * collision suffix core adds when the slug is taken.
+ *
+ * Core builds the slug as sanitize_title( mb_substr( $value, 0, 50 ) ), and on
+ * a collision tries mb_substr( $slug, 0, 49 - strlen( $n ) ) . "-$n" for
+ * n = 2, 3, ... So a suffixed slug only counts when its stem is exactly that
+ * truncation, and an unrelated slug such as "field-notes-2" never does.
+ *
+ * @param string $slug  Stored or submitted nicename.
+ * @param string $value Login, email address or local part.
+ * @return bool
+ */
+function wpyeg_defaults_slug_derived_from( $slug, $value ) {
+	$slug = strtolower( (string) $slug );
+	$base = strtolower( (string) sanitize_title( mb_substr( (string) $value, 0, 50 ) ) );
+	if ( '' === $base || '' === $slug ) {
+		return false;
+	}
+	if ( $slug === $base ) {
+		return true;
+	}
+	if ( ! preg_match( '/^(.+)-([1-9][0-9]*)$/', $slug, $parts ) || 2 > (int) $parts[2] ) {
+		return false;
+	}
+
+	return mb_substr( $base, 0, 49 - strlen( $parts[2] ) ) === $parts[1];
+}
+
+/**
+ * Whether an author slug is safe to publish.
+ *
+ * @param string $slug  Candidate nicename.
+ * @param string $login Login.
+ * @param string $email Contact email.
+ * @return bool
+ */
+function wpyeg_defaults_public_slug_is_safe( $slug, $login, $email ) {
+	if ( '' === (string) $slug ) {
+		return false;
+	}
+	foreach ( wpyeg_defaults_public_names_secrets( $login, $email ) as $secret ) {
+		if ( wpyeg_defaults_slug_derived_from( $slug, $secret ) ) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * A neutral display name built from nothing about the account: not the login,
+ * the email or the user ID.
+ *
+ * @return string
+ */
+function wpyeg_defaults_public_names_handle() {
+	/* translators: %s: six random letters and digits, e.g. "3f9a1c". */
+	return sprintf( __( 'Member %s', 'sane-defaults' ), substr( bin2hex( random_bytes( 3 ) ), 0, 6 ) );
+}
+
+/**
+ * The display name to store: the submitted one when it is safe, otherwise the
+ * first safe of nickname, first and last name, first name, last name, the
+ * account's previous display name, and a neutral handle. Never the login,
+ * which is what core falls back to.
+ *
+ * @param array $fields display_name, nickname, first_name, last_name, previous, user_login, user_email.
+ * @return string
+ */
+function wpyeg_defaults_public_names_display( array $fields ) {
+	$login = isset( $fields['user_login'] ) ? (string) $fields['user_login'] : '';
+	$email = isset( $fields['user_email'] ) ? (string) $fields['user_email'] : '';
+	$get   = static function ( $key ) use ( $fields ) {
+		return isset( $fields[ $key ] ) ? trim( (string) $fields[ $key ] ) : '';
+	};
+
+	if ( wpyeg_defaults_public_name_is_safe( $get( 'display_name' ), $login, $email ) ) {
+		return $get( 'display_name' );
+	}
+
+	$first = $get( 'first_name' );
+	$last  = $get( 'last_name' );
+	// Core's own translation of its "first last" format, so name order follows the locale.
+	$full = '' !== $first && '' !== $last
+		? sprintf( translate_with_gettext_context( '%1$s %2$s', 'Display name based on first name and last name', 'default' ), $first, $last ) // phpcs:ignore WordPress.WP.I18n -- core's string, read from core's catalog on purpose.
+		: '';
+
+	foreach ( array( $get( 'nickname' ), $full, $first, $last, $get( 'previous' ) ) as $candidate ) {
+		if ( wpyeg_defaults_public_name_is_safe( $candidate, $login, $email ) ) {
+			return $candidate;
+		}
+	}
+
+	return wpyeg_defaults_public_names_handle();
+}
+
+/**
+ * A safe, unique slug: the slug of the safe display name, made unique the way
+ * core does, or ten random hex characters when that would still be unsafe.
+ *
+ * @param string $display Safe display name.
+ * @param int    $user_id Account being saved, 0 when new.
+ * @param string $login   Login.
+ * @param string $email   Contact email.
+ * @return string
+ */
+function wpyeg_defaults_public_names_slug( $display, $user_id, $login, $email ) {
+	global $wpdb;
+
+	$slug = trim( mb_substr( (string) sanitize_title( $display ), 0, 50 ), '-' );
+	if ( '' === $slug || ! wpyeg_defaults_public_slug_is_safe( $slug, $login, $email ) ) {
+		$slug = bin2hex( random_bytes( 5 ) );
+	}
+
+	for ( $attempt = 0; $attempt < 3; $attempt++ ) {
+		$candidate = $slug;
+		$suffix    = 2;
+		// The same uniqueness check core runs in wp_insert_user().
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- core's own check, per save.
+		while ( $wpdb->get_var( $wpdb->prepare( "SELECT ID FROM {$wpdb->users} WHERE user_nicename = %s AND ID != %d AND user_login != %s LIMIT 1", $candidate, (int) $user_id, (string) $login ) ) ) {
+			$candidate = mb_substr( $slug, 0, 49 - strlen( (string) $suffix ) ) . '-' . $suffix;
+			++$suffix;
+		}
+		if ( wpyeg_defaults_public_slug_is_safe( $candidate, $login, $email ) ) {
+			return $candidate;
+		}
+		$slug = bin2hex( random_bytes( 5 ) );
+	}
+
+	return $slug;
+}
+
+/**
+ * Remember, for the rest of this request, the display name and email chosen
+ * for a login in the users-table filter, so the meta filters that run later in
+ * the same save can use them. Pass $set to write, omit it to read.
+ *
+ * @param string     $login Login.
+ * @param array|null $set   display and email, or null to read.
+ * @return array{display:string,email:string}
+ */
+function wpyeg_defaults_public_names_chosen( $login, $set = null ) {
+	static $chosen = array();
+
+	if ( is_array( $set ) ) {
+		$chosen[ (string) $login ] = array(
+			'display' => isset( $set['display'] ) ? (string) $set['display'] : '',
+			'email'   => isset( $set['email'] ) ? (string) $set['email'] : '',
+		);
+	}
+
+	return isset( $chosen[ (string) $login ] ) ? $chosen[ (string) $login ] : array(
+		'display' => '',
+		'email'   => '',
+	);
+}
+
+/**
+ * Enforce safe values on the users-table fields: display name and slug.
+ *
+ * @param array    $data     Users-table values about to be saved.
+ * @param bool     $update   Whether this is an update.
+ * @param int|null $user_id  Account ID on update.
+ * @param array    $userdata Raw wp_insert_user() input.
+ * @return array
+ */
+function wpyeg_defaults_public_names_filter_user( $data, $update, $user_id, $userdata ) {
+	if ( ! is_array( $data ) ) {
+		return $data;
+	}
+
+	$login  = isset( $data['user_login'] ) ? (string) $data['user_login'] : '';
+	$stored = $update ? get_userdata( (int) $user_id ) : false;
+	if ( $stored ) {
+		// Core leaves the login out of $data on update; read the stored one.
+		$login = (string) $stored->user_login;
+	}
+	$email    = isset( $data['user_email'] ) ? (string) $data['user_email'] : '';
+	$userdata = is_array( $userdata ) ? $userdata : array();
+
+	// $data has been through core's pre_user_* filters; $userdata has not. Run
+	// any value taken from it through the same filter core applies to that
+	// field, or a raw nickname could become the stored display name.
+	$clean = static function ( $filter, $key ) use ( $userdata ) {
+		return isset( $userdata[ $key ] ) ? trim( (string) apply_filters( $filter, (string) $userdata[ $key ] ) ) : ''; // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.DynamicHooknameFound -- core's own pre_user_* filters.
+	};
+
+	$display = wpyeg_defaults_public_names_display(
+		array(
+			'display_name' => isset( $data['display_name'] ) ? (string) $data['display_name'] : '',
+			'nickname'     => '' !== $clean( 'pre_user_nickname', 'nickname' ) ? $clean( 'pre_user_nickname', 'nickname' ) : $login,
+			'first_name'   => $clean( 'pre_user_first_name', 'first_name' ),
+			'last_name'    => $clean( 'pre_user_last_name', 'last_name' ),
+			'previous'     => $stored ? (string) $stored->display_name : '',
+			'user_login'   => $login,
+			'user_email'   => $email,
+		)
+	);
+
+	$slug = isset( $data['user_nicename'] ) ? (string) $data['user_nicename'] : '';
+	// On update with no slug submitted, keep a safe slug the account already has.
+	if ( $stored && empty( $userdata['user_nicename'] ) && ! wpyeg_defaults_public_slug_is_safe( $slug, $login, $email )
+		&& wpyeg_defaults_public_slug_is_safe( $stored->user_nicename, $login, $email ) ) {
+		$slug = (string) $stored->user_nicename;
+	}
+	if ( ! wpyeg_defaults_public_slug_is_safe( $slug, $login, $email ) ) {
+		$slug = wpyeg_defaults_public_names_slug( $display, $update ? (int) $user_id : 0, $login, $email );
+	}
+
+	$data['display_name']  = $display;
+	$data['user_nicename'] = $slug;
+	wpyeg_defaults_public_names_chosen(
+		$login,
+		array(
+			'display' => $display,
+			'email'   => $email,
+		)
+	);
+
+	return $data;
+}
+
+/**
+ * The nickname to store in place of an unsafe one: the display name chosen in
+ * this save when it is safe, otherwise a neutral handle.
+ *
+ * @param WP_User $user Saved account.
+ * @param mixed   $nickname Nickname about to be stored.
+ * @return mixed The nickname, or its safe replacement.
+ */
+function wpyeg_defaults_public_names_safe_nickname( $user, $nickname ) {
+	// What this save chose moments ago. The object core passes in can still
+	// hold the old cached row, so its email may be the one being replaced.
+	$chosen = wpyeg_defaults_public_names_chosen( $user->user_login );
+	$email  = '' !== $chosen['email'] ? $chosen['email'] : (string) $user->user_email;
+
+	if ( wpyeg_defaults_public_name_is_safe( is_scalar( $nickname ) ? (string) $nickname : '', $user->user_login, $email ) ) {
+		return $nickname;
+	}
+
+	return wpyeg_defaults_public_name_is_safe( $chosen['display'], $user->user_login, $email ) ? $chosen['display'] : wpyeg_defaults_public_names_handle();
+}
+
+/**
+ * Enforce a safe nickname, which core stores as user meta after the row.
+ *
+ * @param array   $meta   Core user meta about to be saved.
+ * @param WP_User $user   Saved account.
+ * @param bool    $update Whether this is an update.
+ * @return array
+ */
+function wpyeg_defaults_public_names_filter_meta( $meta, $user, $update ) {
+	unset( $update );
+	if ( ! is_array( $meta ) || ! ( $user instanceof WP_User ) ) {
+		return $meta;
+	}
+
+	$meta['nickname'] = wpyeg_defaults_public_names_safe_nickname( $user, isset( $meta['nickname'] ) ? $meta['nickname'] : '' );
+
+	return $meta;
+}
+
+/**
+ * Enforce a safe nickname passed in wp_insert_user()'s meta_input, which core
+ * writes after, and over, the nickname filtered above.
+ *
+ * @param array   $custom_meta meta_input values about to be saved.
+ * @param WP_User $user        Saved account.
+ * @return array
+ */
+function wpyeg_defaults_public_names_filter_custom_meta( $custom_meta, $user ) {
+	if ( ! is_array( $custom_meta ) || ! array_key_exists( 'nickname', $custom_meta ) || ! ( $user instanceof WP_User ) ) {
+		return $custom_meta;
+	}
+
+	$custom_meta['nickname'] = wpyeg_defaults_public_names_safe_nickname( $user, $custom_meta['nickname'] );
+
+	return $custom_meta;
+}
+
+/**
+ * Hand WordPress 7.2's /random/ rules back to core on deactivation.
+ *
+ * While this plugin turns the redirects off, the saved rewrite rules leave them
+ * out, and nothing rebuilds them once the plugin is gone. Deleting the saved
+ * rules lets each site's next request rebuild them under core's own answer.
+ * Settings are untouched: deactivation stays non-destructive.
+ *
+ * @param bool $network_wide Whether the plugin is being network-deactivated.
+ * @return void
+ */
+function wpyeg_defaults_deactivate( $network_wide = false ) {
+	if ( ! is_multisite() || ! $network_wide ) {
+		wpyeg_defaults_forget_random_rules();
+		return;
+	}
+
+	// Capped pages, like uninstall.php, so a large network is not loaded at once.
+	$paged = 0;
+	do {
+		$sites = get_sites(
+			array(
+				'fields' => 'ids',
+				'number' => 200,
+				'offset' => $paged * 200,
+			)
+		);
+		foreach ( $sites as $site_id ) {
+			switch_to_blog( $site_id );
+			wpyeg_defaults_forget_random_rules();
+			restore_current_blog();
+		}
+		$found = count( $sites );
+		++$paged;
+	} while ( 200 === $found );
+}
+
+/**
+ * Delete one site's saved rewrite rules and the random-redirect note, only
+ * where the note exists: a site whose rules were never built under this
+ * plugin's answer has nothing to undo.
+ *
+ * @return void
+ */
+function wpyeg_defaults_forget_random_rules() {
+	if ( false === get_option( 'wpyeg_random_rules_state' ) ) {
+		return;
+	}
+
+	delete_option( 'wpyeg_random_rules_state' );
+	delete_option( 'rewrite_rules' );
 }

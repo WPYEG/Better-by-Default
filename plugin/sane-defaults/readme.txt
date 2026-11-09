@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.6
+Stable tag: 1.3.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -36,6 +36,7 @@ This table is generated from the same `wpyeg_defaults_schema()` array the plugin
 | Block the endpoint entirely (returns 403) | `block_xmlrpc_endpoint` | `no` |
 | Prohibit Application Passwords | `disable_application_passwords` | `no` |
 | Require strong passwords | `require_strong_passwords` | `yes` |
+| Keep logins and email addresses out of public names | `protect_public_names` | `no` |
 | Limit unfiltered HTML to administrators | `limit_unfiltered_html_to_admins` | `yes` |
 | Remove WordPress version fingerprint | `remove_version` | `no` |
 | Send baseline security headers | `security_headers` | `yes` |
@@ -47,6 +48,7 @@ This table is generated from the same `wpyeg_defaults_schema()` array the plugin
 | Disable self-pingbacks | `disable_self_pingbacks` | `yes` |
 | Disable public author archives | `disable_author_archives` | `yes` |
 | Redirect attachment pages | `redirect_attachment_pages` | `yes` |
+| Disable random post redirects | `disable_random_redirects` | `yes` |
 | Disable emoji script | `disable_emojis` | `yes` |
 | Hide post-password protection | `disable_post_passwords` | `no` |
 | Force the classic editor | `force_classic_editor` | `no` |
@@ -108,6 +110,10 @@ Yes, and you do not have to justify it. It is the only thing this plugin does th
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.3.0 =
+* Added: Disable random post redirects, on by default. WordPress 7.2 sends `/random/`, and `?random` on any archive or search, to a random published post. Each request runs an uncached random-order query, and the author form confirms which author slugs exist even while author archives redirect. The setting turns them off, rebuilds saved rewrite rules whenever the answer changes, and hands the rules back to core on deactivation. It has no effect before WordPress 7.2.
+* Added: Keep logins and email addresses out of public names, off by default. When an account is created or updated, a display name, nickname or author slug that repeats the login, the email address or the part before the @ is replaced with a safe one. Safe names people chose are kept, and logins, email addresses and passwords never change. Existing accounts change the next time they are saved; old author slugs are not redirected. On multisite the main site's setting decides, because accounts are shared. Ported from Keel 0.9.1 without its one-time cleanup screen.
 
 = 1.2.6 =
 * Settings descriptions use more literal explanations, define useful technical terms, and explain the three wp-config.php examples. Setting behaviour and defaults are unchanged.
@@ -198,6 +204,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Turns off WordPress 7.2's new random post redirects by default. Adds an opt-in setting that keeps logins and email addresses out of display names, nicknames and author slugs.
 
 = 1.2.6 =
 Settings descriptions and configuration examples are clearer. Setting behaviour and defaults are unchanged.
