@@ -6,7 +6,7 @@
 
 `a hands-on workshop · build the "sane-defaults" plugin`
 
-Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 32 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
+Welcome to WPYEG. In this workshop we're building and reviewing a small plugin that defines and activates 34 sensible but little-known and seldom used defaults for WordPress sites in 2026. Whether you write PHP daily or just manage WordPress sites, you'll leave knowing why each default matters and how to enable (or disable) it. This workshop and plugin distils years of experience and new learning from a recent project that I've summed up in this workshop.
 
 [This running text is the speaker script — in iA Presenter it stays in your notes, not on the slide.]
 
@@ -31,7 +31,7 @@ if ( wpyeg_defaults_enabled( 'restrict_rest_user_discovery' ) ) {
 }   // that's the whole pattern, repeated across the plugin
 ```
 
-In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 32 settings built around that pattern.
+In our demo plugin, a default is an `add_filter` behind an `if ( option )`. We have 34 settings built around that pattern.
 
 ---
 
@@ -622,8 +622,9 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `block_xmlrpc_endpoint` | `no` | `wp_xmlrpc_server_class` |
 | `disable_application_passwords` | `no` | `wp_is_application_passwords_available` |
 | `require_strong_passwords` | `yes` | server-side password validation |
+| `protect_public_names` | `no` | `wp_pre_insert_user_data` / `insert_user_meta` |
 
-[These are the exact unprefixed keys stored inside the single `wpyeg_better_by_default` option. An allow-setting at `no` can still mean a protective behaviour is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active.]
+[These are the exact unprefixed keys stored inside the single `wpyeg_better_by_default` option. An allow-setting at `no` can still mean a protective behaviour is active: the three XML-RPC categories are unavailable by default, while the all-or-nothing endpoint block remains opt-in. Application Passwords remain available; strong-password validation is active. Public names are opt-in because they change names people see: with them on, a display name, nickname or author slug that repeats the login or email address is replaced when the account is saved.]
 
 ---
 
@@ -653,12 +654,13 @@ if ( wpyeg_defaults_enabled( 'hide_welcome_panel' ) ) {
 | `disable_self_pingbacks` | `yes` | `pre_ping` |
 | `disable_author_archives` | `yes` | `template_redirect` |
 | `redirect_attachment_pages` | `yes` | `template_redirect` |
+| `disable_random_redirects` | `yes` | `wp_enable_random_content_redirect` |
 | `disable_emojis` | `yes` | `init` removes emoji assets |
 | `limit_unfiltered_html_to_admins` | `yes` | `user_has_cap` drops the cap for non-admins |
 | `disable_post_passwords` | `no` | CSS hides the editor's password option |
 | `force_classic_editor` | `no` | four editor gates answered false |
 
-[The schema group is authoritative: emoji removal lives under Content, not Performance. The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Author and attachment redirects remove thin public pages, while the editor policies remain opt-in where they can disrupt an established workflow.]
+[The schema group is authoritative: emoji removal lives under Content, not Performance. The three comment and pingback settings are separate because a site may keep comments while closing new-post pings and suppressing self-pingbacks. Author and attachment redirects remove thin public pages, and WordPress 7.2's random post redirects are off because each one runs an uncached random-order query and the author form confirms which slugs exist, while the editor policies remain opt-in where they can disrupt an established workflow.]
 
 ---
 

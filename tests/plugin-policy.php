@@ -185,6 +185,75 @@ function register_activation_hook( $file, $callback ) {
 }
 
 /**
+ * Deactivation-hook test double.
+ *
+ * @param string   $file     Plugin file.
+ * @param callable $callback Deactivation callback.
+ */
+function register_deactivation_hook( $file, $callback ) {
+	$GLOBALS['wpyeg_test_deactivation'] = $callback;
+	unset( $file );
+}
+
+/**
+ * Main-site test double. True unless a test stages a subsite.
+ *
+ * @return bool
+ */
+function is_main_site() {
+	return empty( $GLOBALS['wpyeg_test_subsite'] );
+}
+
+/**
+ * Main-site ID test double.
+ *
+ * @return int
+ */
+function get_main_site_id() {
+	return 1;
+}
+
+/**
+ * Per-site option test double: the main site's stored settings.
+ *
+ * @param int    $blog_id       Site ID.
+ * @param string $name          Option name.
+ * @param mixed  $default_value Default.
+ * @return mixed
+ */
+function get_blog_option( $blog_id, $name, $default_value = false ) {
+	unset( $blog_id, $name );
+	return isset( $GLOBALS['wpyeg_test_main_option'] ) ? $GLOBALS['wpyeg_test_main_option'] : $default_value;
+}
+
+/**
+ * Slug test double: core's sanitize_title() for the ASCII cases tested here
+ * (lower-case, drop @, other punctuation and spaces to hyphens).
+ *
+ * @param string $title Title.
+ * @return string
+ */
+function sanitize_title( $title ) {
+	$title = strtolower( (string) $title );
+	$title = str_replace( '@', '', $title );
+	$title = preg_replace( '/[^a-z0-9_\-]+/', '-', $title );
+	return trim( preg_replace( '/-+/', '-', $title ), '-' );
+}
+
+/**
+ * Core-catalog translation test double.
+ *
+ * @param string $text    Text.
+ * @param string $context Context.
+ * @param string $domain  Domain.
+ * @return string
+ */
+function translate_with_gettext_context( $text, $context, $domain ) {
+	unset( $context, $domain );
+	return $text;
+}
+
+/**
  * Filter test double.
  *
  * Returns the unfiltered value unless a test has staged an override in
@@ -3454,5 +3523,87 @@ wpyeg_test_assert(
 	false === strpos( $locked_off_markup, '<input type="hidden" name="wpyeg_better_by_default[limit_unfiltered_html_to_admins]"' ),
 	'A locked toggle stored off carries nothing, because any carried value would read as on.'
 );
+
+/*
+ * Random post redirects (WordPress 7.2). On by default; the filter is all it
+ * takes, and the deactivation hook hands the saved rules back to core.
+ */
+$schema = wpyeg_defaults_schema();
+wpyeg_test_assert( 'yes' === $schema['disable_random_redirects']['default'], 'Random post redirects ship off (setting on).' );
+wpyeg_test_assert( 'wpyeg_defaults_deactivate' === ( $GLOBALS['wpyeg_test_deactivation'] ?? null ), 'Deactivation hands the /random/ rewrite rules back to core.' );
+$GLOBALS['wpyeg_test_hooks'] = array();
+wpyeg_defaults_bootstrap();
+$random_gate = wpyeg_test_find_hook( 'wp_enable_random_content_redirect' );
+wpyeg_test_assert( null !== $random_gate && '__return_false' === $random_gate['callback'], 'The random-redirect gate answers false by default.' );
+$GLOBALS['wpyeg_test_option'] = array( 'disable_random_redirects' => 'no' );
+$GLOBALS['wpyeg_test_hooks']  = array();
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'wp_enable_random_content_redirect' ), 'With the setting off, core decides about random redirects.' );
+unset( $GLOBALS['wpyeg_test_option'] );
+
+/*
+ * Public names. Off by default; when on, three filters cover the users-table
+ * row, core's meta and meta_input. On a subsite the main site decides.
+ */
+wpyeg_test_assert( 'no' === $schema['protect_public_names']['default'], 'Public names ship opt-in.' );
+$GLOBALS['wpyeg_test_hooks'] = array();
+wpyeg_defaults_bootstrap();
+wpyeg_test_assert( null === wpyeg_test_find_hook( 'wp_pre_insert_user_data' ), 'Public names register nothing while off.' );
+$GLOBALS['wpyeg_test_option'] = array( 'protect_public_names' => 'yes' );
+$GLOBALS['wpyeg_test_hooks']  = array();
+wpyeg_defaults_bootstrap();
+foreach ( array( 'wp_pre_insert_user_data', 'insert_user_meta', 'insert_custom_user_meta' ) as $public_names_hook ) {
+	wpyeg_test_assert( null !== wpyeg_test_find_hook( $public_names_hook ), "Public names filter {$public_names_hook} when on." );
+}
+unset( $GLOBALS['wpyeg_test_option'] );
+
+$GLOBALS['wpyeg_test_multisite'] = true;
+$GLOBALS['wpyeg_test_subsite']   = true;
+$GLOBALS['wpyeg_test_option']    = array( 'protect_public_names' => 'yes' );
+wpyeg_test_assert( ! wpyeg_defaults_public_names_enforced(), 'A subsite cannot switch public names on for shared accounts.' );
+wpyeg_test_assert( null !== wpyeg_defaults_config_lock( 'protect_public_names' ), 'A subsite shows why the setting is locked.' );
+$GLOBALS['wpyeg_test_option']      = array( 'protect_public_names' => 'no' );
+$GLOBALS['wpyeg_test_main_option'] = array( 'protect_public_names' => 'yes' );
+wpyeg_test_assert( wpyeg_defaults_public_names_enforced(), "A subsite follows the main site's setting." );
+unset( $GLOBALS['wpyeg_test_multisite'], $GLOBALS['wpyeg_test_subsite'], $GLOBALS['wpyeg_test_option'], $GLOBALS['wpyeg_test_main_option'] );
+
+// Detection, ignoring case.
+wpyeg_test_assert( ! wpyeg_defaults_public_name_is_safe( 'Dan@Example.com', 'dan@example.com', 'dan@example.com' ), 'A display name equal to an email login is unsafe, in any case.' );
+wpyeg_test_assert( ! wpyeg_defaults_public_name_is_safe( 'DAN', 'dan@example.com', 'other@example.org' ), 'The local part of the login is unsafe.' );
+wpyeg_test_assert( ! wpyeg_defaults_public_name_is_safe( 'other', 'handle', 'other@example.org' ), 'The local part of the contact email is unsafe.' );
+wpyeg_test_assert( ! wpyeg_defaults_public_name_is_safe( 'Desk ops@example.org Team', 'handle', 'x@example.org' ), 'A name holding any email address is unsafe.' );
+wpyeg_test_assert( ! wpyeg_defaults_public_name_is_safe( 'handle', 'handle', 'x@example.org' ), 'A non-email login is not a public name either.' );
+wpyeg_test_assert( wpyeg_defaults_public_name_is_safe( 'Studio @ Night', 'handle', 'x@example.org' ), 'An at-sign that is not an address is fine.' );
+wpyeg_test_assert( wpyeg_defaults_public_name_is_safe( 'Dan Knauss', 'dan@example.com', 'dan@example.com' ), 'A chosen byline is safe.' );
+
+// Slugs: core's derivation, its -N suffix on the exact stem, and the 50-character truncation.
+wpyeg_test_assert( ! wpyeg_defaults_public_slug_is_safe( 'danexample-com', 'dan@example.com', 'dan@example.com' ), "Core's slug of an email login is unsafe." );
+wpyeg_test_assert( ! wpyeg_defaults_public_slug_is_safe( 'danexample-com-2', 'dan@example.com', 'dan@example.com' ), "Core's collision suffix does not hide it." );
+wpyeg_test_assert( wpyeg_defaults_public_slug_is_safe( 'danexample-com-1', 'dan@example.com', 'dan@example.com' ), 'A -1 suffix is never core output.' );
+wpyeg_test_assert( wpyeg_defaults_public_slug_is_safe( 'field-notes-2', 'dan@example.com', 'dan@example.com' ), 'An unrelated suffixed slug is safe.' );
+$long_login = str_repeat( 'long.', 8 ) . 'writer@fixture.test';
+$long_base  = sanitize_title( mb_substr( $long_login, 0, 50 ) );
+wpyeg_test_assert( ! wpyeg_defaults_public_slug_is_safe( $long_base, $long_login, $long_login ), 'The truncated slug of a long email login is unsafe.' );
+wpyeg_test_assert( ! wpyeg_defaults_public_slug_is_safe( mb_substr( $long_base, 0, 47 ) . '-10', $long_login, $long_login ), 'A two-digit suffix on the truncated stem is caught.' );
+
+// The fallback order: nickname, first + last, first, last, previous, then a handle. Never the login.
+$fallback = array(
+	'display_name' => 'dan@example.com',
+	'nickname'     => 'dan@example.com',
+	'first_name'   => 'Dan',
+	'last_name'    => 'Knauss',
+	'user_login'   => 'dan@example.com',
+	'user_email'   => 'dan@example.com',
+);
+wpyeg_test_assert( 'Dan Knauss' === wpyeg_defaults_public_names_display( $fallback ), 'An unsafe name falls back to first and last name.' );
+wpyeg_test_assert( 'Danny' === wpyeg_defaults_public_names_display( array( 'nickname' => 'Danny' ) + $fallback ), 'A safe nickname comes first.' );
+wpyeg_test_assert( 'Pen Name' === wpyeg_defaults_public_names_display( array( 'display_name' => 'Pen Name' ) + $fallback ), 'A safe chosen name is kept.' );
+$handle = wpyeg_defaults_public_names_display(
+	array(
+		'first_name' => '',
+		'last_name'  => '',
+	) + $fallback
+);
+wpyeg_test_assert( 1 === preg_match( '/^Member [0-9a-f]{6}$/', $handle ), 'With no safe name left, a neutral handle, never the login.' );
 
 fwrite( STDOUT, "Better by Default policy tests passed.\n" );

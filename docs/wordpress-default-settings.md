@@ -308,6 +308,49 @@ the personal-context rules are all local and keep running.
 > standing to say no. A default that cannot be switched off is not a default; it is a
 > requirement wearing a default's clothes.
 
+### Keep Logins and Email Addresses out of Public Names
+- **Setting key:** `protect_public_names`
+- **Default:** `no` (opt-in)
+- **Why:** When a login is an email address, `wp_insert_user()` copies it into the display name
+  and nickname whenever no names are supplied, which covers every self-registration, and builds
+  the author slug from it (`dan@example.com` becomes `danexample-com`). The address then shows up
+  in theme bylines, the Post Author block, the stored author name on every logged-in comment and
+  the `comment-author-{slug}` CSS class. Since 4.5 every account also accepts its email as a login
+  name, so a published address is a valid login identifier as well as personal data.
+
+Closing routes is not the same fix. Restricting REST user discovery and author archives hides the
+REST list, feeds, oEmbed, the users sitemap and `/author/` URLs, but not bylines or comments. This
+setting fixes the data at its source, the user record, so it covers every route that saves an
+account: registration, Add New, profile screens, REST, WP-CLI and shop plugins.
+
+A display name or nickname is safe when it is not the login, the email or the part before the
+`@` (ignoring case) and holds no email address. A slug is safe when it is not core's slug of any
+of those, including core's `-N` collision suffix. When a value is unsafe, the fallback order is
+nickname, then first and last name, then first, then last, then the account's previous display
+name, then a neutral handle such as "Member 3f9a1c". Never the login, which is what core falls back
+to. The slug follows the safe display name, or becomes ten random hex characters.
+
+It is opt-in because it changes names people see. Logins, email addresses and passwords never
+change, and email logins stay allowed: the OWASP Authentication Cheat Sheet says to permit them.
+Existing accounts are fixed the next time they are saved. Keel adds a one-time cleanup for them;
+Better by Default keeps the teaching version to the filters. Old author slugs are **not**
+redirected, because a redirect would confirm which address belongs to which byline. On multisite
+the users table is shared, so the main site's setting decides for every site.
+
+```php
+add_filter( 'wp_pre_insert_user_data', function ( $data, $update, $user_id, $userdata ) {
+    $login = $update ? get_userdata( $user_id )->user_login : $data['user_login']; // Core omits it on update.
+    if ( ! is_safe_public_name( $data['display_name'], $login, $data['user_email'] ) ) {
+        $data['display_name'] = first_safe_name( $userdata, $login, $data['user_email'] );
+    }
+    if ( ! is_safe_public_slug( $data['user_nicename'], $login, $data['user_email'] ) ) {
+        $data['user_nicename'] = unique_slug_from( $data['display_name'] );
+    }
+    return $data;
+}, 20, 4 );
+// The nickname is user meta, saved later: filter insert_user_meta too.
+```
+
 ### Disable AI Connectors
 - **Setting key:** `disable_ai_connectors`
 - **Default:** `yes`
@@ -674,6 +717,29 @@ add_action( 'template_redirect', function () {
 > **Offloaded media:** if the file lives on S3 or a CDN, `wp_safe_redirect()` will refuse the
 > off-site host and bounce to `wp-admin`. Add that one host via `allowed_redirect_hosts` for the
 > redirect rather than reaching for the unguarded `wp_redirect()`.
+
+### Disable Random Post Redirects
+- **Setting key:** `disable_random_redirects`
+- **Default:** `yes`
+- **Why:** WordPress 7.2 answers `/random/`, `/random/category/{slug}/`, `/random/author/{slug}/`
+  and `?random` on any archive or search with a redirect to a random published post. Each request
+  runs an uncached `ORDER BY RAND()` query, which is a cheap way for anyone to make the database
+  work. The author form also confirms which author slugs exist, even while author archives redirect.
+
+Returning `false` from `wp_enable_random_content_redirect` drops the rewrite rules, hides the
+Random base field on the Permalinks screen and makes core ignore the query variable. On earlier
+versions nothing applies the filter, so the setting does nothing there.
+
+Two details matter more than the filter. Core **saves** the `/random/` rewrite rules once, so they
+outlive a change of answer: turn the redirects off and the saved rules still match `/random/`,
+which then renders the home page with a 200. The plugin records what the saved rules were built
+under and soft-flushes them when that differs. And `/random/author/{slug}/` redirects inside
+`WP::main()`, before `template_redirect`, so the author-archive redirect never sees it. With author
+archives off, the plugin makes those queries find nothing, so every author answers the same 404.
+
+```php
+add_filter( 'wp_enable_random_content_redirect', '__return_false' );
+```
 
 ### Disable Emojis
 - **Setting key:** `disable_emojis`
@@ -1274,6 +1340,7 @@ add_filter( 'wpyeg_weak_roles', '__return_empty_array' );
 | XML-RPC: block the endpoint | `block_xmlrpc_endpoint` | `no` | Security |
 | Prohibit Application Passwords | `disable_application_passwords` | `no` | Security |
 | Require strong passwords | `require_strong_passwords` | `yes` | Security |
+| Keep logins and email addresses out of public names | `protect_public_names` | `no` | Security |
 | Remove WordPress version fingerprint | `remove_version` | `no` | Security |
 | Send baseline security headers | `security_headers` | `yes` | Security |
 | Set `X-Frame-Options` | `frame_options` | `SAMEORIGIN` | Security |
@@ -1284,6 +1351,7 @@ add_filter( 'wpyeg_weak_roles', '__return_empty_array' );
 | Disable self-pingbacks | `disable_self_pingbacks` | `yes` | Content |
 | Disable public author archives | `disable_author_archives` | `yes` | Content |
 | Redirect attachment pages | `redirect_attachment_pages` | `yes` | Content |
+| Disable random post redirects | `disable_random_redirects` | `yes` | Content |
 | Disable emoji script | `disable_emojis` | `yes` | Content |
 | Limit unfiltered HTML to administrators | `limit_unfiltered_html_to_admins` | `yes` | Security |
 | Hide post-password protection | `disable_post_passwords` | `no` | Content |
