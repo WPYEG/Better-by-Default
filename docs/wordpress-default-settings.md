@@ -271,9 +271,10 @@ function wpyeg_enforce_strong_password( $errors, $update, $user ) {
 > nor its full hash leaves the site. SHA-1 is only the API lookup format, not the password-storage
 > hash. BBD requests `Add-Padding`, ignores padded count-0 rows, and caps the WordPress HTTP response
 > with `limit_response_size` at 128 KiB. A response that reaches the cap may be truncated, so capped,
-> empty, malformed, failed, and non-200 responses are treated as unavailable and **fail open**; only
-> structurally valid prefix responses are cached for 12 hours. This prevents bad remote evidence from
-> blocking password changes. A
+> empty, malformed, failed, and non-200 responses are treated as unavailable and **fail open**. This
+> prevents bad remote evidence from blocking password changes. A reply is used for the check that
+> asked for it and then dropped: the site keeps no reply and no list of the prefixes it has asked
+> about, so each password check makes one request. A
 > strength estimator (`wpyeg_zxcvbn_score()` via `bjeavons/zxcvbn-php`) is still yours
 > to add if you want one. Server-side validation is the enforcement layer; pair it with the core
 > JS meter for UX, but never trust the client alone.

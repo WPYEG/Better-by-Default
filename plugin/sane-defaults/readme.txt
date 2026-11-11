@@ -99,7 +99,7 @@ No. It is a legitimate but aging API and an additional attack/resource surface. 
 
 = Does this send passwords anywhere? =
 
-No. Breach screening asks Have I Been Pwned whether a password appears in a known breach corpus, and it does so by k-anonymity: the password is hashed locally with SHA-1, only the first five characters of that hash are sent, and the remaining 35 are compared against the returned suffixes on your server. Neither the password nor its full hash leaves the site, and the response is padded so its size does not reveal how many real matches came back. SHA-1 is only the lookup format the API uses; WordPress still owns password storage and its own hashing.
+No. Breach screening asks Have I Been Pwned whether a password appears in a known breach corpus, and it does so by k-anonymity: the password is hashed locally with SHA-1, only the first five characters of that hash are sent, and the remaining 35 are compared against the returned suffixes on your server. Neither the password nor its full hash leaves the site, and the response is padded so its size does not reveal how many real matches came back. SHA-1 is only the lookup format the API uses; WordPress still owns password storage and its own hashing. The reply is used for that one check and then dropped: the site keeps no reply and no list of the prefixes it has asked about.
 
 = Can I turn breach screening off? =
 

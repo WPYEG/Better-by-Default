@@ -8,6 +8,10 @@
  * settings a site had chosen came back weeks later on a fresh install, and the
  * cached breach lookups sat in the options table with nothing left to read them.
  *
+ * Since 1.3.1 the plugin keeps no breach replies at all, and deletes the ones
+ * earlier versions kept at WordPress's next daily clean-up. This file still
+ * removes them, for a site that is deleted before that clean-up has run.
+ *
  * Deactivation is untouched and non-destructive: deactivate, and every setting
  * is still there when the plugin comes back. Only deletion clears it, which is
  * what somebody asking WordPress to delete a plugin has asked for.
@@ -21,20 +25,23 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 /**
- * Everything this plugin persists on one site.
+ * Everything this plugin persists on one site, now or in an earlier version.
  *
- * Two things, and they need different handling:
+ * What the current version writes:
  *
  * - `wpyeg_better_by_default` — one option holding every setting's value.
+ * - `wpyeg_random_rules_state` — what the saved rewrite rules were built under.
  * - `wpyeg_hibp_unavailable` — the last breach-screening failure, if screening
  *   has failed in the last hour. Kind and timestamp only; never the password
  *   and never the hash prefix.
- * - `wpyeg_hibp_cache_generation` — the per-installation namespace that keeps
- *   cache entries left in an external object cache unreachable after reinstall.
- * - `wpyeg_hibp_*` — the Have I Been Pwned response cache, one transient per
- *   five-hex prefix. Deleted with a LIKE query because there is no key to
- *   enumerate: which prefixes exist depends entirely on which passwords have
- *   been checked on this site.
+ *
+ * What versions through 1.3.0 wrote, and may have left behind:
+ *
+ * - `wpyeg_hibp_cache_generation` — the per-installation namespace for the
+ *   response cache those versions kept.
+ * - `wpyeg_hibp_*` — that cache, one transient per five-hex prefix. Deleted
+ *   with a LIKE query because there is no key to enumerate: which prefixes
+ *   exist depends entirely on which passwords were checked on this site.
  *
  * @return void
  */
@@ -48,13 +55,12 @@ function wpyeg_defaults_uninstall_site() {
 	delete_option( 'wpyeg_random_rules_state' );
 
 	/*
-	 * The breach-screening outage record, and the cache namespace.
+	 * The breach-screening outage record, and the namespace of the response
+	 * cache earlier versions kept.
 	 *
-	 * Dropping the generation is what makes the range entries unreachable after
-	 * a reinstall. On a site with a persistent object cache a transient is not a
-	 * database row at all, so the query below cannot see one — a new generation
-	 * means anything left behind belongs to an installation that no longer
-	 * exists, and it expires on its own.
+	 * On a site with a persistent object cache a transient is not a database row
+	 * at all, so the query below cannot see one. Nothing reads those entries any
+	 * more, and they expire on their own within 12 hours of being written.
 	 */
 	delete_transient( 'wpyeg_hibp_unavailable' );
 	delete_option( 'wpyeg_hibp_cache_generation' );
