@@ -431,11 +431,18 @@ function is_super_admin( $user_id = 0 ) {
 /**
  * Capability test double.
  *
+ * A test can stage one answer for every capability, or an answer per
+ * capability, which is what tells a site's administrator (who can manage that
+ * site's options) from a Super Admin (who can manage the network's).
+ *
  * @param string $capability Capability being checked.
  * @return bool
  */
 function current_user_can( $capability ) {
-	unset( $capability );
+	if ( isset( $GLOBALS['wpyeg_test_caps'][ $capability ] ) ) {
+		return (bool) $GLOBALS['wpyeg_test_caps'][ $capability ];
+	}
+
 	return isset( $GLOBALS['wpyeg_test_can'] ) ? (bool) $GLOBALS['wpyeg_test_can'] : true;
 }
 
@@ -3354,6 +3361,169 @@ wpyeg_test_assert( 'no' === $absent['disable_comments'], 'A toggle absent from t
 // once the wp-config constants that trigger a lock have been defined.
 
 /*
+ * Settings a network's main site holds for every site.
+ *
+ * Two settings are the network's rather than a site's. Core runs its background
+ * updater from the main site only, so the main site's core-update policy is the
+ * network's; and a network has one users table, so the main site's public-names
+ * setting decides for every site. On a network every site's administrators can
+ * open that site's settings screen, the main site's included, so on the main
+ * site those two settings need a Super Admin.
+ *
+ * Who the rule leaves alone is pinned as firmly as who it stops: a Super Admin,
+ * a network's other sites, and every single site.
+ *
+ * It sits here for the reason given at the top of this block: these are the
+ * answers with no constant set, so they have to be read before the first define().
+ */
+wpyeg_test_assert(
+	array( 'core_update_policy', 'protect_public_names' ) === wpyeg_defaults_network_shared_keys(),
+	'The network-held settings are the core-update policy and public names.'
+);
+
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	wpyeg_test_assert( isset( $schema[ $shared_key ] ), "Network-held key {$shared_key} is a real setting." );
+}
+
+/**
+ * Stage where a save happens and who is making it.
+ *
+ * Everyone staged here can manage the site's own options, which is what gets
+ * them to the settings screen at all. The question is the network's.
+ *
+ * @param bool $multisite       Whether the install is a network.
+ * @param bool $subsite         Whether this is a site other than the main one.
+ * @param bool $network_manager Whether the user can manage network options.
+ * @return void
+ */
+function wpyeg_test_stage_site( $multisite, $subsite, $network_manager ) {
+	$GLOBALS['wpyeg_test_multisite'] = $multisite;
+	$GLOBALS['wpyeg_test_subsite']   = $subsite;
+	$GLOBALS['wpyeg_test_caps']      = array(
+		'manage_options'         => true,
+		'manage_network_options' => $network_manager,
+	);
+}
+
+/**
+ * Render the settings screen and report whether one control is disabled.
+ *
+ * @param string $markup Rendered screen.
+ * @param string $key    Schema key.
+ * @return bool
+ */
+function wpyeg_test_control_disabled( $markup, $key ) {
+	$control_id = 'wpyeg-defaults-' . str_replace( '_', '-', $key );
+
+	wpyeg_test_assert(
+		1 === preg_match( '/<(?:select|input type="(?:checkbox|number)"[^>]*) id="' . preg_quote( $control_id, '/' ) . '"[^>]*>/', $markup, $control ),
+		"The {$key} control is on the screen."
+	);
+
+	return false !== strpos( $control[0], 'disabled="disabled"' );
+}
+
+$shared_note       = 'only a Super Admin can change it';
+$shared_submission = array(
+	'core_update_policy'   => 'all',
+	'protect_public_names' => 'yes',
+	'disable_comments'     => 'yes',
+	'session_regular_days' => '5',
+);
+
+// The main site, and an administrator of that site who is not a Super Admin.
+wpyeg_test_stage_site( true, false, false );
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'   => 'minor',
+	'protect_public_names' => 'no',
+	'disable_comments'     => 'no',
+	'session_regular_days' => 2,
+);
+$shared_saved                 = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'minor' === $shared_saved['core_update_policy'], 'On the main site, a site administrator\'s save keeps the stored core-update policy.' );
+wpyeg_test_assert( 'no' === $shared_saved['protect_public_names'], 'And the stored public-names setting.' );
+wpyeg_test_assert( 'yes' === $shared_saved['disable_comments'], 'The same save still stores the site\'s own toggles.' );
+wpyeg_test_assert( 5 === $shared_saved['session_regular_days'], 'And the site\'s own numbers.' );
+
+// A disabled control submits nothing. Kept means kept, not reset to the default.
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'   => 'manual',
+	'protect_public_names' => 'yes',
+);
+$shared_saved                 = wpyeg_defaults_sanitize( array() );
+wpyeg_test_assert( 'manual' === $shared_saved['core_update_policy'], 'A save that omits the core-update policy keeps the stored choice, not the default.' );
+wpyeg_test_assert( 'yes' === $shared_saved['protect_public_names'], 'A save that omits public names keeps the stored choice, not off.' );
+
+$shared_saved = wpyeg_defaults_sanitize(
+	array(
+		'core_update_policy'   => 'inherit',
+		'protect_public_names' => '',
+	)
+);
+wpyeg_test_assert( 'manual' === $shared_saved['core_update_policy'] && 'yes' === $shared_saved['protect_public_names'], 'The stored choices are kept whichever way the save would move them.' );
+
+// Nothing stored yet: the first save keeps the shipped defaults for the two.
+unset( $GLOBALS['wpyeg_test_option'] );
+$shared_saved = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'minor' === $shared_saved['core_update_policy'] && 'no' === $shared_saved['protect_public_names'], 'With nothing stored, a site administrator\'s first save keeps the shipped defaults for both.' );
+
+// The screen says so, on those two controls and no others.
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	$shared_lock = wpyeg_defaults_config_lock( $shared_key );
+	wpyeg_test_assert( is_string( $shared_lock ) && false !== strpos( $shared_lock, $shared_note ), "On the main site, a site administrator is told why {$shared_key} is locked." );
+}
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'disable_comments' ), 'A setting that is the site\'s own is not locked.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'require_strong_passwords' ), 'Nor is any other.' );
+
+ob_start();
+wpyeg_defaults_render_settings_page();
+$shared_markup = ob_get_clean();
+wpyeg_test_assert( wpyeg_test_control_disabled( $shared_markup, 'core_update_policy' ), 'The core-update control is disabled for a site administrator on the main site.' );
+wpyeg_test_assert( wpyeg_test_control_disabled( $shared_markup, 'protect_public_names' ), 'The public-names control is disabled for a site administrator on the main site.' );
+wpyeg_test_assert( ! wpyeg_test_control_disabled( $shared_markup, 'disable_comments' ), 'The site\'s own controls stay live.' );
+wpyeg_test_assert( 2 === substr_count( $shared_markup, $shared_note ), 'The reason is shown once beside each of the two controls.' );
+
+// A Super Admin on the main site decides both.
+wpyeg_test_stage_site( true, false, true );
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'   => 'minor',
+	'protect_public_names' => 'no',
+);
+$shared_saved                 = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'all' === $shared_saved['core_update_policy'] && 'yes' === $shared_saved['protect_public_names'], 'A Super Admin\'s save on the main site changes both.' );
+
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	wpyeg_test_assert( null === wpyeg_defaults_config_lock( $shared_key ), "A Super Admin is not locked out of {$shared_key}." );
+}
+
+ob_start();
+wpyeg_defaults_render_settings_page();
+$shared_markup = ob_get_clean();
+wpyeg_test_assert( ! wpyeg_test_control_disabled( $shared_markup, 'core_update_policy' ) && ! wpyeg_test_control_disabled( $shared_markup, 'protect_public_names' ), 'Both controls are live for a Super Admin on the main site.' );
+wpyeg_test_assert( 0 === substr_count( $shared_markup, $shared_note ), 'And no reason is shown, because nothing is locked.' );
+
+// Another site of the network: its copies decide nothing, so the rule does not
+// apply. Public names keeps the note it already had there.
+wpyeg_test_stage_site( true, true, false );
+$shared_saved = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'all' === $shared_saved['core_update_policy'], 'On another site of the network, the core-update policy saves as before.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'core_update_policy' ), 'And is not locked there.' );
+$shared_lock = wpyeg_defaults_config_lock( 'protect_public_names' );
+wpyeg_test_assert( is_string( $shared_lock ) && false === strpos( $shared_lock, $shared_note ) && false !== strpos( $shared_lock, 'main site' ), 'Public names still points another site at the main site\'s setting.' );
+
+// A single site. Its administrators cannot manage network options either,
+// because there is no network: the rule must not read that as a refusal.
+wpyeg_test_stage_site( false, false, false );
+$shared_saved = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'all' === $shared_saved['core_update_policy'] && 'yes' === $shared_saved['protect_public_names'], 'On a single site, an administrator\'s save changes both.' );
+
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	wpyeg_test_assert( null === wpyeg_defaults_config_lock( $shared_key ), "On a single site, {$shared_key} is not locked." );
+}
+
+unset( $GLOBALS['wpyeg_test_multisite'], $GLOBALS['wpyeg_test_subsite'], $GLOBALS['wpyeg_test_caps'], $GLOBALS['wpyeg_test_option'] );
+
+/*
  * DISALLOW_UNFILTERED_HTML is independent of the update constants. Core strips
  * unfiltered_html from every role when it is set, administrators included, so
  * this setting cannot add anything on top of it and the screen has to say so.
@@ -3398,6 +3568,21 @@ unset( $GLOBALS['wpyeg_test_option'] );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_minor_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no minor-update filter.' );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_major_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no major-update filter.' );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_dev_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no dev-update filter, so the constant is genuinely obeyed.' );
+
+/*
+ * A constant and the network rule can both apply to the core-update control on
+ * a main site. The note names the constant, because that is what decides while
+ * it is set, and the stored value is kept all the same, so removing the constant
+ * later does not hand a site administrator the network's setting.
+ */
+wpyeg_test_stage_site( true, false, false );
+$GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'manual' );
+$shared_lock                  = wpyeg_defaults_config_lock( 'core_update_policy' );
+wpyeg_test_assert( false !== strpos( $shared_lock, 'WP_AUTO_UPDATE_CORE' ) && false === strpos( $shared_lock, $shared_note ), 'On a main site under WP_AUTO_UPDATE_CORE, the note names the constant.' );
+$shared_saved = wpyeg_defaults_sanitize( array( 'core_update_policy' => 'all' ) );
+wpyeg_test_assert( 'manual' === $shared_saved['core_update_policy'], 'And a site administrator\'s save still keeps the stored policy.' );
+wpyeg_test_assert( false !== strpos( (string) wpyeg_defaults_config_lock( 'protect_public_names' ), $shared_note ), 'Public names, which no constant decides, keeps the network note.' );
+unset( $GLOBALS['wpyeg_test_multisite'], $GLOBALS['wpyeg_test_subsite'], $GLOBALS['wpyeg_test_caps'], $GLOBALS['wpyeg_test_option'] );
 
 /*
  * Mail deliverability warning.

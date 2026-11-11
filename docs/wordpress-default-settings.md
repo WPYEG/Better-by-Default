@@ -335,7 +335,8 @@ change, and email logins stay allowed: the OWASP Authentication Cheat Sheet says
 Existing accounts are fixed the next time they are saved. Keel adds a one-time cleanup for them;
 Better by Default keeps the teaching version to the filters. Old author slugs are **not**
 redirected, because a redirect would confirm which address belongs to which byline. On multisite
-the users table is shared, so the main site's setting decides for every site.
+the users table is shared, so the main site's setting decides for every site. That makes it a
+network setting, so on the main site only a Super Admin can change it.
 
 ```php
 add_filter( 'wp_pre_insert_user_data', function ( $data, $update, $user_id, $userdata ) {
@@ -943,6 +944,12 @@ Better by Default does not register those filters when `WP_AUTO_UPDATE_CORE` is 
 `wp-config.php`; an explicit operator-level policy wins and the settings screen reports that
 the control is locked. `AUTOMATIC_UPDATER_DISABLED` and `DISALLOW_FILE_MODS` can prevent the
 updater from running at all, so the screen warns about those overrides too.
+
+On multisite, WordPress runs background updates from the main site only, so the main site's
+choice is the whole network's. A network decision belongs to a Super Admin, and each site's
+administrators can open that site's settings screen, the main site's included. So on the main
+site this control is locked for anyone who cannot manage network options, and a save keeps the
+stored value. The other sites' copies of the setting decide nothing.
 
 **A note on honest settings UI — this is the part worth studying.** A setting that keeps
 rendering as a live control while an external constant silently overrides it is a trap: the

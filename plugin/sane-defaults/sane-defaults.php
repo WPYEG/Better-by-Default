@@ -2997,6 +2997,14 @@ function wpyeg_defaults_sanitize( $input ) {
 	$input  = is_array( $input ) ? $input : array();
 
 	foreach ( $schema as $key => $field ) {
+		// A setting the main site holds for the whole network keeps its stored
+		// value unless a Super Admin is saving. The screen disables the control
+		// as well, but a disabled control is only a courtesy: this is the rule.
+		if ( wpyeg_defaults_needs_network_manager( $key ) ) {
+			$clean[ $key ] = wpyeg_defaults_get( $key );
+			continue;
+		}
+
 		switch ( $field['type'] ) {
 			case 'toggle':
 				$clean[ $key ] = ! empty( $input[ $key ] ) ? 'yes' : 'no';
@@ -3027,10 +3035,53 @@ function wpyeg_defaults_sanitize( $input ) {
 }
 
 /**
- * If a wp-config.php constant supersedes a setting, return a short inline note
- * explaining it (the note may contain <code>). The control is then disabled and
- * the note shown, so the screen never offers a switch that cannot take effect.
- * Returns null when the setting is fully under the dashboard's control.
+ * The settings a network's main site holds for every site.
+ *
+ * Most settings here are a site's own business. Two are not, because of where
+ * WordPress keeps what they govern:
+ *
+ * - `core_update_policy`: a network has one copy of WordPress, and core runs
+ *   its background updater from the main site only. The main site's choice is
+ *   therefore the network's.
+ * - `protect_public_names`: a network has one users table, so the main site's
+ *   setting already decides for every site (see
+ *   wpyeg_defaults_public_names_enforced()).
+ *
+ * @return string[] Schema keys.
+ */
+function wpyeg_defaults_network_shared_keys() {
+	return array( 'core_update_policy', 'protect_public_names' );
+}
+
+/**
+ * Whether a setting is out of the current user's hands because it belongs to
+ * the whole network.
+ *
+ * On a network, each site's administrators can reach that site's settings
+ * screen, the main site's included. A setting that applies to every site
+ * is a network decision, and WordPress gives those to Super Admins: the test
+ * is `manage_network_options`, the capability core asks for on its own Network
+ * Settings screen. Single sites are unaffected, and so are a network's other
+ * sites, whose copies of these two settings decide nothing.
+ *
+ * @param string $key Schema key.
+ * @return bool
+ */
+function wpyeg_defaults_needs_network_manager( $key ) {
+	return is_multisite()
+		&& is_main_site()
+		&& in_array( $key, wpyeg_defaults_network_shared_keys(), true )
+		&& ! current_user_can( 'manage_network_options' );
+}
+
+/**
+ * If something outside this screen decides a setting, return a short inline
+ * note explaining it (the note may contain <code>). The control is then disabled
+ * and the note shown, so the screen never offers a switch that cannot take
+ * effect. Returns null when the setting is fully under the dashboard's control.
+ *
+ * Usually that something is a wp-config.php constant. On a network it can also
+ * be the network itself: see wpyeg_defaults_needs_network_manager().
  *
  * @param string $key Schema key.
  * @return string|null
@@ -3073,6 +3124,11 @@ function wpyeg_defaults_config_lock( $key ) {
 				return __( 'On multisite, accounts are shared by every site, so the main site\'s setting decides for all of them.', 'sane-defaults' );
 			}
 			break;
+	}
+
+	// A constant is reported first, above: it is what decides while it is set.
+	if ( wpyeg_defaults_needs_network_manager( $key ) ) {
+		return __( 'This site\'s setting applies to every site on the network, so only a Super Admin can change it.', 'sane-defaults' );
 	}
 
 	return null;
@@ -3321,8 +3377,8 @@ function wpyeg_defaults_render_control( $key, $field, $stacked ) {
 	$help_id  = $field_id . '-description';
 	$describe = empty( $field['help'] ) ? '' : ' aria-describedby="' . esc_attr( $help_id ) . '"';
 
-	// A wp-config.php constant may supersede this setting; if so the control is
-	// disabled and the reason shown next to it.
+	// A wp-config.php constant, or the network, may decide this setting; if so
+	// the control is disabled and the reason shown next to it.
 	$lock   = wpyeg_defaults_config_lock( $key );
 	$locked = null !== $lock;
 
@@ -3330,7 +3386,9 @@ function wpyeg_defaults_render_control( $key, $field, $stacked ) {
 	 * A disabled control is not submitted, so a save under the constant would
 	 * read as "unset" and quietly overwrite the stored preference. Carry it in a
 	 * hidden field. For a toggle only 'yes' is carried, because sanitize treats
-	 * any non-empty submitted value as checked.
+	 * any non-empty submitted value as checked. (A network-held setting does not
+	 * depend on this: wpyeg_defaults_sanitize() keeps its stored value whatever
+	 * is submitted.)
 	 */
 	if ( $locked && ( 'toggle' !== $field['type'] || 'yes' === $value ) ) {
 		printf( '<input type="hidden" name="%s" value="%s" />', esc_attr( $name ), esc_attr( 'toggle' === $field['type'] ? 'yes' : $value ) );
