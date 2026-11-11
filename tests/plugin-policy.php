@@ -33,25 +33,32 @@ function __( $text ) { // phpcs:ignore WordPress.WP.I18n.MissingArgDomain
  * Returns the schema defaults unless a test has staged a stored option, which
  * is how the policies that ship disabled get exercised.
  *
+ * That is the settings option. Any other option exists only when a test stages
+ * it by name: answering every name with the settings array would tell the code
+ * under test that an option it is merely checking for is there.
+ *
  * @param string $name          Option name.
  * @param mixed  $default_value Default value.
  * @return mixed
  */
 function get_option( $name, $default_value = false ) {
-	unset( $name );
+	if ( 'wpyeg_better_by_default' !== $name ) {
+		return isset( $GLOBALS['wpyeg_test_named_options'][ $name ] ) ? $GLOBALS['wpyeg_test_named_options'][ $name ] : $default_value;
+	}
+
 	return isset( $GLOBALS['wpyeg_test_option'] ) ? $GLOBALS['wpyeg_test_option'] : $default_value;
 }
 
 /**
- * UUID test double.
+ * Option-deletion test double, for options staged by name.
  *
- * Deterministic on purpose: the cache generation only has to be opaque and
- * stable, and a random one would make a failing assertion unreproducible.
- *
- * @return string
+ * @param string $name Option name.
+ * @return bool
  */
-function wp_generate_uuid4() {
-	return 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+function delete_option( $name ) {
+	$GLOBALS['wpyeg_test_deleted_options'][] = $name;
+	unset( $GLOBALS['wpyeg_test_named_options'][ $name ] );
+	return true;
 }
 
 /**
@@ -431,11 +438,18 @@ function is_super_admin( $user_id = 0 ) {
 /**
  * Capability test double.
  *
+ * A test can stage one answer for every capability, or an answer per
+ * capability, which is what tells a site's administrator (who can manage that
+ * site's options) from a Super Admin (who can manage the network's).
+ *
  * @param string $capability Capability being checked.
  * @return bool
  */
 function current_user_can( $capability ) {
-	unset( $capability );
+	if ( isset( $GLOBALS['wpyeg_test_caps'][ $capability ] ) ) {
+		return (bool) $GLOBALS['wpyeg_test_caps'][ $capability ];
+	}
+
 	return isset( $GLOBALS['wpyeg_test_can'] ) ? (bool) $GLOBALS['wpyeg_test_can'] : true;
 }
 
@@ -531,7 +545,7 @@ function is_wp_error( $value ) {
 }
 
 /**
- * Transient test double. The breach check caches each HIBP range response.
+ * Transient test double. The breach check keeps its failure record in one.
  *
  * @param string $key Transient key.
  * @return mixed
@@ -557,8 +571,7 @@ function set_transient( $key, $value, $ttl = 0 ) {
 /**
  * Transient deleter test double.
  *
- * The breach check clears a cached range response that no longer validates, so
- * the next call refetches instead of reusing bad data for the rest of its TTL.
+ * The breach check clears its failure record after a live successful lookup.
  *
  * @param string $key Transient key.
  * @return bool
@@ -582,6 +595,7 @@ function delete_transient( $key ) {
 function wp_remote_get( $url, $args = array() ) {
 	$GLOBALS['wpyeg_test_last_http_url']  = $url;
 	$GLOBALS['wpyeg_test_last_http_args'] = $args;
+	$GLOBALS['wpyeg_test_http_calls']     = isset( $GLOBALS['wpyeg_test_http_calls'] ) ? $GLOBALS['wpyeg_test_http_calls'] + 1 : 1;
 
 	return isset( $GLOBALS['wpyeg_test_http'] )
 		? $GLOBALS['wpyeg_test_http']
@@ -669,6 +683,7 @@ function wp_get_attachment_url( $attachment_id ) {
 
 require_once __DIR__ . '/class-wp-error.php';
 require_once __DIR__ . '/class-wp-rest-request.php';
+require_once __DIR__ . '/class-wpyeg-test-wpdb.php';
 require_once dirname( __DIR__ ) . '/plugin/sane-defaults/sane-defaults.php';
 
 /**
@@ -2004,8 +2019,40 @@ $hibp_password = 'correct horse battery staple';
 $hibp_hash     = strtoupper( sha1( $hibp_password ) );
 $hibp_suffix   = substr( $hibp_hash, 5 );
 
+/**
+ * Start a new request, as far as the code under test can tell.
+ *
+ * The breach check remembers one answer for the rest of the request that asked,
+ * and tells requests apart by their start time. Every case here runs in one PHP
+ * process, so without this each would inherit the answer of the case before it.
+ *
+ * @return void
+ */
+function wpyeg_test_new_request() {
+	$_SERVER['REQUEST_TIME_FLOAT'] = ( isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ? (float) $_SERVER['REQUEST_TIME_FLOAT'] : 0.0 ) + 1.0;
+}
+
+/**
+ * What the harness holds about lookups, other than the failure record.
+ *
+ * The failure record is a transient, and it is *supposed* to be written when a
+ * lookup fails: counting it would make "nothing was kept" false for exactly the
+ * responses these assertions check. Everything else a lookup could leave
+ * behind (another transient, a new option) shows up here.
+ *
+ * @return array
+ */
+function wpyeg_test_kept_by_lookups() {
+	return array_diff_key(
+		(array) $GLOBALS['wpyeg_test_transients'],
+		array( 'wpyeg_hibp_unavailable' => true )
+	) + ( isset( $GLOBALS['wpyeg_test_created'] ) ? (array) $GLOBALS['wpyeg_test_created'] : array() );
+}
+
 // A real match: the suffix is present with a non-zero count.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_created']    = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "0000000000000000000000000000000000A:3\r\n{$hibp_suffix}:42\r\n",
@@ -2013,20 +2060,32 @@ $GLOBALS['wpyeg_test_http']       = array(
 wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A hash suffix returned with a non-zero count is treated as breached.' );
 wpyeg_test_assert( 128 * 1024 === $GLOBALS['wpyeg_test_last_http_args']['limit_response_size'], 'HIBP responses are capped at 128 KiB through the WordPress HTTP API.' );
 wpyeg_test_assert( 'true' === $GLOBALS['wpyeg_test_last_http_args']['headers']['Add-Padding'], 'HIBP range requests ask for padded responses.' );
+wpyeg_test_assert( 'https://api.pwnedpasswords.com/range/' . substr( $hibp_hash, 0, 5 ) === $GLOBALS['wpyeg_test_last_http_url'], 'Only the five-character prefix is sent.' );
+
+/*
+ * A reply is used once and dropped. Nothing about the lookup stays on the site:
+ * no transient, no option, and so no list of the prefixes this site asked about.
+ */
+wpyeg_test_assert( array() === wpyeg_test_kept_by_lookups(), 'A reply that found a match is not kept.' );
+wpyeg_test_assert( array() === (array) $GLOBALS['wpyeg_test_transients'], 'A working lookup writes no transient at all.' );
 
 // Add-Padding rows come back with a count of 0 and must not count as a match.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "{$hibp_suffix}:0\r\n",
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'Padded rows (count 0) are ignored rather than read as a breach.' );
+wpyeg_test_assert( array() === wpyeg_test_kept_by_lookups(), 'A reply that found no match is not kept either.' );
 
 // An unreachable API must fail open, never lock out a password change.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'offline' );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A transport failure fails open.' );
 
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 503 ),
@@ -2034,31 +2093,15 @@ $GLOBALS['wpyeg_test_http']       = array(
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A non-200 response fails open.' );
 
-/**
- * The breach-range entries the harness has cached.
- *
- * The failure record is a transient too, and it is *supposed* to be written
- * when a lookup fails — counting it would make "nothing was cached" false for
- * exactly the responses these assertions check, and the test would be measuring
- * the diagnostic instead of the cache.
- *
- * @return array
- */
-function wpyeg_test_cached_ranges() {
-	return array_diff_key(
-		(array) $GLOBALS['wpyeg_test_transients'],
-		array( 'wpyeg_hibp_unavailable' => true )
-	);
-}
-
 // A body that reaches the transport limit may be truncated and is unavailable.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => str_repeat( 'A', 128 * 1024 ),
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A response reaching the 128 KiB transport cap fails open.' );
-wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A capped response is never cached.' );
+wpyeg_test_assert( array() === wpyeg_test_kept_by_lookups(), 'A capped response is not kept.' );
 
 /*
  * The cap guard has to hold for *well-formed* data too. The check above is
@@ -2066,7 +2109,7 @@ wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A capped response is
  * cannot tell whether the length check works. This body is structurally valid
  * and reaches the cap on a row boundary, which is the case that only the length
  * check can catch: measured after trim() it slips under the cap, validates, and
- * would then be cached for 12 hours with its tail silently missing.
+ * would then be trusted with its tail silently missing.
  */
 $hibp_cap = 39 * 27; // 35 hex + ":" + 1 digit + CRLF, times a whole number of rows.
 $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] = $hibp_cap;
@@ -2078,7 +2121,8 @@ for ( $i = 0; $i < 26; $i++ ) {
 // call returns true instead of failing open, so the assertion below is real.
 $hibp_rows[] = $hibp_suffix . ':4';
 
-$hibp_capped_body                 = implode( "\r\n", $hibp_rows ) . "\r\n";
+$hibp_capped_body = implode( "\r\n", $hibp_rows ) . "\r\n";
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
@@ -2086,7 +2130,7 @@ $GLOBALS['wpyeg_test_http']       = array(
 );
 wpyeg_test_assert( strlen( $hibp_capped_body ) === $hibp_cap, 'The truncation fixture reaches the cap exactly.' );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A well-formed response reaching the cap fails open rather than trusting a truncated range.' );
-wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A well-formed capped response is never cached.' );
+wpyeg_test_assert( array() === wpyeg_test_kept_by_lookups(), 'A well-formed capped response is not kept.' );
 unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] );
 
 /*
@@ -2096,6 +2140,7 @@ unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_hibp_max_response_bytes'] );
  * whether anybody could ever find out that it did: "not in the corpus" and "the
  * corpus was not consulted" used to be the same answer.
  */
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 wpyeg_test_assert( null === wpyeg_defaults_hibp_last_failure(), 'A site that has not failed records nothing.' );
 
@@ -2105,6 +2150,7 @@ $hibp_record = wpyeg_defaults_hibp_last_failure();
 wpyeg_test_assert( is_array( $hibp_record ) && 'unreachable' === $hibp_record['kind'], 'An unreachable API is recorded as unreachable.' );
 
 // The kind is specific enough to act on: a rate limit is not an outage.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 429 ),
@@ -2118,75 +2164,81 @@ wpyeg_test_assert( 'http_429' === wpyeg_defaults_hibp_last_failure()['kind'], 'A
  * by design, but a log of which prefixes a site looked up is still a record of
  * its passwords' shape, and no diagnostic needs it.
  */
-$hibp_serialised = json_encode( wpyeg_defaults_hibp_last_failure() ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Test harness; wp_json_encode() is not stubbed here.
+$hibp_serialised = json_encode( $GLOBALS['wpyeg_test_transients'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.json_encode_json_encode -- Test harness; wp_json_encode() is not stubbed here.
+wpyeg_test_assert( array( 'wpyeg_hibp_unavailable' ) === array_keys( $GLOBALS['wpyeg_test_transients'] ), 'A failed lookup stores the failure record and nothing else.' );
 wpyeg_test_assert( false === strpos( $hibp_serialised, $hibp_password ), 'The record does not contain the password.' );
-wpyeg_test_assert( false === strpos( $hibp_serialised, strtoupper( substr( $hibp_hash, 0, 5 ) ) ), 'Nor the hash prefix that was looked up.' );
+wpyeg_test_assert( false === stripos( $hibp_serialised, substr( $hibp_hash, 0, 5 ) ), 'Nor the hash prefix that was looked up.' );
 
-// A live success clears it.
+// A live success in a later request clears it.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_http'] = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => strtoupper( substr( $hibp_hash, 5 ) ) . ':0',
 );
 wpyeg_defaults_password_is_pwned( $hibp_password );
 wpyeg_test_assert( null === wpyeg_defaults_hibp_last_failure(), 'A live successful lookup clears the record.' );
-
-// The cache namespace is per installation, so entries an uninstaller cannot
-// reach are unreachable rather than live again after a reinstall.
-$hibp_generation = wpyeg_defaults_hibp_cache_generation();
-wpyeg_test_assert( '' !== $hibp_generation, 'A cache generation exists.' );
-wpyeg_test_assert(
-	false !== strpos( (string) key( wpyeg_test_cached_ranges() ), $hibp_generation ),
-	'And the range cache key carries it.'
-);
-
-$GLOBALS['wpyeg_test_transients'] = array();
+wpyeg_test_assert( array() === (array) $GLOBALS['wpyeg_test_transients'], 'And leaves nothing in its place.' );
 
 /*
- * A cached response that no longer validates is cleared, not reused for 12h.
- *
- * The key is built the way production builds it, generation and all. Seeding
- * the un-namespaced key would leave an entry nothing ever reads, and the
- * assertion below would fail against a cache the plugin never touched.
+ * A reply an earlier version kept is not an answer. Through 1.3.0 a reply sat
+ * in a transient named for its prefix; one still in place after an upgrade must
+ * not be read. Both key shapes those versions used are seeded with a body that
+ * holds the suffix, and the endpoint is down: if either were read, the answer
+ * would be "breached" instead of failing open.
  */
-$GLOBALS['wpyeg_test_transients'] = array(
-	'wpyeg_hibp_' . wpyeg_defaults_hibp_cache_generation() . '_' . substr( $hibp_hash, 0, 5 ) => 'CORRUPTED CACHE ENTRY',
+wpyeg_test_new_request();
+$GLOBALS['wpyeg_test_transients']    = array(
+	'wpyeg_hibp_aaaaaaaabbbb4ccc8dddeeeeeeeeeeee_' . substr( $hibp_hash, 0, 5 ) => "{$hibp_suffix}:42",
+	'wpyeg_hibp_' . substr( $hibp_hash, 0, 5 ) => "{$hibp_suffix}:42",
 );
-$GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'network down' );
-wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An invalid cached range response fails open.' );
-wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'An invalid cached range response is deleted so the next call refetches.' );
+$GLOBALS['wpyeg_test_named_options'] = array( 'wpyeg_hibp_cache_generation' => 'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee' );
+$GLOBALS['wpyeg_test_http']          = new WP_Error( 'http_request_failed', 'network down' );
+$GLOBALS['wpyeg_test_http_calls']    = 0;
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A reply kept by an earlier version is not read.' );
+wpyeg_test_assert( 1 === $GLOBALS['wpyeg_test_http_calls'], 'The check asks the service instead.' );
+unset( $GLOBALS['wpyeg_test_named_options'] );
 
 // One invalid row invalidates the response, even if another row looks like a match.
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "MALFORMED\r\n{$hibp_suffix}:42\r\n",
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A malformed range response fails open instead of trusting partial data.' );
-wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'A malformed range response is never cached.' );
+wpyeg_test_assert( array() === wpyeg_test_kept_by_lookups(), 'A malformed range response is not kept.' );
 
 /*
  * A 200 whose body is empty is the shape the sibling plugin's review reported:
- * a well-formed reply carrying no rows, whose "not breached" answer gets cached,
- * letting a hostile or compromised upstream hold a whole prefix open until the
- * entry expires.
+ * a well-formed reply carrying no rows. It is unavailable data, not a "not
+ * breached" answer, and it must not be remembered as one.
  *
  * The empty case above pairs an empty body with a 503, so it exercises the
  * non-200 branch and never reaches the emptiness check. This one is a 200, which
  * is the only way to get there.
  */
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => '',
 );
 wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An empty 200 fails open.' );
-wpyeg_test_assert( array() === wpyeg_test_cached_ranges(), 'An empty 200 is never cached, so one bad reply cannot hold a prefix open.' );
+wpyeg_test_assert( array() === wpyeg_test_kept_by_lookups(), 'An empty 200 is not kept.' );
+
+// Same request, and the service now answers: the empty reply was not remembered.
+$GLOBALS['wpyeg_test_http'] = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => "{$hibp_suffix}:42\r\n",
+);
+wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'An unavailable answer is never remembered, so one bad reply cannot stand in for a later good one.' );
 
 /*
  * TLS verification is what keeps the hostile-upstream case requiring a real
  * compromise rather than a hostile network. Nothing passes sslverify today, so
  * WordPress's default of true stands; this fails if anyone ever passes false.
  */
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
@@ -2198,15 +2250,145 @@ wpyeg_test_assert(
 	'The breach lookup never disables TLS verification.'
 );
 
-// The range response is cached per prefix, so a second call makes no request.
+/*
+ * --- one answer per request, and none between requests ---
+ *
+ * The REST users route checks a password twice in one request, as an argument
+ * and again before the save. The second check reuses the first answer. That is
+ * the only reuse there is: the next request asks again.
+ */
+wpyeg_test_new_request();
 $GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http_calls'] = 0;
 $GLOBALS['wpyeg_test_http']       = array(
 	'response' => array( 'code' => 200 ),
 	'body'     => "{$hibp_suffix}:9\r\n",
 );
-wpyeg_defaults_password_is_pwned( $hibp_password );
+wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'The first check of a request asks the service.' );
 $GLOBALS['wpyeg_test_http'] = new WP_Error( 'http_request_failed', 'must not be called' );
-wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'The cached range response is reused instead of refetching.' );
+wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A second check of the same password in the same request reuses the answer.' );
+wpyeg_test_assert( 1 === $GLOBALS['wpyeg_test_http_calls'], 'And makes no second request.' );
+wpyeg_test_assert( null === wpyeg_defaults_hibp_last_failure(), 'A reused answer records no failure.' );
+
+// The verdict filter still has the last word on a reused answer.
+$GLOBALS['wpyeg_test_filter_values']['wpyeg_password_is_pwned'] = false;
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'The verdict filter applies to a reused answer too.' );
+unset( $GLOBALS['wpyeg_test_filter_values']['wpyeg_password_is_pwned'] );
+
+// A different password in the same request is a different question.
+$hibp_other                 = 'a different password entirely';
+$GLOBALS['wpyeg_test_http'] = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => strtoupper( substr( sha1( $hibp_other ), 5 ) ) . ":0\r\n",
+);
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_other ), 'Another password in the same request gets its own answer.' );
+wpyeg_test_assert( 2 === $GLOBALS['wpyeg_test_http_calls'], 'And its own request.' );
+
+// The next request asks again: with the endpoint down it fails open, where a
+// kept reply would have answered "breached".
+wpyeg_test_new_request();
+$GLOBALS['wpyeg_test_http_calls'] = 0;
+$GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'network down' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A later request does not reuse an earlier request\'s answer.' );
+wpyeg_test_assert( 1 === $GLOBALS['wpyeg_test_http_calls'], 'It asks the service again.' );
+
+// An unavailable answer is not remembered within a request either.
+wpyeg_test_new_request();
+$GLOBALS['wpyeg_test_transients'] = array();
+$GLOBALS['wpyeg_test_http_calls'] = 0;
+$GLOBALS['wpyeg_test_http']       = new WP_Error( 'http_request_failed', 'network down' );
+wpyeg_test_assert( false === wpyeg_defaults_password_is_pwned( $hibp_password ), 'A failed lookup fails open.' );
+$GLOBALS['wpyeg_test_http'] = array(
+	'response' => array( 'code' => 200 ),
+	'body'     => "{$hibp_suffix}:9\r\n",
+);
+wpyeg_test_assert( true === wpyeg_defaults_password_is_pwned( $hibp_password ), 'The next check in that request asks again and gets the real answer.' );
+wpyeg_test_assert( 2 === $GLOBALS['wpyeg_test_http_calls'], 'Both checks reached the service.' );
+
+// Nothing in the plugin writes a reply anywhere that outlives the request.
+wpyeg_test_assert( 2 === preg_match_all( '/\bset_transient\(/', $plugin_source ), 'The plugin writes a transient in two places.' );
+wpyeg_test_assert( 2 === preg_match_all( '/\bset_transient\(\s*+\'wpyeg_hibp_unavailable\'/', $plugin_source ), 'Both are the failure record.' );
+wpyeg_test_assert( false === strpos( $plugin_source, 'wp_cache_set' ) && false === strpos( $plugin_source, 'set_site_transient' ), 'Nothing is written to the object cache or a network transient.' );
+
+/*
+ * --- replies an earlier version kept are deleted ---
+ *
+ * The clean-up rides on core's daily delete_expired_transients event. The
+ * database double below answers the one statement it issues by applying it to
+ * staged option rows, LIKE escapes included, so the assertions are about which
+ * rows survive rather than about the statement's spelling.
+ */
+
+$hibp_generation = 'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee';
+$hibp_legacy     = array(
+	'_transient_wpyeg_hibp_' . $hibp_generation . '_1E4C9',
+	'_transient_timeout_wpyeg_hibp_' . $hibp_generation . '_1E4C9',
+	'_transient_wpyeg_hibp_' . $hibp_generation . '_FFFFF',
+	'_transient_timeout_wpyeg_hibp_' . $hibp_generation . '_FFFFF',
+	// The shape used before the namespace existed.
+	'_transient_wpyeg_hibp_0A1B2',
+	'_transient_timeout_wpyeg_hibp_0A1B2',
+);
+$hibp_keepers    = array(
+	// The failure record: a kind and a time, never a prefix.
+	'_transient_wpyeg_hibp_unavailable',
+	'_transient_timeout_wpyeg_hibp_unavailable',
+	// The plugin's other rows.
+	'wpyeg_better_by_default',
+	'wpyeg_random_rules_state',
+	// Somebody else's rows that only look similar: _ is a wildcard unless escaped.
+	'_transient_wpyegXhibp_1E4C9',
+	'xtransient_wpyeg_hibp_1E4C9',
+	'_transient_other_plugin',
+	'siteurl',
+);
+
+$GLOBALS['wpdb']       = new Wpyeg_Test_Wpdb(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test harness.
+$GLOBALS['wpdb']->rows = array_merge( $hibp_legacy, $hibp_keepers );
+
+// No marker: a site that never kept a reply is left alone, without a query.
+$GLOBALS['wpyeg_test_named_options']   = array();
+$GLOBALS['wpyeg_test_deleted_options'] = array();
+wpyeg_defaults_hibp_forget_replies();
+wpyeg_test_assert( array() === $GLOBALS['wpdb']->queries, 'A site with no kept replies runs no clean-up statement.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_deleted_options'], 'And deletes no option.' );
+
+// The marker an earlier version left is what starts the clean-up. A delete the
+// database refuses keeps the marker, so the next daily run tries again.
+$GLOBALS['wpyeg_test_named_options'] = array( 'wpyeg_hibp_cache_generation' => $hibp_generation );
+$GLOBALS['wpdb']->refuse             = true;
+wpyeg_defaults_hibp_forget_replies();
+wpyeg_test_assert( 1 === count( $GLOBALS['wpdb']->queries ), 'A site with kept replies runs the clean-up statement.' );
+wpyeg_test_assert( array() === $GLOBALS['wpyeg_test_deleted_options'], 'A refused delete leaves the marker in place.' );
+wpyeg_test_assert( array_merge( $hibp_legacy, $hibp_keepers ) === $GLOBALS['wpdb']->rows, 'And every row where it was.' );
+
+$GLOBALS['wpdb']->refuse  = false;
+$GLOBALS['wpdb']->queries = array();
+wpyeg_defaults_hibp_forget_replies();
+wpyeg_test_assert( 1 === count( $GLOBALS['wpdb']->queries ), 'The next run issues one statement.' );
+wpyeg_test_assert( array() === array_values( array_intersect( $hibp_legacy, $GLOBALS['wpdb']->rows ) ), 'Every kept reply goes, with its timeout row, in both key shapes.' );
+wpyeg_test_assert( $hibp_keepers === $GLOBALS['wpdb']->rows, 'The failure record, the plugin\'s other options and other rows stay.' );
+wpyeg_test_assert( array( 'wpyeg_hibp_cache_generation' ) === $GLOBALS['wpyeg_test_deleted_options'], 'The namespace option goes with them.' );
+
+// Once cleaned, the next daily run finds no marker and does nothing.
+wpyeg_defaults_hibp_forget_replies();
+wpyeg_test_assert( 1 === count( $GLOBALS['wpdb']->queries ), 'A cleaned site is not cleaned again.' );
+
+unset( $GLOBALS['wpdb'], $GLOBALS['wpyeg_test_named_options'], $GLOBALS['wpyeg_test_deleted_options'] );
+
+// It is wired to core's daily clean-up, and not behind the password toggle: a
+// site that has since switched screening off still has its kept replies deleted.
+foreach ( array( 'yes', 'no' ) as $hibp_toggle ) {
+	$GLOBALS['wpyeg_test_option'] = array( 'require_strong_passwords' => $hibp_toggle );
+	$GLOBALS['wpyeg_test_hooks']  = array();
+	wpyeg_defaults_bootstrap();
+	wpyeg_test_assert(
+		null !== wpyeg_test_find_hook( 'delete_expired_transients', 'wpyeg_defaults_hibp_forget_replies' ),
+		"The clean-up runs on core's daily event with require_strong_passwords set to {$hibp_toggle}."
+	);
+}
+unset( $GLOBALS['wpyeg_test_option'] );
+$GLOBALS['wpyeg_test_hooks'] = array();
 
 // The valid-response scan remains allocation-light and exits on the first match.
 wpyeg_test_assert( false !== strpos( $plugin_source, "foreach ( preg_split( '/\\r\\n|\\n/', \$body ) as \$line )" ), 'HIBP suffixes are scanned directly rather than copied into another result array.' );
@@ -3354,6 +3536,169 @@ wpyeg_test_assert( 'no' === $absent['disable_comments'], 'A toggle absent from t
 // once the wp-config constants that trigger a lock have been defined.
 
 /*
+ * Settings a network's main site holds for every site.
+ *
+ * Two settings are the network's rather than a site's. Core runs its background
+ * updater from the main site only, so the main site's core-update policy is the
+ * network's; and a network has one users table, so the main site's public-names
+ * setting decides for every site. On a network every site's administrators can
+ * open that site's settings screen, the main site's included, so on the main
+ * site those two settings need a Super Admin.
+ *
+ * Who the rule leaves alone is pinned as firmly as who it stops: a Super Admin,
+ * a network's other sites, and every single site.
+ *
+ * It sits here for the reason given at the top of this block: these are the
+ * answers with no constant set, so they have to be read before the first define().
+ */
+wpyeg_test_assert(
+	array( 'core_update_policy', 'protect_public_names' ) === wpyeg_defaults_network_shared_keys(),
+	'The network-held settings are the core-update policy and public names.'
+);
+
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	wpyeg_test_assert( isset( $schema[ $shared_key ] ), "Network-held key {$shared_key} is a real setting." );
+}
+
+/**
+ * Stage where a save happens and who is making it.
+ *
+ * Everyone staged here can manage the site's own options, which is what gets
+ * them to the settings screen at all. The question is the network's.
+ *
+ * @param bool $multisite       Whether the install is a network.
+ * @param bool $subsite         Whether this is a site other than the main one.
+ * @param bool $network_manager Whether the user can manage network options.
+ * @return void
+ */
+function wpyeg_test_stage_site( $multisite, $subsite, $network_manager ) {
+	$GLOBALS['wpyeg_test_multisite'] = $multisite;
+	$GLOBALS['wpyeg_test_subsite']   = $subsite;
+	$GLOBALS['wpyeg_test_caps']      = array(
+		'manage_options'         => true,
+		'manage_network_options' => $network_manager,
+	);
+}
+
+/**
+ * Render the settings screen and report whether one control is disabled.
+ *
+ * @param string $markup Rendered screen.
+ * @param string $key    Schema key.
+ * @return bool
+ */
+function wpyeg_test_control_disabled( $markup, $key ) {
+	$control_id = 'wpyeg-defaults-' . str_replace( '_', '-', $key );
+
+	wpyeg_test_assert(
+		1 === preg_match( '/<(?:select|input type="(?:checkbox|number)"[^>]*) id="' . preg_quote( $control_id, '/' ) . '"[^>]*>/', $markup, $control ),
+		"The {$key} control is on the screen."
+	);
+
+	return false !== strpos( $control[0], 'disabled="disabled"' );
+}
+
+$shared_note       = 'only a Super Admin can change it';
+$shared_submission = array(
+	'core_update_policy'   => 'all',
+	'protect_public_names' => 'yes',
+	'disable_comments'     => 'yes',
+	'session_regular_days' => '5',
+);
+
+// The main site, and an administrator of that site who is not a Super Admin.
+wpyeg_test_stage_site( true, false, false );
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'   => 'minor',
+	'protect_public_names' => 'no',
+	'disable_comments'     => 'no',
+	'session_regular_days' => 2,
+);
+$shared_saved                 = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'minor' === $shared_saved['core_update_policy'], 'On the main site, a site administrator\'s save keeps the stored core-update policy.' );
+wpyeg_test_assert( 'no' === $shared_saved['protect_public_names'], 'And the stored public-names setting.' );
+wpyeg_test_assert( 'yes' === $shared_saved['disable_comments'], 'The same save still stores the site\'s own toggles.' );
+wpyeg_test_assert( 5 === $shared_saved['session_regular_days'], 'And the site\'s own numbers.' );
+
+// A disabled control submits nothing. Kept means kept, not reset to the default.
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'   => 'manual',
+	'protect_public_names' => 'yes',
+);
+$shared_saved                 = wpyeg_defaults_sanitize( array() );
+wpyeg_test_assert( 'manual' === $shared_saved['core_update_policy'], 'A save that omits the core-update policy keeps the stored choice, not the default.' );
+wpyeg_test_assert( 'yes' === $shared_saved['protect_public_names'], 'A save that omits public names keeps the stored choice, not off.' );
+
+$shared_saved = wpyeg_defaults_sanitize(
+	array(
+		'core_update_policy'   => 'inherit',
+		'protect_public_names' => '',
+	)
+);
+wpyeg_test_assert( 'manual' === $shared_saved['core_update_policy'] && 'yes' === $shared_saved['protect_public_names'], 'The stored choices are kept whichever way the save would move them.' );
+
+// Nothing stored yet: the first save keeps the shipped defaults for the two.
+unset( $GLOBALS['wpyeg_test_option'] );
+$shared_saved = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'minor' === $shared_saved['core_update_policy'] && 'no' === $shared_saved['protect_public_names'], 'With nothing stored, a site administrator\'s first save keeps the shipped defaults for both.' );
+
+// The screen says so, on those two controls and no others.
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	$shared_lock = wpyeg_defaults_config_lock( $shared_key );
+	wpyeg_test_assert( is_string( $shared_lock ) && false !== strpos( $shared_lock, $shared_note ), "On the main site, a site administrator is told why {$shared_key} is locked." );
+}
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'disable_comments' ), 'A setting that is the site\'s own is not locked.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'require_strong_passwords' ), 'Nor is any other.' );
+
+ob_start();
+wpyeg_defaults_render_settings_page();
+$shared_markup = ob_get_clean();
+wpyeg_test_assert( wpyeg_test_control_disabled( $shared_markup, 'core_update_policy' ), 'The core-update control is disabled for a site administrator on the main site.' );
+wpyeg_test_assert( wpyeg_test_control_disabled( $shared_markup, 'protect_public_names' ), 'The public-names control is disabled for a site administrator on the main site.' );
+wpyeg_test_assert( ! wpyeg_test_control_disabled( $shared_markup, 'disable_comments' ), 'The site\'s own controls stay live.' );
+wpyeg_test_assert( 2 === substr_count( $shared_markup, $shared_note ), 'The reason is shown once beside each of the two controls.' );
+
+// A Super Admin on the main site decides both.
+wpyeg_test_stage_site( true, false, true );
+$GLOBALS['wpyeg_test_option'] = array(
+	'core_update_policy'   => 'minor',
+	'protect_public_names' => 'no',
+);
+$shared_saved                 = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'all' === $shared_saved['core_update_policy'] && 'yes' === $shared_saved['protect_public_names'], 'A Super Admin\'s save on the main site changes both.' );
+
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	wpyeg_test_assert( null === wpyeg_defaults_config_lock( $shared_key ), "A Super Admin is not locked out of {$shared_key}." );
+}
+
+ob_start();
+wpyeg_defaults_render_settings_page();
+$shared_markup = ob_get_clean();
+wpyeg_test_assert( ! wpyeg_test_control_disabled( $shared_markup, 'core_update_policy' ) && ! wpyeg_test_control_disabled( $shared_markup, 'protect_public_names' ), 'Both controls are live for a Super Admin on the main site.' );
+wpyeg_test_assert( 0 === substr_count( $shared_markup, $shared_note ), 'And no reason is shown, because nothing is locked.' );
+
+// Another site of the network: its copies decide nothing, so the rule does not
+// apply. Public names keeps the note it already had there.
+wpyeg_test_stage_site( true, true, false );
+$shared_saved = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'all' === $shared_saved['core_update_policy'], 'On another site of the network, the core-update policy saves as before.' );
+wpyeg_test_assert( null === wpyeg_defaults_config_lock( 'core_update_policy' ), 'And is not locked there.' );
+$shared_lock = wpyeg_defaults_config_lock( 'protect_public_names' );
+wpyeg_test_assert( is_string( $shared_lock ) && false === strpos( $shared_lock, $shared_note ) && false !== strpos( $shared_lock, 'main site' ), 'Public names still points another site at the main site\'s setting.' );
+
+// A single site. Its administrators cannot manage network options either,
+// because there is no network: the rule must not read that as a refusal.
+wpyeg_test_stage_site( false, false, false );
+$shared_saved = wpyeg_defaults_sanitize( $shared_submission );
+wpyeg_test_assert( 'all' === $shared_saved['core_update_policy'] && 'yes' === $shared_saved['protect_public_names'], 'On a single site, an administrator\'s save changes both.' );
+
+foreach ( wpyeg_defaults_network_shared_keys() as $shared_key ) {
+	wpyeg_test_assert( null === wpyeg_defaults_config_lock( $shared_key ), "On a single site, {$shared_key} is not locked." );
+}
+
+unset( $GLOBALS['wpyeg_test_multisite'], $GLOBALS['wpyeg_test_subsite'], $GLOBALS['wpyeg_test_caps'], $GLOBALS['wpyeg_test_option'] );
+
+/*
  * DISALLOW_UNFILTERED_HTML is independent of the update constants. Core strips
  * unfiltered_html from every role when it is set, administrators included, so
  * this setting cannot add anything on top of it and the screen has to say so.
@@ -3398,6 +3743,21 @@ unset( $GLOBALS['wpyeg_test_option'] );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_minor_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no minor-update filter.' );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_major_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no major-update filter.' );
 wpyeg_test_assert( null === wpyeg_test_find_hook( 'allow_dev_auto_core_updates' ), 'Under WP_AUTO_UPDATE_CORE the plugin registers no dev-update filter, so the constant is genuinely obeyed.' );
+
+/*
+ * A constant and the network rule can both apply to the core-update control on
+ * a main site. The note names the constant, because that is what decides while
+ * it is set, and the stored value is kept all the same, so removing the constant
+ * later does not hand a site administrator the network's setting.
+ */
+wpyeg_test_stage_site( true, false, false );
+$GLOBALS['wpyeg_test_option'] = array( 'core_update_policy' => 'manual' );
+$shared_lock                  = wpyeg_defaults_config_lock( 'core_update_policy' );
+wpyeg_test_assert( false !== strpos( $shared_lock, 'WP_AUTO_UPDATE_CORE' ) && false === strpos( $shared_lock, $shared_note ), 'On a main site under WP_AUTO_UPDATE_CORE, the note names the constant.' );
+$shared_saved = wpyeg_defaults_sanitize( array( 'core_update_policy' => 'all' ) );
+wpyeg_test_assert( 'manual' === $shared_saved['core_update_policy'], 'And a site administrator\'s save still keeps the stored policy.' );
+wpyeg_test_assert( false !== strpos( (string) wpyeg_defaults_config_lock( 'protect_public_names' ), $shared_note ), 'Public names, which no constant decides, keeps the network note.' );
+unset( $GLOBALS['wpyeg_test_multisite'], $GLOBALS['wpyeg_test_subsite'], $GLOBALS['wpyeg_test_caps'], $GLOBALS['wpyeg_test_option'] );
 
 /*
  * Mail deliverability warning.

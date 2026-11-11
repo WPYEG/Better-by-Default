@@ -4,7 +4,7 @@ Tags: security, updates, defaults, performance, cleanup
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -99,7 +99,7 @@ No. It is a legitimate but aging API and an additional attack/resource surface. 
 
 = Does this send passwords anywhere? =
 
-No. Breach screening asks Have I Been Pwned whether a password appears in a known breach corpus, and it does so by k-anonymity: the password is hashed locally with SHA-1, only the first five characters of that hash are sent, and the remaining 35 are compared against the returned suffixes on your server. Neither the password nor its full hash leaves the site, and the response is padded so its size does not reveal how many real matches came back. SHA-1 is only the lookup format the API uses; WordPress still owns password storage and its own hashing.
+No. Breach screening asks Have I Been Pwned whether a password appears in a known breach corpus, and it does so by k-anonymity: the password is hashed locally with SHA-1, only the first five characters of that hash are sent, and the remaining 35 are compared against the returned suffixes on your server. Neither the password nor its full hash leaves the site, and the response is padded so its size does not reveal how many real matches came back. SHA-1 is only the lookup format the API uses; WordPress still owns password storage and its own hashing. The reply is used for that one check and then dropped: the site keeps no reply and no list of the prefixes it has asked about.
 
 = Can I turn breach screening off? =
 
@@ -110,6 +110,10 @@ Yes, and you do not have to justify it. It is the only thing this plugin does th
 Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives theme switches and can't be deactivated. You lose the settings screen convenience when loaded that way.
 
 == Changelog ==
+
+= 1.3.1 =
+* Breach screening no longer keeps Have I Been Pwned replies. A reply answers the check that asked for it and is then dropped, so the site stores no reply and no list of the hash prefixes it has looked up. Each password check makes one request; a request that checks the same password twice still asks once. Replies an earlier version kept are deleted at WordPress's next daily clean-up, along with the option that namespaced them.
+* On multisite, the two settings the main site holds for every site now need a Super Admin: the core update policy, because WordPress runs background updates from the main site only, and public names, because accounts are shared. For other administrators of the main site both controls are locked with the reason shown, and a save keeps the stored values. Single sites and a network's other sites are unaffected.
 
 = 1.3.0 =
 * Added: Disable random post redirects, on by default. WordPress 7.2 sends `/random/`, and `?random` on any archive or search, to a random published post. Each request runs an uncached random-order query, and the author form confirms which author slugs exist even while author archives redirect. The setting turns them off, rebuilds saved rewrite rules whenever the answer changes, and hands the rules back to core on deactivation. It has no effect before WordPress 7.2.
@@ -204,6 +208,9 @@ Yes. Drop the main PHP file into `wp-content/mu-plugins/` so the policy survives
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.3.1 =
+Breach screening no longer keeps replies from Have I Been Pwned, and replies kept by earlier versions are deleted. On multisite, the main site's core update policy and public-names setting now need a Super Admin.
 
 = 1.3.0 =
 Turns off WordPress 7.2's new random post redirects by default. Adds an opt-in setting that keeps logins and email addresses out of display names, nicknames and author slugs.

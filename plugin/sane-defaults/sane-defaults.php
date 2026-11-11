@@ -3,7 +3,7 @@
  * Plugin Name:       Better by Default
  * Plugin URI:        https://github.com/WPYEG/Better-by-Default
  * Description:        Sane defaults for every new WordPress site. Applies a menu of sensible security, update, UX, SEO, and performance defaults — each one individually toggleable from Settings → Better by Default. Built for the WPYEG Edmonton WordPress meetup.
- * Version:           1.3.0
+ * Version:           1.3.1
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            WPYEG
@@ -435,7 +435,7 @@ const WPYEG_DEFAULTS_OPTION = 'wpyeg_better_by_default';
  * both and fails when they disagree — an asset version that lags the plugin is
  * a stylesheet a browser goes on serving from cache after it changed.
  */
-const WPYEG_DEFAULTS_VERSION = '1.3.0';
+const WPYEG_DEFAULTS_VERSION = '1.3.1';
 
 /**
  * Read one setting, falling back to its schema default.
@@ -1252,6 +1252,10 @@ function wpyeg_defaults_bootstrap() {
 	if ( wpyeg_defaults_enabled( 'require_strong_passwords' ) ) {
 		add_action( 'admin_notices', 'wpyeg_defaults_render_hibp_notice' );
 	}
+
+	// Not behind the toggle either: replies an earlier version kept are deleted
+	// whether or not screening is still on. Core's daily clean-up carries it.
+	add_action( 'delete_expired_transients', 'wpyeg_defaults_hibp_forget_replies' );
 
 	/* ----- Login and sessions ----- */
 
@@ -2262,10 +2266,10 @@ function wpyeg_defaults_validate_password( $password, $user = null ) {
 	 * Two rejections that cost nothing come before the network call.
 	 *
 	 * Breach screening otherwise runs ahead of every cheap check, so anyone who
-	 * can reach a password field can drive one outbound request and one cache
-	 * entry per submission, with the prefix of their choosing. Moving the role
-	 * gate first would fix that by exempting low-privilege accounts from the one
-	 * rule that costs them nothing, which is the wrong trade.
+	 * can reach a password field can drive one outbound request per submission,
+	 * with the prefix of their choosing. Moving the role gate first would fix
+	 * that by exempting low-privilege accounts from the one rule that costs them
+	 * nothing, which is the wrong trade.
 	 *
 	 * What is safe to move ahead is anything that can never be a valid password
 	 * whatever the role: nothing at all, and something longer than WordPress
@@ -2660,34 +2664,94 @@ function wpyeg_defaults_rest_password_context( $request ) {
 }
 
 /**
- * A per-installation namespace for the breach cache.
+ * One definite breach answer, remembered for the rest of this request and
+ * nowhere else.
  *
- * Entries live in transients, and on a site with a persistent object cache a
- * transient is not a database row — so an uninstaller cannot reach it, and the
- * same lookup keys become live again after a reinstall. Giving every
- * installation its own generation makes anything left over belong to a
- * namespace nothing will construct a second time.
+ * Some requests check the same password twice: the REST users route validates
+ * it as an argument and again before the user is saved. The second check reuses
+ * the first answer instead of asking Have I Been Pwned the same question again.
  *
- * @return string
+ * It lives in this PHP process only, and the next lookup replaces it. It is tied
+ * to the request that asked, so a long-running worker cannot hand it to a later
+ * request. "Unavailable" is never remembered: the next check asks again.
+ *
+ * Nothing is kept between requests. Through 1.3.0 a reply was kept for 12 hours
+ * in a transient named for its prefix. The failure record has always refused to
+ * hold a prefix, because a list of the prefixes a site asked about is still a
+ * record of its passwords' shape; a reply now follows the same rule. Password
+ * changes are rare, so asking each time costs little.
+ *
+ * @param string    $hash  Upper-case SHA-1 of the password being checked.
+ * @param bool|null $pwned A definite answer to remember, or null to recall one.
+ * @return bool|null The remembered answer when recalling; null otherwise.
  */
-function wpyeg_defaults_hibp_cache_generation() {
-	$generation = get_option( 'wpyeg_hibp_cache_generation' );
+function wpyeg_defaults_hibp_request_answer( $hash, $pwned = null ) {
+	static $held = null;
 
-	if ( is_string( $generation ) && '' !== $generation ) {
-		return $generation;
+	$request = isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ? (float) $_SERVER['REQUEST_TIME_FLOAT'] : 0.0;
+
+	if ( null !== $pwned ) {
+		$held = array(
+			'request' => $request,
+			'hash'    => (string) $hash,
+			'pwned'   => (bool) $pwned,
+		);
+
+		return null;
 	}
 
-	$candidate = str_replace( '-', '', wp_generate_uuid4() );
+	return is_array( $held ) && $request === $held['request'] && hash_equals( $held['hash'], (string) $hash )
+		? $held['pwned']
+		: null;
+}
 
-	// add_option() returns false if another request created it first; re-read
-	// rather than overwrite, so concurrent password changes agree on one value.
-	if ( add_option( 'wpyeg_hibp_cache_generation', $candidate, '', false ) ) {
-		return $candidate;
+/**
+ * Delete the replies an earlier version kept.
+ *
+ * Through 1.3.0 each reply was kept for 12 hours in a transient named for its
+ * prefix, under a per-installation namespace. Nothing reads those any more, so
+ * they go, and the namespace option goes with them.
+ *
+ * This rides on core's own daily `delete_expired_transients` event instead of
+ * an upgrade routine, because the plugin has none: no stored version to compare,
+ * and no activation hook. The namespace option is the marker. A site that never
+ * kept a reply, or has already been cleaned, pays one option read a day. A site
+ * coming from before the namespace existed has no marker, and core's own expiry
+ * clears its rows within a day or so.
+ *
+ * The failure record shares the `wpyeg_hibp_` prefix and is kept: it holds a
+ * kind and a time, never a prefix.
+ *
+ * On a site with a persistent object cache a transient is not a database row,
+ * and the cache cannot be asked to list its keys. Entries there are left to
+ * expire, which they do within 12 hours.
+ *
+ * @return void
+ */
+function wpyeg_defaults_hibp_forget_replies() {
+	global $wpdb;
+
+	if ( false === get_option( 'wpyeg_hibp_cache_generation' ) ) {
+		return;
 	}
 
-	$generation = get_option( 'wpyeg_hibp_cache_generation' );
+	// A transient is two option rows; both go.
+	$deleted = $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->prepare(
+			"DELETE FROM {$wpdb->options} WHERE ( option_name LIKE %s OR option_name LIKE %s ) AND option_name NOT IN ( %s, %s )",
+			$wpdb->esc_like( '_transient_wpyeg_hibp_' ) . '%',
+			$wpdb->esc_like( '_transient_timeout_wpyeg_hibp_' ) . '%',
+			'_transient_wpyeg_hibp_unavailable',
+			'_transient_timeout_wpyeg_hibp_unavailable'
+		)
+	);
 
-	return is_string( $generation ) && '' !== $generation ? $generation : $candidate;
+	// A refused delete keeps the marker, so tomorrow's run tries again.
+	if ( false === $deleted ) {
+		return;
+	}
+
+	delete_option( 'wpyeg_hibp_cache_generation' );
 }
 
 /**
@@ -2813,6 +2877,10 @@ function wpyeg_defaults_render_hibp_notice() {
  * an unreachable HIBP service does. This avoids locking everyone out of
  * password changes when the remote evidence is unavailable or invalid.
  *
+ * A reply is used for the check that asked for it and then dropped. Nothing
+ * about a lookup is stored on the site: see
+ * wpyeg_defaults_hibp_request_answer() for why.
+ *
  * The function carries the wpyeg_defaults_ prefix every other function here
  * uses; the filter it applies keeps the shorter wpyeg_ prefix all this plugin's
  * public hooks use. They are two namespaces, not one inconsistency — renaming
@@ -2852,46 +2920,49 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 	$suffix = substr( $hash, 5 );
 	$limit  = max( 1024, (int) apply_filters( 'wpyeg_hibp_max_response_bytes', 128 * 1024 ) );
 
-	$cache_key = 'wpyeg_hibp_' . wpyeg_defaults_hibp_cache_generation() . '_' . $prefix;
-	$body      = get_transient( $cache_key );
-	$cache_hit = false !== $body;
+	// One request sometimes checks the same password twice. Only the first
+	// check asks; the answer goes no further than this request.
+	$known = wpyeg_defaults_hibp_request_answer( $hash );
 
-	if ( false === $body ) {
-		$response = wp_remote_get(
-			'https://api.pwnedpasswords.com/range/' . $prefix,
-			array(
-				'timeout'             => 4,
-				'limit_response_size' => $limit,
-				'headers'             => array( 'Add-Padding' => 'true' ),
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			// Fail open — never block a password change because HIBP is down —
-			// but record it, so a site whose screening stopped working can tell.
-			wpyeg_defaults_hibp_unavailable( 'unreachable' );
-
-			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
-		}
-
-		$status = (int) wp_remote_retrieve_response_code( $response );
-
-		if ( 200 !== $status ) {
-			// The status is kept: a rate limit is a different problem from an
-			// outage, and reads differently to whoever has to act on it.
-			wpyeg_defaults_hibp_unavailable( 'http_' . $status );
-
-			return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
-		}
-
-		$body = (string) wp_remote_retrieve_body( $response );
+	if ( null !== $known ) {
+		/** This filter is documented at the end of this function. */
+		return (bool) apply_filters( 'wpyeg_password_is_pwned', $known, $password );
 	}
+
+	$response = wp_remote_get(
+		'https://api.pwnedpasswords.com/range/' . $prefix,
+		array(
+			'timeout'             => 4,
+			'limit_response_size' => $limit,
+			'headers'             => array( 'Add-Padding' => 'true' ),
+		)
+	);
+
+	if ( is_wp_error( $response ) ) {
+		// Fail open — never block a password change because HIBP is down —
+		// but record it, so a site whose screening stopped working can tell.
+		wpyeg_defaults_hibp_unavailable( 'unreachable' );
+
+		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+	}
+
+	$status = (int) wp_remote_retrieve_response_code( $response );
+
+	if ( 200 !== $status ) {
+		// The status is kept: a rate limit is a different problem from an
+		// outage, and reads differently to whoever has to act on it.
+		wpyeg_defaults_hibp_unavailable( 'http_' . $status );
+
+		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
+	}
+
+	$body = (string) wp_remote_retrieve_body( $response );
 
 	// Measure before trimming. A response cut at exactly the cap can end on a
 	// row boundary, and trimming that trailing CRLF would drop it back under the
 	// cap — leaving a truncated range that still parses as well-formed.
-	$raw_length = strlen( (string) $body );
-	$body       = trim( (string) $body );
+	$raw_length = strlen( $body );
+	$body       = trim( $body );
 
 	// A response at the transport cap may be truncated. Empty, oversized, or
 	// structurally invalid range data is unavailable data, so fail open.
@@ -2900,30 +2971,18 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 		$raw_length >= $limit ||
 		! preg_match( '/\A[0-9A-F]{35}:[0-9]+(?:\r?\n[0-9A-F]{35}:[0-9]+)*\z/i', $body )
 	) {
-		// A cached entry that no longer validates would otherwise keep failing
-		// open for the rest of its TTL. Drop it so the next call refetches.
-		if ( $cache_hit ) {
-			delete_transient( $cache_key );
-		}
-
 		wpyeg_defaults_hibp_unavailable( $raw_length >= $limit ? 'truncated' : 'malformed' );
 
 		return (bool) apply_filters( 'wpyeg_password_is_pwned', false, $password );
 	}
 
-	if ( ! $cache_hit ) {
-		set_transient( $cache_key, $body, 12 * HOUR_IN_SECONDS );
-
-		/*
-		 * A live response proves screening works again, so the record goes. Only
-		 * on the uncached path: a cache hit says nothing about the service's
-		 * current state, and clearing there would put a write on the common path
-		 * to answer a question it had not asked. Read before delete, so a healthy
-		 * site never writes at all.
-		 */
-		if ( null !== wpyeg_defaults_hibp_last_failure() ) {
-			delete_transient( 'wpyeg_hibp_unavailable' );
-		}
+	/*
+	 * A live response proves screening works again, so the record goes. Read
+	 * before delete, so a healthy site never writes at all: a working lookup
+	 * leaves the database exactly as it found it.
+	 */
+	if ( null !== wpyeg_defaults_hibp_last_failure() ) {
+		delete_transient( 'wpyeg_hibp_unavailable' );
 	}
 
 	$pwned = false;
@@ -2939,6 +2998,8 @@ function wpyeg_defaults_password_is_pwned( $password ) {
 			break;
 		}
 	}
+
+	wpyeg_defaults_hibp_request_answer( $hash, $pwned );
 
 	/**
 	 * Filter the breach-screening verdict (e.g. to use a local blocklist, or to
@@ -2997,6 +3058,14 @@ function wpyeg_defaults_sanitize( $input ) {
 	$input  = is_array( $input ) ? $input : array();
 
 	foreach ( $schema as $key => $field ) {
+		// A setting the main site holds for the whole network keeps its stored
+		// value unless a Super Admin is saving. The screen disables the control
+		// as well, but a disabled control is only a courtesy: this is the rule.
+		if ( wpyeg_defaults_needs_network_manager( $key ) ) {
+			$clean[ $key ] = wpyeg_defaults_get( $key );
+			continue;
+		}
+
 		switch ( $field['type'] ) {
 			case 'toggle':
 				$clean[ $key ] = ! empty( $input[ $key ] ) ? 'yes' : 'no';
@@ -3027,10 +3096,53 @@ function wpyeg_defaults_sanitize( $input ) {
 }
 
 /**
- * If a wp-config.php constant supersedes a setting, return a short inline note
- * explaining it (the note may contain <code>). The control is then disabled and
- * the note shown, so the screen never offers a switch that cannot take effect.
- * Returns null when the setting is fully under the dashboard's control.
+ * The settings a network's main site holds for every site.
+ *
+ * Most settings here are a site's own business. Two are not, because of where
+ * WordPress keeps what they govern:
+ *
+ * - `core_update_policy`: a network has one copy of WordPress, and core runs
+ *   its background updater from the main site only. The main site's choice is
+ *   therefore the network's.
+ * - `protect_public_names`: a network has one users table, so the main site's
+ *   setting already decides for every site (see
+ *   wpyeg_defaults_public_names_enforced()).
+ *
+ * @return string[] Schema keys.
+ */
+function wpyeg_defaults_network_shared_keys() {
+	return array( 'core_update_policy', 'protect_public_names' );
+}
+
+/**
+ * Whether a setting is out of the current user's hands because it belongs to
+ * the whole network.
+ *
+ * On a network, each site's administrators can reach that site's settings
+ * screen, the main site's included. A setting that applies to every site
+ * is a network decision, and WordPress gives those to Super Admins: the test
+ * is `manage_network_options`, the capability core asks for on its own Network
+ * Settings screen. Single sites are unaffected, and so are a network's other
+ * sites, whose copies of these two settings decide nothing.
+ *
+ * @param string $key Schema key.
+ * @return bool
+ */
+function wpyeg_defaults_needs_network_manager( $key ) {
+	return is_multisite()
+		&& is_main_site()
+		&& in_array( $key, wpyeg_defaults_network_shared_keys(), true )
+		&& ! current_user_can( 'manage_network_options' );
+}
+
+/**
+ * If something outside this screen decides a setting, return a short inline
+ * note explaining it (the note may contain <code>). The control is then disabled
+ * and the note shown, so the screen never offers a switch that cannot take
+ * effect. Returns null when the setting is fully under the dashboard's control.
+ *
+ * Usually that something is a wp-config.php constant. On a network it can also
+ * be the network itself: see wpyeg_defaults_needs_network_manager().
  *
  * @param string $key Schema key.
  * @return string|null
@@ -3073,6 +3185,11 @@ function wpyeg_defaults_config_lock( $key ) {
 				return __( 'On multisite, accounts are shared by every site, so the main site\'s setting decides for all of them.', 'sane-defaults' );
 			}
 			break;
+	}
+
+	// A constant is reported first, above: it is what decides while it is set.
+	if ( wpyeg_defaults_needs_network_manager( $key ) ) {
+		return __( 'This site\'s setting applies to every site on the network, so only a Super Admin can change it.', 'sane-defaults' );
 	}
 
 	return null;
@@ -3321,8 +3438,8 @@ function wpyeg_defaults_render_control( $key, $field, $stacked ) {
 	$help_id  = $field_id . '-description';
 	$describe = empty( $field['help'] ) ? '' : ' aria-describedby="' . esc_attr( $help_id ) . '"';
 
-	// A wp-config.php constant may supersede this setting; if so the control is
-	// disabled and the reason shown next to it.
+	// A wp-config.php constant, or the network, may decide this setting; if so
+	// the control is disabled and the reason shown next to it.
 	$lock   = wpyeg_defaults_config_lock( $key );
 	$locked = null !== $lock;
 
@@ -3330,7 +3447,9 @@ function wpyeg_defaults_render_control( $key, $field, $stacked ) {
 	 * A disabled control is not submitted, so a save under the constant would
 	 * read as "unset" and quietly overwrite the stored preference. Carry it in a
 	 * hidden field. For a toggle only 'yes' is carried, because sanitize treats
-	 * any non-empty submitted value as checked.
+	 * any non-empty submitted value as checked. (A network-held setting does not
+	 * depend on this: wpyeg_defaults_sanitize() keeps its stored value whatever
+	 * is submitted.)
 	 */
 	if ( $locked && ( 'toggle' !== $field['type'] || 'yes' === $value ) ) {
 		printf( '<input type="hidden" name="%s" value="%s" />', esc_attr( $name ), esc_attr( 'toggle' === $field['type'] ? 'yes' : $value ) );

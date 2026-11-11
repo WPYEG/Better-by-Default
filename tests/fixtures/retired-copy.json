@@ -89,6 +89,10 @@
     {
       "phrase": "we should not fight that layer",
       "why": "deference to an upstream header that is now compared against"
+    },
+    {
+      "phrase": "cached for 12 hours",
+      "why": "the claim that breach-range replies are kept; since 1.3.1 a reply is used once and dropped"
     }
   ]
 }
