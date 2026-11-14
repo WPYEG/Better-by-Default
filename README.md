@@ -205,6 +205,15 @@ pass. Rebuild and look at the handout before it goes out.
 
 (`node_modules/` in `workshop/` is gitignored.)
 
+### Testing process
+
+This repository follows the shared [QA and AI-testing process](https://github.com/dknauss/agent-skills/blob/trunk/docs/qa-process.md)
+used for Keel and its siblings: risk tiers that set the minimum testing for each pull request,
+lab passes with a coverage matrix, a separate tester for sensitive changes, an adversarial
+review and independent re-test before each release, and the rules that keep agents from
+weakening or bypassing the checks that grade them. Name the tier in the pull request
+description.
+
 ### Spelling
 
 Canadian, throughout — prose, comments, and the strings the plugin puts on screen.
