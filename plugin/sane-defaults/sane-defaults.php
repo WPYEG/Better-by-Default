@@ -1071,7 +1071,7 @@ function wpyeg_defaults_bootstrap() {
 		add_action(
 			'template_redirect',
 			function () {
-				if ( is_author() ) {
+				if ( is_author() || wpyeg_defaults_is_author_request() ) {
 					wp_safe_redirect( home_url( '/' ), 301 );
 					exit;
 				}
@@ -3639,6 +3639,32 @@ define( 'WP_POST_REVISIONS', 10 );</pre>
  * describe: a setting you have saved is yours and is never touched; a setting
  * you have never saved follows the current default.
  */
+
+/**
+ * Whether the main request asked for an author archive, existing or not.
+ *
+ * `is_author()` is true only for a real author, so redirecting on it alone
+ * answered `/?author=1` with a 301 and `/?author=999` with core's 404, which
+ * told anyone which author IDs and slugs exist. Reading the parsed query
+ * variables redirects an unknown author too, feeds included.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_is_author_request() {
+	global $wp;
+
+	if ( ! $wp instanceof WP || ! is_array( $wp->query_vars ) ) {
+		return false;
+	}
+
+	foreach ( array( 'author', 'author_name' ) as $var ) {
+		if ( isset( $wp->query_vars[ $var ] ) && ( ! is_scalar( $wp->query_vars[ $var ] ) || '' !== (string) $wp->query_vars[ $var ] ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 /**
  * Replace the author name in feeds.
