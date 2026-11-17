@@ -260,7 +260,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'random',
 			'label'   => 'Disable random post redirects',
-			'help'    => 'WordPress 7.2 and later answer <code>/random/</code>, and <code>?random</code> on any archive or search, with a redirect to a random published post. Each request runs an uncached random-order query, and the author form confirms which author slugs exist. Has no effect on earlier versions.',
+			'help'    => 'WordPress 7.2 and later answer <code>/random/</code>, and <code>?random</code> on any archive, with a redirect to a random published post. Added to <code>?author=N</code>, it confirms which author IDs exist unless author archives are off, and each redirect skips the page cache. Has no effect on earlier versions.',
 		),
 		'disable_emojis'                  => array(
 			'default' => 'yes',
@@ -1148,10 +1148,11 @@ function wpyeg_defaults_bootstrap() {
 		add_action( 'init', 'wpyeg_defaults_check_random_rules', PHP_INT_MAX );
 
 		/*
-		 * /random/author/{slug}/ redirects to a post when that author exists and
-		 * 404s when not: the existence test the author-archive redirect closes.
-		 * Core redirects inside WP::main(), before template_redirect, so the
-		 * archive redirect never sees these requests.
+		 * ?author=N&random redirects to a post when that author exists and 404s
+		 * when not: the existence test the author-archive redirect closes. The
+		 * 7.2 betas redirected inside WP::main(), before template_redirect, so
+		 * the archive redirect never saw these requests. RC1 redirects from
+		 * template_redirect (core #66661); this guard covers both.
 		 */
 		if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
 			add_action( 'pre_get_posts', 'wpyeg_defaults_block_random_author', 100 );

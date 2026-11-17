@@ -724,9 +724,12 @@ add_action( 'template_redirect', function () {
 - **Setting key:** `disable_random_redirects`
 - **Default:** `yes`
 - **Why:** WordPress 7.2 answers `/random/`, `/random/category/{slug}/`, `/random/author/{slug}/`
-  and `?random` on any archive or search with a redirect to a random published post. Each request
-  runs an uncached `ORDER BY RAND()` query, which is a cheap way for anyone to make the database
-  work. The author form also confirms which author slugs exist, even while author archives redirect.
+  and `?random` on any archive with a redirect to a random published post. The real risk is author
+  discovery: `?author=N&random` redirects when author ID N exists and has a post, and 404s when it
+  does not. Each redirect is also sent with `Cache-Control: no-store`, so a page cache cannot absorb
+  it. (The 7.2 betas also ran an uncached `ORDER BY RAND()` query; RC1 looks up 50 random post IDs
+  by primary key instead (core #66654), and sends a search with `?random` back to the search
+  (#66662).)
 
 Returning `false` from `wp_enable_random_content_redirect` drops the rewrite rules, hides the
 Random base field on the Permalinks screen and makes core ignore the query variable. On earlier
@@ -735,9 +738,10 @@ versions nothing applies the filter, so the setting does nothing there.
 Two details matter more than the filter. Core **saves** the `/random/` rewrite rules once, so they
 outlive a change of answer: turn the redirects off and the saved rules still match `/random/`,
 which then renders the home page with a 200. The plugin records what the saved rules were built
-under and soft-flushes them when that differs. And `/random/author/{slug}/` redirects inside
-`WP::main()`, before `template_redirect`, so the author-archive redirect never sees it. With author
-archives off, the plugin makes those queries find nothing, so every author answers the same 404.
+under and soft-flushes them when that differs. And in the 7.2 betas the random redirect ran inside
+`WP::main()`, before `template_redirect`, so the author-archive redirect never saw it; RC1 sends it
+from `template_redirect` at priority 100 (#66661). With author archives off, the plugin makes random
+author queries find nothing, so a real and an unknown author get the same 404 on either.
 
 ```php
 add_filter( 'wp_enable_random_content_redirect', '__return_false' );
