@@ -244,7 +244,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'thin_pages',
 			'label'   => 'Disable public author archives',
-			'help'    => 'Redirects <code>/author/{slug}/</code> to the home page. This removes public author archives, which can reveal usernames and repeat content listed elsewhere.',
+			'help'    => 'Returns a 404 for <code>/author/{slug}/</code>, <code>?author=N</code> and their feeds, the same for real and unknown authors. This removes public author archives, which can reveal usernames and repeat content listed elsewhere.',
 		),
 		'redirect_attachment_pages'       => array(
 			'default' => 'yes',
@@ -1070,12 +1070,7 @@ function wpyeg_defaults_bootstrap() {
 	if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
 		add_action(
 			'template_redirect',
-			function () {
-				if ( is_author() || wpyeg_defaults_is_author_request() ) {
-					wp_safe_redirect( home_url( '/' ), 301 );
-					exit;
-				}
-			},
+			'wpyeg_defaults_author_archive_404',
 			9
 		);
 		// Redirecting /author/ pages does not stop feeds naming the author in
@@ -3641,12 +3636,43 @@ define( 'WP_POST_REVISIONS', 10 );</pre>
  */
 
 /**
+ * Answer every author request with a plain 404 while author archives are off.
+ *
+ * Covers `/?author=N`, `/author/{slug}/`, `?author_name=` and their feeds, for
+ * real and unknown authors alike. A redirect home would be a soft 404, and
+ * redirecting only real authors left unknown ones on core's 404, which told
+ * them apart. Runs at priority 9, before core's redirect_canonical, which
+ * would otherwise send `/?author=N` to the author's nicename.
+ *
+ * @return void
+ */
+function wpyeg_defaults_author_archive_404() {
+	if ( ! is_author() && ! wpyeg_defaults_is_author_request() ) {
+		return;
+	}
+
+	global $wp_query;
+
+	if ( $wp_query instanceof WP_Query ) {
+		$wp_query->set_404();
+		// set_404() keeps the feed flag; the 404 template needs it off.
+		$wp_query->is_feed = false;
+	}
+
+	remove_action( 'template_redirect', 'redirect_canonical' );
+
+	status_header( 404 );
+	if ( ! headers_sent() ) {
+		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
+	}
+	nocache_headers();
+}
+
+/**
  * Whether the main request asked for an author archive, existing or not.
  *
- * `is_author()` is true only for a real author, so redirecting on it alone
- * answered `/?author=1` with a 301 and `/?author=999` with core's 404, which
- * told anyone which author IDs and slugs exist. Reading the parsed query
- * variables redirects an unknown author too, feeds included.
+ * `is_author()` is true only for a real author, so the parsed query variables
+ * are read too, feeds included.
  *
  * @return bool
  */

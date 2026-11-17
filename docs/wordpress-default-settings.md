@@ -649,7 +649,10 @@ add_action( 'pre_ping', function ( &$links ) {
 - **Setting key:** `disable_author_archives`
 - **Default:** `yes`
 - **Why:** Author archive URLs (`/author/{slug}/`) are another username-enumeration path and
-  usually thin, duplicate content. Redirect them home.
+  usually thin, duplicate content. Answer them with a plain 404. A redirect home would be a
+  soft 404, and acting only on real authors (`is_author()`) leaves unknown ones on core's 404,
+  which tells them apart. Check the request's own query variables too, so every `?author=N`,
+  `/author/{slug}/`, `?author_name=` and author feed request gets the same answer.
 
 Register it at priority **9**, not the default 10. Core hooks `redirect_canonical` to
 `template_redirect` at 10 before any plugin loads, so a callback at 10 runs after it, and
@@ -658,9 +661,13 @@ username this setting hides. The attachment redirect below needs the same priori
 
 ```php
 add_action( 'template_redirect', function () {
-    if ( is_author() ) {
-        wp_safe_redirect( home_url( '/' ), 301 );
-        exit;
+    global $wp, $wp_query;
+    if ( is_author() || ! empty( $wp->query_vars['author'] ) || ! empty( $wp->query_vars['author_name'] ) ) {
+        $wp_query->set_404();
+        $wp_query->is_feed = false;
+        remove_action( 'template_redirect', 'redirect_canonical' );
+        status_header( 404 );
+        nocache_headers();
     }
 }, 9 ); // Ahead of core's redirect_canonical at 10.
 ```
