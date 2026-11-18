@@ -244,7 +244,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'thin_pages',
 			'label'   => 'Disable public author archives',
-			'help'    => 'Redirects <code>/author/{slug}/</code> to the home page. This removes public author archives, which can reveal usernames and repeat content listed elsewhere.',
+			'help'    => 'Returns a 404 for <code>/author/{slug}/</code>, <code>?author=N</code> and their feeds, the same for real and unknown authors. This removes public author archives, which can reveal usernames and repeat content listed elsewhere.',
 		),
 		'redirect_attachment_pages'       => array(
 			'default' => 'yes',
@@ -260,7 +260,7 @@ function wpyeg_defaults_schema() {
 			'group'   => 'content',
 			'section' => 'random',
 			'label'   => 'Disable random post redirects',
-			'help'    => 'WordPress 7.2 and later answer <code>/random/</code>, and <code>?random</code> on any archive or search, with a redirect to a random published post. Each request runs an uncached random-order query, and the author form confirms which author slugs exist. Has no effect on earlier versions.',
+			'help'    => 'WordPress 7.2 and later answer <code>/random/</code>, and <code>?random</code> on any archive, with a redirect to a random published post. Added to <code>?author=N</code>, it confirms which author IDs exist unless author archives are off, and each redirect skips the page cache. Has no effect on earlier versions.',
 		),
 		'disable_emojis'                  => array(
 			'default' => 'yes',
@@ -1070,12 +1070,7 @@ function wpyeg_defaults_bootstrap() {
 	if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
 		add_action(
 			'template_redirect',
-			function () {
-				if ( is_author() ) {
-					wp_safe_redirect( home_url( '/' ), 301 );
-					exit;
-				}
-			},
+			'wpyeg_defaults_author_archive_404',
 			9
 		);
 		// Redirecting /author/ pages does not stop feeds naming the author in
@@ -1090,6 +1085,10 @@ function wpyeg_defaults_bootstrap() {
 		// redirect working correctly.
 		add_filter( 'oembed_response_data', 'wpyeg_defaults_strip_oembed_author' );
 		add_filter( 'wp_sitemaps_add_provider', 'wpyeg_defaults_drop_users_sitemap', 10, 2 );
+	} else {
+		// Archives public: an author with nothing published gets the same 404
+		// as an unknown one. Priority 9 for the same reason as above.
+		add_action( 'template_redirect', 'wpyeg_defaults_empty_author_archive_404', 9 );
 	}
 
 	if ( wpyeg_defaults_enabled( 'redirect_attachment_pages' ) ) {
@@ -1148,10 +1147,11 @@ function wpyeg_defaults_bootstrap() {
 		add_action( 'init', 'wpyeg_defaults_check_random_rules', PHP_INT_MAX );
 
 		/*
-		 * /random/author/{slug}/ redirects to a post when that author exists and
-		 * 404s when not: the existence test the author-archive redirect closes.
-		 * Core redirects inside WP::main(), before template_redirect, so the
-		 * archive redirect never sees these requests.
+		 * ?author=N&random redirects to a post when that author exists and 404s
+		 * when not: the existence test the author-archive redirect closes. The
+		 * 7.2 betas redirected inside WP::main(), before template_redirect, so
+		 * the archive redirect never saw these requests. RC1 redirects from
+		 * template_redirect (core #66661); this guard covers both.
 		 */
 		if ( wpyeg_defaults_enabled( 'disable_author_archives' ) ) {
 			add_action( 'pre_get_posts', 'wpyeg_defaults_block_random_author', 100 );
@@ -3638,6 +3638,112 @@ define( 'WP_POST_REVISIONS', 10 );</pre>
  * describe: a setting you have saved is yours and is never touched; a setting
  * you have never saved follows the current default.
  */
+
+/**
+ * Answer every author request with a plain 404 while author archives are off.
+ *
+ * Covers `/?author=N`, `/author/{slug}/`, `?author_name=` and their feeds, for
+ * real and unknown authors alike. A redirect home would be a soft 404, and
+ * redirecting only real authors left unknown ones on core's 404, which told
+ * them apart. Runs at priority 9, before core's redirect_canonical, which
+ * would otherwise send `/?author=N` to the author's nicename.
+ *
+ * @return void
+ */
+function wpyeg_defaults_author_archive_404() {
+	if ( ! is_author() && ! wpyeg_defaults_is_author_request() ) {
+		return;
+	}
+
+	wpyeg_defaults_send_author_404();
+}
+
+/**
+ * Answer an author archive with nothing published with a plain 404.
+ *
+ * Runs while author archives are public. Core gives an unknown `?author=N` a
+ * 404 but an author with no published posts an empty archive with a 200, and
+ * `?author=N` for that author a redirect to the nicename, so the answer told
+ * real accounts from unknown ones. An unknown `/author/{slug}/` gets the same
+ * 404 instead of core's list of every post. Feeds and paged URLs are included. An
+ * author with published posts keeps core's archive and canonical redirect.
+ *
+ * @return void
+ */
+function wpyeg_defaults_empty_author_archive_404() {
+	global $wp_query;
+
+	if ( ! is_author() || ! $wp_query instanceof WP_Query ) {
+		return;
+	}
+
+	// An unknown /author/{slug}/ lists every post instead of no author's.
+	if ( $wp_query->have_posts() && get_queried_object() instanceof WP_User ) {
+		return;
+	}
+
+	wpyeg_defaults_send_author_404();
+}
+
+/**
+ * Turn the current author request into a plain 404.
+ *
+ * @return void
+ */
+function wpyeg_defaults_send_author_404() {
+	global $wp_query;
+
+	if ( $wp_query instanceof WP_Query ) {
+		$wp_query->set_404();
+		// set_404() keeps the feed flag; the 404 template needs it off.
+		$wp_query->is_feed = false;
+		// It keeps the queried author too, whose ID would mark a page with the
+		// same ID as current in navigation, so a real author's 404 would differ.
+		$wp_query->queried_object    = null;
+		$wp_query->queried_object_id = null;
+		// It keeps the found posts too. A theme without 404.php falls back to
+		// index.php, whose Loop would still list the author's posts.
+		$wp_query->posts         = array();
+		$wp_query->post          = null;
+		$wp_query->post_count    = 0;
+		$wp_query->found_posts   = 0;
+		$wp_query->max_num_pages = 0;
+		$wp_query->current_post  = -1;
+		$GLOBALS['post']         = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+	}
+
+	remove_action( 'template_redirect', 'redirect_canonical' );
+
+	status_header( 404 );
+	if ( ! headers_sent() ) {
+		header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
+	}
+	nocache_headers();
+}
+
+/**
+ * Whether the main request asked for an author archive, existing or not.
+ *
+ * `is_author()` is true only for a real author, so the parsed query variables
+ * are read too, feeds included.
+ *
+ * @return bool
+ */
+function wpyeg_defaults_is_author_request() {
+	global $wp;
+
+	if ( ! $wp instanceof WP || ! is_array( $wp->query_vars ) ) {
+		return false;
+	}
+
+	foreach ( array( 'author', 'author_name' ) as $var ) {
+		if ( isset( $wp->query_vars[ $var ] ) && ( ! is_scalar( $wp->query_vars[ $var ] ) || '' !== (string) $wp->query_vars[ $var ] ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 /**
  * Replace the author name in feeds.
