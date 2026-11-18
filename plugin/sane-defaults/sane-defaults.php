@@ -3657,6 +3657,10 @@ function wpyeg_defaults_author_archive_404() {
 		$wp_query->set_404();
 		// set_404() keeps the feed flag; the 404 template needs it off.
 		$wp_query->is_feed = false;
+		// It keeps the queried author too, whose ID would mark a page with the
+		// same ID as current in navigation, so a real author's 404 would differ.
+		$wp_query->queried_object    = null;
+		$wp_query->queried_object_id = null;
 	}
 
 	remove_action( 'template_redirect', 'redirect_canonical' );
