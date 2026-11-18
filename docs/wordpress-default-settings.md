@@ -653,6 +653,9 @@ add_action( 'pre_ping', function ( &$links ) {
   soft 404, and acting only on real authors (`is_author()`) leaves unknown ones on core's 404,
   which tells them apart. Check the request's own query variables too, so every `?author=N`,
   `/author/{slug}/`, `?author_name=` and author feed request gets the same answer.
+  With archives left public, an author with no published posts, or a slug naming no one, still
+  gets the same 404: core
+  would serve their empty archive with a 200 while an unknown `?author=N` gets a 404.
 
 Register it at priority **9**, not the default 10. Core hooks `redirect_canonical` to
 `template_redirect` at 10 before any plugin loads, so a callback at 10 runs after it, and

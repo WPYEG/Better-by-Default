@@ -1085,6 +1085,10 @@ function wpyeg_defaults_bootstrap() {
 		// redirect working correctly.
 		add_filter( 'oembed_response_data', 'wpyeg_defaults_strip_oembed_author' );
 		add_filter( 'wp_sitemaps_add_provider', 'wpyeg_defaults_drop_users_sitemap', 10, 2 );
+	} else {
+		// Archives public: an author with nothing published gets the same 404
+		// as an unknown one. Priority 9 for the same reason as above.
+		add_action( 'template_redirect', 'wpyeg_defaults_empty_author_archive_404', 9 );
 	}
 
 	if ( wpyeg_defaults_enabled( 'redirect_attachment_pages' ) ) {
@@ -3651,6 +3655,42 @@ function wpyeg_defaults_author_archive_404() {
 		return;
 	}
 
+	wpyeg_defaults_send_author_404();
+}
+
+/**
+ * Answer an author archive with nothing published with a plain 404.
+ *
+ * Runs while author archives are public. Core gives an unknown `?author=N` a
+ * 404 but an author with no published posts an empty archive with a 200, and
+ * `?author=N` for that author a redirect to the nicename, so the answer told
+ * real accounts from unknown ones. An unknown `/author/{slug}/` gets the same
+ * 404 instead of core's list of every post. Feeds and paged URLs are included. An
+ * author with published posts keeps core's archive and canonical redirect.
+ *
+ * @return void
+ */
+function wpyeg_defaults_empty_author_archive_404() {
+	global $wp_query;
+
+	if ( ! is_author() || ! $wp_query instanceof WP_Query ) {
+		return;
+	}
+
+	// An unknown /author/{slug}/ lists every post instead of no author's.
+	if ( $wp_query->have_posts() && get_queried_object() instanceof WP_User ) {
+		return;
+	}
+
+	wpyeg_defaults_send_author_404();
+}
+
+/**
+ * Turn the current author request into a plain 404.
+ *
+ * @return void
+ */
+function wpyeg_defaults_send_author_404() {
 	global $wp_query;
 
 	if ( $wp_query instanceof WP_Query ) {
