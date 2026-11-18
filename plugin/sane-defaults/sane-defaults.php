@@ -3701,6 +3701,15 @@ function wpyeg_defaults_send_author_404() {
 		// same ID as current in navigation, so a real author's 404 would differ.
 		$wp_query->queried_object    = null;
 		$wp_query->queried_object_id = null;
+		// It keeps the found posts too. A theme without 404.php falls back to
+		// index.php, whose Loop would still list the author's posts.
+		$wp_query->posts         = array();
+		$wp_query->post          = null;
+		$wp_query->post_count    = 0;
+		$wp_query->found_posts   = 0;
+		$wp_query->max_num_pages = 0;
+		$wp_query->current_post  = -1;
+		$GLOBALS['post']         = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 	}
 
 	remove_action( 'template_redirect', 'redirect_canonical' );
